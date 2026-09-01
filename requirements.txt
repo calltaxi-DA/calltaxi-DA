@@ -1,0 +1,8 @@
+# Python 3.12 기준으로 검증된 버전
+pandas==2.2.3
+matplotlib==3.9.2
+seaborn==0.13.2
+ipython==8.27.0
+jupyter==1.0.0
+ipykernel==6.29.5
+lxml==5.3.0
