@@ -1,0 +1,216 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1320" viewBox="0 0 1200 1320">
+<rect x="0" y="0" width="1200" height="1320" fill="#f8fafc"/>
+<text x="600.0" y="44" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="27" font-weight="800" fill="#0f172a" text-anchor="middle">배차 병목 재현 검증: cjh 원본 vs data/processed</text>
+<text x="600.0" y="72" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="14" font-weight="500" fill="#475569" text-anchor="middle">cjh가 SVG로 전달한 접수→배차·배차→승차 병목 분석이 정제 데이터에서도 재현되는지 검증</text>
+<rect x="40" y="100" width="268" height="80" rx="14" fill="#ffffff" stroke="#dbeafe" stroke-width="1"/>
+<text x="58" y="128" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="700" fill="#334155" text-anchor="start">시간대별 최대 오차</text>
+<text x="58" y="163" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="26" font-weight="800" fill="#2563eb" text-anchor="start">0.3분</text>
+<rect x="328" y="100" width="268" height="80" rx="14" fill="#ffffff" stroke="#dbeafe" stroke-width="1"/>
+<text x="346" y="128" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="700" fill="#334155" text-anchor="start">14~16시 흐름 오차</text>
+<text x="346" y="163" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="26" font-weight="800" fill="#2563eb" text-anchor="start">&lt;0.2%</text>
+<rect x="616" y="100" width="268" height="80" rx="14" fill="#ffffff" stroke="#dbeafe" stroke-width="1"/>
+<text x="634" y="128" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="700" fill="#334155" text-anchor="start">배차→승차 TOP4 오차</text>
+<text x="634" y="163" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="26" font-weight="800" fill="#2563eb" text-anchor="start">0.1분</text>
+<rect x="904" y="100" width="268" height="80" rx="14" fill="#ffffff" stroke="#dbeafe" stroke-width="1"/>
+<text x="922" y="128" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="700" fill="#334155" text-anchor="start">접수→배차 TOP4 오차</text>
+<text x="922" y="163" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="26" font-weight="800" fill="#ea580c" text-anchor="start">1.3분</text>
+<text x="45" y="220" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="19" font-weight="800" fill="#111827" text-anchor="start">1) 시간대별 접수→배차 재현 비교 (예약유형 제외 기준)</text>
+<text x="45" y="242" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#64748b" text-anchor="start">파랑=재현(data/processed), 점선테두리=cjh 원본 — 거의 겹칠 정도로 일치</text>
+<text x="80" y="280" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="14" font-weight="800" fill="#334155" text-anchor="end">8시</text>
+<rect x="95" y="260" width="493.2" height="16" rx="4" fill="#2563eb"/>
+<rect x="95" y="278" width="480.0" height="10" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="598.2" y="273" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1e293b" text-anchor="start">재현 41.1분 / cjh 40.0분</text>
+<text x="80" y="314" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="14" font-weight="800" fill="#334155" text-anchor="end">11시</text>
+<rect x="95" y="294" width="162.0" height="16" rx="4" fill="#2563eb"/>
+<rect x="95" y="312" width="159.6" height="10" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="267.0" y="307" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1e293b" text-anchor="start">재현 13.5분 / cjh 13.3분</text>
+<text x="80" y="348" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="14" font-weight="800" fill="#334155" text-anchor="end">12시</text>
+<rect x="95" y="328" width="172.8" height="16" rx="4" fill="#2563eb"/>
+<rect x="95" y="346" width="170.4" height="10" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="277.8" y="341" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1e293b" text-anchor="start">재현 14.4분 / cjh 14.2분</text>
+<text x="80" y="382" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="14" font-weight="800" fill="#334155" text-anchor="end">13시</text>
+<rect x="95" y="362" width="166.8" height="16" rx="4" fill="#2563eb"/>
+<rect x="95" y="380" width="163.2" height="10" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="271.8" y="375" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1e293b" text-anchor="start">재현 13.9분 / cjh 13.6분</text>
+<text x="80" y="416" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="14" font-weight="800" fill="#334155" text-anchor="end">14시</text>
+<rect x="95" y="396" width="226.8" height="16" rx="4" fill="#2563eb"/>
+<rect x="95" y="414" width="225.6" height="10" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="331.79999999999995" y="409" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1e293b" text-anchor="start">재현 18.9분 / cjh 18.8분</text>
+<text x="80" y="450" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="14" font-weight="800" fill="#334155" text-anchor="end">15시</text>
+<rect x="95" y="430" width="412.8" height="16" rx="4" fill="#2563eb"/>
+<rect x="95" y="448" width="414.0" height="10" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="519.0" y="443" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1e293b" text-anchor="start">재현 34.4분 / cjh 34.5분</text>
+<text x="80" y="484" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="14" font-weight="800" fill="#334155" text-anchor="end">16시</text>
+<rect x="95" y="464" width="466.8" height="16" rx="4" fill="#2563eb"/>
+<rect x="95" y="482" width="470.4" height="10" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,2"/>
+<text x="575.4000000000001" y="477" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="700" fill="#1e293b" text-anchor="start">재현 38.9분 / cjh 39.2분</text>
+<text x="95" y="512" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="500" fill="#94a3b8" text-anchor="start">* 배차→승차는 7개 시간대 모두 재현·원본 차이 0.0~0.1분으로 동일하여 별도 표기 생략</text>
+<rect x="800" y="242" width="360" height="340" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="1"/>
+<text x="824" y="276" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="19" font-weight="800" fill="#111827" text-anchor="start">핵심 발견</text>
+<text x="826" y="310" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155" text-anchor="start">예약 유형(전날 예약 후 당일 배차)을</text>
+<text x="826" y="334" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155" text-anchor="start">포함하면 접수→배차 평균이 왜곡된다.</text>
+<rect x="826" y="354" width="308" height="96" rx="10" fill="#fef2f2" stroke="#fecaca" stroke-width="1"/>
+<text x="844" y="382" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12" font-weight="700" fill="#991b1b" text-anchor="start">예약 포함 (8시 기준)</text>
+<text x="844" y="410" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="24" font-weight="800" fill="#b91c1c" text-anchor="start">285.0분</text>
+<text x="844" y="434" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="600" fill="#991b1b" text-anchor="start">cjh 원본(40.0분) 대비 +7배</text>
+<rect x="826" y="462" width="308" height="96" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1"/>
+<text x="844" y="490" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12" font-weight="700" fill="#1e3a8a" text-anchor="start">예약 제외 (8시 기준)</text>
+<text x="844" y="518" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="24" font-weight="800" fill="#1d4ed8" text-anchor="start">41.1분</text>
+<text x="844" y="542" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="600" fill="#1e3a8a" text-anchor="start">cjh 원본(40.0분)과 거의 일치</text>
+<text x="45" y="640" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="19" font-weight="800" fill="#111827" text-anchor="start">2) 14→15→16시 접수/탑승 흐름 (SVG14 카드 검증)</text>
+<rect x="45" y="668" width="350" height="118" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="65" y="702" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="20" font-weight="800" fill="#0f172a" text-anchor="start">14시</text>
+<text x="65" y="728" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#334155" text-anchor="start">재현: 접수 197,592 / 탑승 148,070  (차이 +49,522)</text>
+<text x="65" y="752" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#64748b" text-anchor="start">cjh:  접수 198,268 / 탑승 148,621  (차이 +49,647)</text>
+<text x="65" y="776" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12" font-weight="800" fill="#1d4ed8" text-anchor="start">오차 125건 (전체 대비 0.06%)</text>
+<text x="407.5" y="734" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="28" font-weight="800" fill="#94a3b8" text-anchor="middle">→</text>
+<rect x="420" y="668" width="350" height="118" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="440" y="702" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="20" font-weight="800" fill="#0f172a" text-anchor="start">15시</text>
+<text x="440" y="728" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#334155" text-anchor="start">재현: 접수 176,026 / 탑승 129,623  (차이 +46,403)</text>
+<text x="440" y="752" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#64748b" text-anchor="start">cjh:  접수 176,754 / 탑승 130,135  (차이 +46,619)</text>
+<text x="440" y="776" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12" font-weight="800" fill="#1d4ed8" text-anchor="start">오차 216건 (전체 대비 0.12%)</text>
+<text x="782.5" y="734" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="28" font-weight="800" fill="#94a3b8" text-anchor="middle">→</text>
+<rect x="795" y="668" width="350" height="118" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="815" y="702" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="20" font-weight="800" fill="#0f172a" text-anchor="start">16시</text>
+<text x="815" y="728" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#334155" text-anchor="start">재현: 접수 97,434 / 탑승 105,566  (차이 -8,132)</text>
+<text x="815" y="752" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#64748b" text-anchor="start">cjh:  접수 97,824 / 탑승 106,041  (차이 -8,217)</text>
+<text x="815" y="776" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12" font-weight="800" fill="#1d4ed8" text-anchor="start">오차 85건 (전체 대비 0.09%)</text>
+<text x="45" y="830" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="19" font-weight="800" fill="#111827" text-anchor="start">3) 15시 서울 25개구 TOP8 — 즉시콜 기준 재현 결과</text>
+<text x="45" y="852" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="12" font-weight="600" fill="#64748b" text-anchor="start">cjh 원본은 구 이름 인코딩이 손상돼 대조 불가 — TOP4 수치만 참고 표기. 아래 구 이름은 이번 재현에서 실제로 계산된 값.</text>
+<text x="45" y="885" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827" text-anchor="start">접수→배차 TOP8</text>
+<text x="45" y="905" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#94a3b8" text-anchor="start">cjh 원본 TOP4 접수→배차: 62.1 / 56.8 / 56.7 / 56.0분</text>
+<rect x="45" y="919" width="495" height="26" rx="6" fill="#1e293b"/>
+<text x="72.5" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">순위</text>
+<text x="145.0" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">자치구</text>
+<text x="232.5" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">접수건수</text>
+<text x="322.5" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">접수→배차</text>
+<text x="415.0" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">전체대기</text>
+<text x="500.0" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">취소율</text>
+<rect x="45" y="945" width="495" height="24" fill="#fff7ed" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="72.5" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">1</text>
+<text x="145.0" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">서대문구</text>
+<text x="232.5" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">10,348</text>
+<text x="322.5" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">60.8분</text>
+<text x="415.0" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">66.7분</text>
+<text x="500.0" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">22.6%</text>
+<rect x="45" y="969" width="495" height="24" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="72.5" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">2</text>
+<text x="145.0" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">종로구</text>
+<text x="232.5" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">6,326</text>
+<text x="322.5" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">56.1분</text>
+<text x="415.0" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">59.2분</text>
+<text x="500.0" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">29.6%</text>
+<rect x="45" y="993" width="495" height="24" fill="#fff7ed" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="72.5" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">3</text>
+<text x="145.0" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">중구</text>
+<text x="232.5" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">3,076</text>
+<text x="322.5" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">56.0분</text>
+<text x="415.0" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">62.8분</text>
+<text x="500.0" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">26.7%</text>
+<rect x="45" y="1017" width="495" height="24" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="72.5" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">4</text>
+<text x="145.0" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">서초구</text>
+<text x="232.5" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">5,780</text>
+<text x="322.5" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">55.5분</text>
+<text x="415.0" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">58.1분</text>
+<text x="500.0" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">32.3%</text>
+<rect x="45" y="1041" width="495" height="24" fill="#fff7ed" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="72.5" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">5</text>
+<text x="145.0" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">용산구</text>
+<text x="232.5" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">2,578</text>
+<text x="322.5" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">53.4분</text>
+<text x="415.0" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">58.1분</text>
+<text x="500.0" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">29.0%</text>
+<rect x="45" y="1065" width="495" height="24" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="72.5" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">6</text>
+<text x="145.0" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">마포구</text>
+<text x="232.5" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">9,174</text>
+<text x="322.5" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">46.5분</text>
+<text x="415.0" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">53.3분</text>
+<text x="500.0" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">21.9%</text>
+<rect x="45" y="1089" width="495" height="24" fill="#fff7ed" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="72.5" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">7</text>
+<text x="145.0" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">영등포구</text>
+<text x="232.5" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">9,615</text>
+<text x="322.5" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">46.4분</text>
+<text x="415.0" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">57.0분</text>
+<text x="500.0" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">19.5%</text>
+<rect x="45" y="1113" width="495" height="24" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="72.5" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">8</text>
+<text x="145.0" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">동작구</text>
+<text x="232.5" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">4,737</text>
+<text x="322.5" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">43.0분</text>
+<text x="415.0" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">48.1분</text>
+<text x="500.0" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">26.6%</text>
+<text x="615" y="885" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="15" font-weight="800" fill="#111827" text-anchor="start">배차→승차 TOP8</text>
+<text x="615" y="905" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#94a3b8" text-anchor="start">cjh 원본 TOP4 배차→승차: 25.0 / 24.0 / 23.4 / 22.9분</text>
+<rect x="615" y="919" width="510" height="26" rx="6" fill="#1e293b"/>
+<text x="642.5" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">순위</text>
+<text x="715.0" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">자치구</text>
+<text x="802.5" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">접수건수</text>
+<text x="892.5" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">배차→승차</text>
+<text x="987.5" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">접수→배차</text>
+<text x="1080.0" y="936" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">전체대기</text>
+<rect x="615" y="945" width="510" height="24" fill="#fff7ed" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="642.5" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">1</text>
+<text x="715.0" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">중구</text>
+<text x="802.5" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">3,076</text>
+<text x="892.5" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">24.9분</text>
+<text x="987.5" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">56.0분</text>
+<text x="1080.0" y="961" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">62.8분</text>
+<rect x="615" y="969" width="510" height="24" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="642.5" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">2</text>
+<text x="715.0" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">용산구</text>
+<text x="802.5" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">2,578</text>
+<text x="892.5" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">24.0분</text>
+<text x="987.5" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">53.4분</text>
+<text x="1080.0" y="985" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">58.1분</text>
+<rect x="615" y="993" width="510" height="24" fill="#fff7ed" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="642.5" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">3</text>
+<text x="715.0" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">서초구</text>
+<text x="802.5" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">5,780</text>
+<text x="892.5" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">23.4분</text>
+<text x="987.5" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">55.5분</text>
+<text x="1080.0" y="1009" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">58.1분</text>
+<rect x="615" y="1017" width="510" height="24" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="642.5" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">4</text>
+<text x="715.0" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">종로구</text>
+<text x="802.5" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">6,326</text>
+<text x="892.5" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">22.8분</text>
+<text x="987.5" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">56.1분</text>
+<text x="1080.0" y="1033" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">59.2분</text>
+<rect x="615" y="1041" width="510" height="24" fill="#fff7ed" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="642.5" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">5</text>
+<text x="715.0" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">영등포구</text>
+<text x="802.5" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">9,615</text>
+<text x="892.5" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">21.5분</text>
+<text x="987.5" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">46.4분</text>
+<text x="1080.0" y="1057" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">57.0분</text>
+<rect x="615" y="1065" width="510" height="24" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="642.5" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">6</text>
+<text x="715.0" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">강남구</text>
+<text x="802.5" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">5,764</text>
+<text x="892.5" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">20.9분</text>
+<text x="987.5" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">40.2분</text>
+<text x="1080.0" y="1081" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">47.8분</text>
+<rect x="615" y="1089" width="510" height="24" fill="#fff7ed" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="642.5" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">7</text>
+<text x="715.0" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">서대문구</text>
+<text x="802.5" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">10,348</text>
+<text x="892.5" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">20.8분</text>
+<text x="987.5" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">60.8분</text>
+<text x="1080.0" y="1105" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">66.7분</text>
+<rect x="615" y="1113" width="510" height="24" fill="#ffffff" stroke="#e5e7eb" stroke-width="0.5"/>
+<text x="642.5" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">8</text>
+<text x="715.0" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">성북구</text>
+<text x="802.5" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">6,286</text>
+<text x="892.5" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">20.6분</text>
+<text x="987.5" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">32.1분</text>
+<text x="1080.0" y="1129" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="10.5" font-weight="700" fill="#111827" text-anchor="middle">45.0분</text>
+<rect x="45" y="1141" width="1110" height="130" rx="14" fill="#eff6ff" stroke="#bae6fd" stroke-width="1"/>
+<text x="70" y="1173" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="19" font-weight="800" fill="#0f172a" text-anchor="start">결론</text>
+<text x="74" y="1203" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155" text-anchor="start">① 14~16시 접수→배차 급증, 배차→승차는 완만이라는 원본 결론이 정제 데이터에서도 그대로 유지된다.</text>
+<text x="74" y="1227" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155" text-anchor="start">② 예약 유형(이용목적에 "예약" 포함)을 제외해야 원본 수치와 일치 — 이 필터링 기준이 cjh 분석의 전제였을 가능성이 높다.</text>
+<text x="74" y="1251" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155" text-anchor="start">③ 잔여 오차(0.1~1.3분)는 01번 정제의 미확정 판단 3건(중복130건·결측1건·4/20 처리) 확정 후 재검증 필요.</text>
+<text x="1190" y="1305" font-family="Apple SD Gothic Neo, Malgun Gothic, Arial, sans-serif" font-size="11" font-weight="500" fill="#94a3b8" text-anchor="end">자료: 서울시설공단 장애인콜택시 탑승내역 2025 · data/processed 정제본 기준 재현 · cjh 원본 SVG 대조</text>
+</svg>
