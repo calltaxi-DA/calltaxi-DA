@@ -10,11 +10,32 @@ venv/
 .ipynb_checkpoints/
 
 # Data files (large raw data)
-data/raw/
+# NOTE: use "dir/*" (not "dir/") so the "!" exceptions below actually work.
+# ("dir/" ignores the folder itself, which blocks git from re-including files inside it.)
+data/raw/*
 !data/raw/.gitkeep
+!data/raw/hospital_info_seoul.csv
+!data/raw/건강보험심사평가원_의료기관별 감염병 및 중증환자 치료시설 현황_20260630.csv
+!data/raw/seoul_municipalities_geo_simple.json
 
-data/processed/
+data/processed/*
 !data/processed/.gitkeep
+!data/processed/hospital_info_seoul_행정동_파생컬럼추가.csv
+!data/processed/region_dong_call_hospital_combined.csv
+!data/processed/region_dong_call_hospital_combined_medical.csv
+!data/processed/region_dong_call_hospital_combined_병원급규모추가.csv
+!data/processed/region_dong_call_hospital_combined_medical_병원급규모추가.csv
+!data/processed/region_dong_call_hospital_combined_07_2_의사수추가.csv
+!data/processed/region_dong_call_hospital_combined_medical_07_2_의사수추가.csv
+!data/processed/region_gu_call_hospital_combined.csv
+!data/processed/region_gu_call_hospital_combined_medical.csv
+!data/processed/region_gu_call_hospital_combined_병원급규모추가.csv
+!data/processed/region_gu_call_hospital_combined_medical_병원급규모추가.csv
+!data/processed/region_gu_call_hospital_combined_07_2_의사수추가.csv
+!data/processed/region_gu_call_hospital_combined_medical_07_2_의사수추가.csv
+
+notebooks_docs_lye/
+.claude/
 
 # OS / editor
 .DS_Store
