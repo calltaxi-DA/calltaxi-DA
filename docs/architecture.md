@@ -10,7 +10,17 @@
 | 분석 결과 발행 (신규, 경계) | `analysis/` | 서비스가 그대로 가져다 쓰기로 확정된 export 결과 | 분석 담당자가 검토 후 수동 export |
 | 서비스 (신규) | `backend/`, `frontend/`, `ai/` | 장애인콜택시 추천 웹서비스 | 상시 구동되는 백엔드/프론트엔드 프로세스 |
 
-세 축은 서로 다른 실행 주기(1회성 분석 vs 상시 서비스)와 데이터 신선도 요구사항을 가지므로 분리되어 있다. `data/`, `notebooks*/`는 탐색적·불안정한 작업 공간이라 서비스가 직접 참조하지 않는다. 분석 결과(예: 시간대별 대기시간 통계)가 서비스에 필요해지면, 사람이 검토해서 `analysis/`에 export하고, `ai/`는 오직 `analysis/`의 파일만 읽어 lookup 테이블/모델로 가공한다. 즉 데이터 흐름은 `notebooks*/ → (사람이 검토) → analysis/ → ai/ → backend/` 한 방향이다.
+세 축은 서로 다른 실행 주기(1회성 분석 vs 상시 서비스)와 데이터 신선도 요구사항을 가지므로 분리되어 있다. `data/`, `notebooks*/`는 탐색적·불안정한 작업 공간이라 서비스가 직접 참조하지 않는다.
+
+**대기시간 예측 흐름**: `analysis/`는 분석이 만들어낸 **특장차/임차택시 Prediction 모델**(또는 그 산출물)이 놓이는 곳이고, `ai/`는 그 모델을 직접 호출·서빙하는 **AI Adapter**다 — 예측 로직 자체를 갖지 않고 모델을 감싸기만 한다.
+
+```text
+notebooks*/ (모델 학습·검증) → analysis/ (특장차/임차택시 Prediction 모델) → ai/ (AI Adapter) → backend/
+```
+
+`ai/`는 오직 `analysis/`의 산출물만 참조하며, 모델이 아직 연결되지 않은 동안에는 가짜 값을 반환하지 않고 명확히 실패(`NotImplementedError`)한다 — `backend/`가 "예측 불가" 상태를 받아 처리하도록 강제한다.
+
+> 요금/시간/도보 우선순위에 따른 **추천 로직(Rule-based ranking)은 `ai/`에 두지 않는다.** `ai/`는 예측 모델 어댑터 전용이고, 추천 정렬은 백엔드 개발 로드맵의 **Backend Phase 7**에서 `backend/` 쪽에 구현할 예정이다(아직 미착수).
 
 ## 서비스 개요 (기획 요약)
 
@@ -20,10 +30,10 @@
 
 ## 폴더 책임
 
-- **`backend/`** — FastAPI HTTP 계층. 요청을 받아 `ai/`를 호출하고 응답을 만든다. 비즈니스 로직(대기시간 계산식, 정렬 규칙)을 직접 갖지 않는다.
-- **`ai/`** — 장애인콜택시 대기시간 산출과 Rule-based 추천 로직. 순수 Python이며 FastAPI/HTTP를 알지 못한다(단독 테스트·재사용 가능해야 함). 데이터가 필요하면 `analysis/`만 참조한다.
+- **`backend/`** — FastAPI HTTP 계층. 요청을 받아 `ai/`(예측)를 호출하고, 요금/시간/도보 우선순위 추천 정렬(Rule-based, Backend Phase 7 예정)도 여기서 구현한다. 대기시간 예측 모델 자체는 갖지 않는다.
+- **`ai/`** — **AI Adapter.** `analysis/`의 특장차/임차택시 Prediction 모델을 호출하는 어댑터. 순수 Python이며 FastAPI/HTTP를 알지 못한다(단독 테스트·재사용 가능해야 함). 예측 로직·추천 로직을 직접 갖지 않는다 — 모델이 없으면 `NotImplementedError`로 실패한다.
 - **`frontend/`** — 사용자 화면. `backend/`가 노출하는 API만 호출하고, 데이터 파일이나 `ai/`를 직접 참조하지 않는다.
-- **`analysis/`** — 분석 결과 중 서비스가 쓰기로 확정된 것만 모아두는 export 공간. 노트북이 자동으로 쓰지 않고 사람이 검토 후 옮긴다. 자세한 규칙은 [`analysis/README.md`](../analysis/README.md).
+- **`analysis/`** — 분석이 만들어낸 Prediction 모델/산출물 중 서비스가 쓰기로 확정된 것만 모아두는 export 공간. 노트북이 자동으로 쓰지 않고 사람이 검토 후 옮긴다. 자세한 규칙은 [`analysis/README.md`](../analysis/README.md).
 - **`data/`, `notebooks*/`, `src/`** — 기존 데이터분석 자산(탐색적, 원본/중간 산출물). 서비스 코드(`backend/`, `frontend/`, `ai/`)가 이 폴더의 파일 경로를 직접 참조하지 않는다 — 필요하면 `analysis/`를 거친다.
 - **`docs/`** — 이 저장소를 다루는 데 필요한 설계/운영 문서. 노트북 단위의 분석 계획 문서는 `notebooks_docs_lye/`(gitignore 대상, 팀 공유 문서 아님)에 남는다.
 

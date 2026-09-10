@@ -3,8 +3,8 @@
 서울시 장애인콜택시 데이터를 분석하고, 그 결과(예상 대기시간)를 반영해 지하철·저상버스·장애인콜택시 이동경로를 추천하는 서비스를 만드는 모노레포입니다.
 
 - **분석**: `data/`, `notebooks*/`, `src/` — 대기시간·이동패턴 분석 (기존)
-- **분석 결과 발행**: `analysis/` — 서비스가 쓰기로 확정된 export 결과만 모아두는 경계 (신규)
-- **서비스**: `backend/`(FastAPI), `frontend/`(Vite+React+TS), `ai/`(대기시간·추천 로직, `analysis/`만 참조) — 신규
+- **분석 결과 발행**: `analysis/` — 특장차/임차택시 Prediction 모델 등 서비스가 쓰기로 확정된 export 결과만 모아두는 경계 (신규)
+- **서비스**: `backend/`(FastAPI + 추천 정렬), `frontend/`(Vite+React+TS), `ai/`(AI Adapter — `analysis/`의 예측 모델 호출 전용) — 신규
 
 구조와 각 폴더의 책임은 [`docs/architecture.md`](docs/architecture.md)에, 코드 작성 규칙은 [`AGENTS.md`](AGENTS.md)에 있습니다.
 

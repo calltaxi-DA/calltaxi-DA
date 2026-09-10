@@ -4,8 +4,8 @@
 
 ## 아키텍처 규칙
 
-1. **`backend/`는 HTTP만 담당한다.** 대기시간 계산, 추천 정렬 같은 비즈니스 로직을 라우터 함수 안에 직접 작성하지 않는다 — `ai/`의 함수를 호출한다.
-2. **`ai/`는 FastAPI/HTTP를 import하지 않는다.** 입력/출력은 일반 Python 타입(dataclass 등)으로만 주고받아, HTTP 없이도 단위 테스트가 가능해야 한다.
+1. **`backend/`는 HTTP + 추천 정렬(Rule-based ranking)을 담당한다.** 대기시간 예측은 라우터 함수 안에 직접 작성하지 않고 `ai/`(AI Adapter)를 호출한다. 요금/시간/도보 우선순위 추천 로직은 `ai/`가 아니라 `backend/`에 둔다(Backend Phase 7, 아직 미착수).
+2. **`ai/`는 AI Adapter다 — 예측 모델을 호출하는 것 외의 로직(추천 정렬 등)을 갖지 않는다.** FastAPI/HTTP를 import하지 않고, 입력/출력은 일반 Python 타입(dataclass 등)으로만 주고받아 HTTP 없이도 단위 테스트가 가능해야 한다. 모델이 연결되지 않은 기능은 가짜 값을 반환하지 말고 `NotImplementedError`를 발생시킨다.
 3. **`frontend/`는 `backend/`의 API를 통해서만 데이터를 얻는다.** `data/`의 CSV나 `ai/` 코드를 직접 참조하지 않는다.
 4. **서비스 코드(`backend/`, `frontend/`, `ai/`)는 `data/raw`, `data/processed`, `notebooks*/`의 파일 경로를 직접 참조하지 않는다.** 분석 결과가 필요하면 사람이 검토해서 `analysis/`에 export하고, `ai/`는 `analysis/`의 파일만 읽는다.
 5. **기존 `src/`, `notebooks*/`는 데이터분석 전용이다.** 서비스 기능을 이 폴더에 추가하지 않는다.
@@ -17,10 +17,9 @@
 |---|---|---|
 | `backend/app/api/` | 라우터, 요청/응답 스키마 | 계산 로직 직접 구현 |
 | `backend/app/core/` | 설정 로딩, 로깅 등 앱 공통 인프라 | 도메인 로직 |
-| `ai/waiting_time/` | 시간대별 예상 대기시간 산출 | HTTP, FastAPI import |
-| `ai/recommendation/` | Rule-based 경로 정렬 | HTTP, FastAPI import |
+| `ai/waiting_time/` | 특장차/임차택시 Prediction 모델 호출(AI Adapter) | 모델 미연결 시 가짜 값 반환, 추천/정렬 로직 |
 | `frontend/src/` | 화면, API 클라이언트 | 백엔드 로직 재구현 |
-| `analysis/` | 서비스가 쓰기로 확정된 분석 export 결과 | 탐색적 분석, 노트북의 자동 출력 경로로 사용 |
+| `analysis/` | 서비스가 쓰기로 확정된 Prediction 모델/분석 export 결과 | 탐색적 분석, 노트북의 자동 출력 경로로 사용 |
 | `docs/` | 지금 실제로 필요한 설계/운영 문서만 | 빈 문서, 미확정 내용 미리 채우기 |
 
 ## 코드 작성 기준

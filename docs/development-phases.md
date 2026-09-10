@@ -9,12 +9,12 @@
 ## Phase 0 — 모노레포 초기 스캐폴딩 (2026-09-10)
 
 - 브랜치: `feat/service-bootstrap` (base: `dev`)
-- 한 일: `backend/`(FastAPI), `ai/`(대기시간·추천 로직 골격), `frontend/`(Vite+React+TS)를 기존 데이터분석 구조와 분리해 추가. 이후 `analysis/`를 분석→서비스 경계(export 전용 공간)로 추가. `docs/`, `AGENTS.md`, 루트 `README.md` 정비.
+- 한 일: `backend/`(FastAPI), `ai/`(AI Adapter 골격), `frontend/`(Vite+React+TS)를 기존 데이터분석 구조와 분리해 추가. `analysis/`를 분석→서비스 경계(Prediction 모델 export 전용 공간)로 추가. 이후 `ai/`에서 추천 정렬(`recommendation/`)을 제거하고 예측 모델 어댑터 역할로 좁힘(ADR 0002), `estimator.py`가 모델 미연결 시 `NotImplementedError`를 던지도록 변경. `docs/`, `AGENTS.md`, 루트 `README.md` 정비.
 - 산출물:
-  - `GET /health` 동작(200 확인), `pytest`(backend+ai) 6개 통과, `npm run build`/`npm test`(frontend) 통과
-  - `docs/architecture.md`(폴더 책임/데이터 소유권), `docs/decisions/0001-monorepo-and-stack.md`
-  - `analysis/README.md` — export 규칙만 정의, 아직 실제 export된 파일은 없음
+  - `GET /health` 동작(200 확인), `pytest`(backend+ai) 5개 통과, `npm run build`/`npm test`(frontend) 통과
+  - `docs/architecture.md`(폴더 책임/데이터 소유권/대기시간 예측 흐름), `docs/decisions/0001-monorepo-and-stack.md`, `docs/decisions/0002-ai-as-adapter-only.md`
+  - `analysis/README.md` — export 규칙만 정의, 아직 실제 export된 Prediction 모델은 없음
 - 다음 Phase가 이어받을 것:
   - 화면 1(MAP) → 화면 2(경로 비교) → 화면 3(교통비 캘린더) 구체 설계 — 원 기획서에서 이미 다음 단계로 지정된 작업
-  - 위 화면 설계가 나온 뒤 `backend/app/api/`에 실제 라우트, `ai/`에 실제 대기시간 데이터/추천 규칙 반영
-  - `ai/waiting_time/estimator.py`는 지금 고정값(30분)을 반환하는 자리표시자다 — `notebooks_lye/5-1_plan_시간대별평균대기시간.ipynb` 등 기존 분석 결과를 `analysis/`로 export한 뒤 실제 lookup으로 연결해야 함
+  - 특장차/임차택시 Prediction 모델을 `analysis/`로 export하고, `ai/waiting_time/estimator.py`가 그 모델을 실제로 호출하도록 구현(현재는 `NotImplementedError`)
+  - **Backend Phase 7**: 요금/시간/도보 우선순위 추천 정렬(Rule-based)을 `backend/`에 구현 — `ai/`가 아니라 `backend/`가 담당(ADR 0002)
