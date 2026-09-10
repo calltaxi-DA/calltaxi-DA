@@ -1,6 +1,6 @@
 # analysis/
 
-`ai/`(AI Adapter)가 실제로 호출·서빙하는 **특장차/임차택시 Prediction 모델과 그 산출물의 발행처(export 대상)**. `data/`, `notebooks*/`, `src/`(탐색적 분석, 원본/중간 산출물, 팀 작업 공간)와는 구분된다 — 이 폴더에는 "서비스가 그대로 가져다 쓰기로 확정된" 모델/결과만 둔다.
+`ai/`(AI Adapter)가 실제로 호출·서빙하는 **장애인 콜택시 통합 대기시간 Prediction 모델과 그 산출물의 발행처(export 대상)**. `data/`, `notebooks*/`, `src/`(탐색적 분석, 원본/중간 산출물, 팀 작업 공간)와는 구분된다 — 이 폴더에는 "서비스가 그대로 가져다 쓰기로 확정된" 모델/결과만 둔다.
 
 ## 규칙
 
@@ -10,6 +10,6 @@
 
 ## 현재 상태
 
-아직 이곳으로 export된 Prediction 모델/분석 결과가 없다 — `ai/waiting_time/estimator.py`는 그래서 지금 `NotImplementedError`를 발생시킨다. 첫 후보: 특장차/임차택시 시간대별 예상 대기시간 Prediction 모델(출처 후보: `notebooks_lye/5-1_plan_시간대별평균대기시간.ipynb` 등).
+아직 이곳으로 export된 Prediction 모델/분석 결과가 없다 — `ai/waiting_time/estimator.py`는 그래서 지금 `NotImplementedError`를 발생시킨다. 첫 후보: 장애인 콜택시 통합 시간대별 예상 대기시간 Prediction 모델(출처 후보: `notebooks_lye/5-1_plan_시간대별평균대기시간.ipynb` 등).
 
 요금/시간/도보 우선순위 추천 로직은 이 폴더·`ai/`가 아니라 `backend/`가 담당한다(Backend Phase 7 예정).

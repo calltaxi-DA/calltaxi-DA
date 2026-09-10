@@ -1,10 +1,10 @@
-"""AI Adapter: 특장차/임차택시 대기시간 Prediction 모델 연동 지점.
+"""AI Adapter: 장애인 콜택시 통합 대기시간 Prediction 모델 연동 지점.
 
 이 모듈은 예측 모델 자체가 아니라, backend가 예측 모델을 호출하기 위해 쓰는 어댑터다.
 아직 실제 모델이 연결되지 않았으므로 호출 시 NotImplementedError를 발생시킨다 —
 연결 전까지 가짜 값을 반환해 문제를 숨기지 않는다.
 
-TODO: 특장차/임차택시별 Prediction 모델이 준비되면 이 함수 내부에서 모델을 호출하도록 구현한다.
+TODO: 장애인 콜택시 통합 대기시간 Prediction 모델이 준비되면 이 함수 내부에서 모델을 호출하도록 구현한다.
 """
 
 from dataclasses import dataclass
@@ -26,5 +26,5 @@ def estimate_waiting_minutes(hour_of_day: int) -> WaitingTimeEstimate:
         raise ValueError("hour_of_day는 0~23 사이여야 합니다")
 
     raise NotImplementedError(
-        "특장차/임차택시 대기시간 Prediction 모델이 아직 연결되지 않았습니다."
+        "장애인 콜택시 통합 대기시간 Prediction 모델이 아직 연결되지 않았습니다."
     )

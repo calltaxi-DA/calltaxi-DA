@@ -12,10 +12,10 @@
 
 세 축은 서로 다른 실행 주기(1회성 분석 vs 상시 서비스)와 데이터 신선도 요구사항을 가지므로 분리되어 있다. `data/`, `notebooks*/`는 탐색적·불안정한 작업 공간이라 서비스가 직접 참조하지 않는다.
 
-**대기시간 예측 흐름**: `analysis/`는 분석이 만들어낸 **특장차/임차택시 Prediction 모델**(또는 그 산출물)이 놓이는 곳이고, `ai/`는 그 모델을 직접 호출·서빙하는 **AI Adapter**다 — 예측 로직 자체를 갖지 않고 모델을 감싸기만 한다.
+**대기시간 예측 흐름**: `analysis/`는 분석이 만들어낸 **장애인 콜택시 통합 대기시간 Prediction 모델**(또는 그 산출물)이 놓이는 곳이고, `ai/`는 그 모델을 직접 호출·서빙하는 **AI Adapter**다 — 예측 로직 자체를 갖지 않고 모델을 감싸기만 한다.
 
 ```text
-notebooks*/ (모델 학습·검증) → analysis/ (특장차/임차택시 Prediction 모델) → ai/ (AI Adapter) → backend/
+notebooks*/ (모델 학습·검증) → analysis/ (장애인 콜택시 통합 대기시간 Prediction 모델) → ai/ (AI Adapter) → backend/
 ```
 
 `ai/`는 오직 `analysis/`의 산출물만 참조하며, 모델이 아직 연결되지 않은 동안에는 가짜 값을 반환하지 않고 명확히 실패(`NotImplementedError`)한다 — `backend/`가 "예측 불가" 상태를 받아 처리하도록 강제한다.
@@ -31,7 +31,7 @@ notebooks*/ (모델 학습·검증) → analysis/ (특장차/임차택시 Predic
 ## 폴더 책임
 
 - **`backend/`** — FastAPI HTTP 계층. 요청을 받아 `ai/`(예측)를 호출하고, 요금/시간/도보 우선순위 추천 정렬(Rule-based, Backend Phase 7 예정)도 여기서 구현한다. 대기시간 예측 모델 자체는 갖지 않는다.
-- **`ai/`** — **AI Adapter.** `analysis/`의 특장차/임차택시 Prediction 모델을 호출하는 어댑터. 순수 Python이며 FastAPI/HTTP를 알지 못한다(단독 테스트·재사용 가능해야 함). 예측 로직·추천 로직을 직접 갖지 않는다 — 모델이 없으면 `NotImplementedError`로 실패한다.
+- **`ai/`** — **AI Adapter.** `analysis/`의 장애인 콜택시 통합 대기시간 Prediction 모델을 호출하는 어댑터. 순수 Python이며 FastAPI/HTTP를 알지 못한다(단독 테스트·재사용 가능해야 함). 예측 로직·추천 로직을 직접 갖지 않는다 — 모델이 없으면 `NotImplementedError`로 실패한다.
 - **`frontend/`** — 사용자 화면. `backend/`가 노출하는 API만 호출하고, 데이터 파일이나 `ai/`를 직접 참조하지 않는다.
 - **`analysis/`** — 분석이 만들어낸 Prediction 모델/산출물 중 서비스가 쓰기로 확정된 것만 모아두는 export 공간. 노트북이 자동으로 쓰지 않고 사람이 검토 후 옮긴다. 자세한 규칙은 [`analysis/README.md`](../analysis/README.md).
 - **`data/`, `notebooks*/`, `src/`** — 기존 데이터분석 자산(탐색적, 원본/중간 산출물). 서비스 코드(`backend/`, `frontend/`, `ai/`)가 이 폴더의 파일 경로를 직접 참조하지 않는다 — 필요하면 `analysis/`를 거친다.
