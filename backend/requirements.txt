@@ -1,0 +1,7 @@
+# backend 서비스 전용 의존성 (Python 3.12 기준)
+# 데이터분석용 의존성(루트 requirements.txt)과 분리 관리한다.
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic-settings==2.5.2
+pytest==8.3.3
+httpx==0.27.2
