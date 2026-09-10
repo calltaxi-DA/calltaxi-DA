@@ -30,3 +30,6 @@ def get_env(name: str, required: bool = True) -> str | None:
 
 MOBILITY_API_KEY = get_env("MOBILITY_API_KEY", required=False)
 MOBILITY_API_BASE_URL = get_env("MOBILITY_API_BASE_URL", required=False) or "https://apis.data.go.kr/B553766/wksn"
+
+SUBWAY_REALTIME_ARRIVAL_API_KEY = get_env("SUBWAY_REALTIME_ARRIVAL_API_KEY", required=False)
+SUBWAY_REALTIME_ARRIVAL_BASE_URL = get_env("SUBWAY_REALTIME_ARRIVAL_BASE_URL", required=False)
