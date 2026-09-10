@@ -17,7 +17,7 @@
 |---|---|---|
 | `backend/app/api/` | 라우터, 요청/응답 스키마 | 계산 로직 직접 구현 |
 | `backend/app/core/` | 설정 로딩, 로깅 등 앱 공통 인프라 | 도메인 로직 |
-| `ai/waiting_time/` | 특장차/임차택시 Prediction 모델 호출(AI Adapter) | 모델 미연결 시 가짜 값 반환, 추천/정렬 로직 |
+| `ai/waiting_time/` | 장애인 콜택시 통합 대기시간 Prediction 모델 호출(AI Adapter) | 모델 미연결 시 가짜 값 반환, 추천/정렬 로직 |
 | `frontend/src/` | 화면, API 클라이언트 | 백엔드 로직 재구현 |
 | `analysis/` | 서비스가 쓰기로 확정된 Prediction 모델/분석 export 결과 | 탐색적 분석, 노트북의 자동 출력 경로로 사용 |
 | `docs/` | 지금 실제로 필요한 설계/운영 문서만 | 빈 문서, 미확정 내용 미리 채우기 |
