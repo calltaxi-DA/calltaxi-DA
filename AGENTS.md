@@ -7,8 +7,9 @@
 1. **`backend/`는 HTTP만 담당한다.** 대기시간 계산, 추천 정렬 같은 비즈니스 로직을 라우터 함수 안에 직접 작성하지 않는다 — `ai/`의 함수를 호출한다.
 2. **`ai/`는 FastAPI/HTTP를 import하지 않는다.** 입력/출력은 일반 Python 타입(dataclass 등)으로만 주고받아, HTTP 없이도 단위 테스트가 가능해야 한다.
 3. **`frontend/`는 `backend/`의 API를 통해서만 데이터를 얻는다.** `data/`의 CSV나 `ai/` 코드를 직접 참조하지 않는다.
-4. **서비스 코드(`backend/`, `frontend/`, `ai/`)는 `data/raw`, `data/processed`의 파일 경로를 하드코딩하지 않는다.** 분석 결과가 필요하면 `ai/`에 값을 명시적으로 옮겨 담는다(경로 참조가 아니라 값 복사).
+4. **서비스 코드(`backend/`, `frontend/`, `ai/`)는 `data/raw`, `data/processed`, `notebooks*/`의 파일 경로를 직접 참조하지 않는다.** 분석 결과가 필요하면 사람이 검토해서 `analysis/`에 export하고, `ai/`는 `analysis/`의 파일만 읽는다.
 5. **기존 `src/`, `notebooks*/`는 데이터분석 전용이다.** 서비스 기능을 이 폴더에 추가하지 않는다.
+6. **`analysis/`에는 노트북/스크립트가 자동으로 쓰지 않는다.** 분석이 끝나고 결과가 안정화된 뒤 사람이 수동으로 export한다(자세한 규칙은 `analysis/README.md`).
 
 ## 폴더 책임
 
@@ -19,6 +20,7 @@
 | `ai/waiting_time/` | 시간대별 예상 대기시간 산출 | HTTP, FastAPI import |
 | `ai/recommendation/` | Rule-based 경로 정렬 | HTTP, FastAPI import |
 | `frontend/src/` | 화면, API 클라이언트 | 백엔드 로직 재구현 |
+| `analysis/` | 서비스가 쓰기로 확정된 분석 export 결과 | 탐색적 분석, 노트북의 자동 출력 경로로 사용 |
 | `docs/` | 지금 실제로 필요한 설계/운영 문서만 | 빈 문서, 미확정 내용 미리 채우기 |
 
 ## 코드 작성 기준
