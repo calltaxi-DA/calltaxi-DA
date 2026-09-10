@@ -5,6 +5,10 @@ __pycache__/
 *.pyd
 .venv/
 venv/
+.pytest_cache/
+
+# Node
+node_modules/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -50,6 +54,7 @@ Thumbs.db
 # Environment
 .env
 .env.*
+!.env.example
 
 # Model output
 models/
