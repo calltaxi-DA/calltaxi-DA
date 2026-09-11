@@ -15,14 +15,14 @@ describe('App', () => {
     render(<App />)
 
     expect(
-      screen.getByRole('heading', { name: /출발지와 목적지를 검색하고 지도에서 위치를 확인하세요/i }),
+      screen.getByRole('heading', { name: /어디로 이동할까요/i }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('출발지')).toBeInTheDocument()
     expect(screen.getByLabelText('목적지')).toBeInTheDocument()
     expect(screen.getByLabelText('지도 위치 확인')).toBeInTheDocument()
     expect(screen.getByText(/Kakao Maps 앱 키를 설정하면 지도와 장소검색을 사용할 수 있습니다/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '출발지 장소검색' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '목적지 장소검색' })).toBeInTheDocument()
+    expect(screen.getByLabelText('경로 검색 패널')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: '검색' })).toHaveLength(2)
     expect(screen.getByLabelText('장애인 콜택시')).toBeChecked()
     expect(screen.getByLabelText('지하철')).toBeChecked()
     expect(screen.getByLabelText('저상버스')).toBeChecked()
@@ -55,7 +55,7 @@ describe('App', () => {
     render(<App />)
 
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
-    fireEvent.click(screen.getByRole('button', { name: '출발지 장소검색' }))
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
 
     expect(screen.getByText('지도 서비스가 준비된 뒤 다시 검색하세요.')).toBeInTheDocument()
   })
@@ -107,10 +107,10 @@ describe('App', () => {
 
     render(<App />)
 
-    await waitFor(() => expect(screen.getByText('지도 준비 완료')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
 
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
-    fireEvent.click(screen.getByRole('button', { name: '출발지 장소검색' }))
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
 
     expect(keywordSearch).toHaveBeenCalledWith('서울시청', expect.any(Function))
     expect(screen.getByText('서울 중구 세종대로 110')).toBeInTheDocument()
@@ -118,7 +118,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /서울시청/ }))
 
     expect(screen.getByDisplayValue('서울시청')).toBeInTheDocument()
-    expect(screen.getByText(/좌표: 37.566826, 126.978657/)).toBeInTheDocument()
+    expect(screen.getByText(/37.566826/)).toBeInTheDocument()
+    expect(screen.getByText(/126.978657/)).toBeInTheDocument()
     await waitFor(() => expect(markerConstructor).toHaveBeenCalledTimes(1))
     expect(setCenter).toHaveBeenCalledTimes(1)
   })

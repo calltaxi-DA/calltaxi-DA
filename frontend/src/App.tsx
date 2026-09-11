@@ -324,123 +324,123 @@ function App() {
 
   return (
     <main className="app-shell">
-      <section className="hero">
-        <p className="eyebrow">장애인 이동 경로 비교</p>
-        <h1>출발지와 목적지를 검색하고 지도에서 위치를 확인하세요.</h1>
-        <p>
-          Kakao 장소검색으로 실제 출발지와 목적지를 선택하고, 장애인 콜택시·지하철·저상버스
-          비교 조건을 함께 설정합니다. 실제 경로 계산은 이후 Phase에서 backend API와 연결합니다.
-        </p>
-      </section>
-
-      <section className="map-card" aria-label="지도 위치 확인">
-        <div className="map-toolbar">
-          <div>
-            <h2>지도</h2>
-            <p>{mapStatus}</p>
-          </div>
-          <span className={isMapReady ? 'status-pill ready' : 'status-pill'} aria-live="polite">
-            {isMapReady ? '지도 준비 완료' : '지도 대기'}
-          </span>
-        </div>
+      <section className="map-layer" aria-label="지도 위치 확인">
         <div className="map-canvas" ref={mapContainerRef} role="img" aria-label="선택한 장소가 표시되는 지도" />
-      </section>
-
-      <form className="search-panel" aria-label="경로 검색 조건" onSubmit={handleSubmit}>
-        <div className="field-grid">
-          {(['origin', 'destination'] as const).map((role) => (
-            <div className="place-search" key={role}>
-              <label>
-                <span>{getLocationLabel(role)}</span>
-                <input
-                  value={role === 'origin' ? origin : destination}
-                  onChange={(event) => updatePlaceQuery(role, event.target.value)}
-                  placeholder={role === 'origin' ? '예: 서울시청' : '예: 서울역'}
-                  autoComplete="off"
-                />
-              </label>
-              <button className="secondary-button" type="button" onClick={() => searchPlaces(role)}>
-                {getLocationLabel(role)} 장소검색
-              </button>
-              {placeSearchMessage[role] ? (
-                <p className="field-hint" role="status">
-                  {placeSearchMessage[role]}
-                </p>
-              ) : null}
-              {selectedPlaces[role] ? (
-                <p className="selected-place">
-                  선택 위치: {selectedPlaces[role]?.address}
-                  <br />
-                  좌표: {selectedPlaces[role]?.lat.toFixed(6)}, {selectedPlaces[role]?.lng.toFixed(6)}
-                </p>
-              ) : null}
-              {searchResults[role].length > 0 ? (
-                <ul className="place-results" aria-label={`${getLocationLabel(role)} 검색 결과`}>
-                  {searchResults[role].map((place) => (
-                    <li key={place.id}>
-                      <button type="button" onClick={() => selectPlace(role, place)}>
-                        <strong>{place.name}</strong>
-                        <span>{place.address}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ))}
+        <div className="map-status-bar">
+          <span className={isMapReady ? 'status-dot ready' : 'status-dot'} aria-hidden="true" />
+          <span>{mapStatus}</span>
         </div>
-
-        <fieldset>
-          <legend>이동수단 선택</legend>
-          <div className="option-row">
-            {transportOptions.map((option) => (
-              <label className="check-card" key={option.value}>
-                <input
-                  type="checkbox"
-                  checked={selectedTransportTypes.includes(option.value)}
-                  onChange={() => handleTransportToggle(option.value)}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>우선순위 선택</legend>
-          <p className="field-hint">시간·비용·도보 기준을 1순위부터 3순위까지 정해주세요.</p>
-          <div className="priority-grid">
-            {priorityOrder.map((selectedPriority, index) => (
-              <label key={`${index + 1}-priority`}>
-                <span>{index + 1}순위</span>
-                <select
-                  value={selectedPriority}
-                  onChange={(event) => handlePriorityChange(index, event.target.value)}
-                >
-                  {priorityOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
-        <button type="submit" disabled={!canSearch}>
-          경로검색
-        </button>
-      </form>
-
-      <section className="summary-card" aria-live="polite">
-        <h2>입력 조건 요약</h2>
-        {submittedSummary ? (
-          <p>{submittedSummary}</p>
-        ) : (
-          <p>출발지·목적지와 이동 조건을 입력하면 이곳에 검색 조건이 표시됩니다.</p>
-        )}
       </section>
+
+      <aside className="route-panel" aria-label="경로 검색 패널">
+        <header className="panel-header">
+          <p className="eyebrow">장애인 이동 경로 비교</p>
+          <h1>어디로 이동할까요?</h1>
+          <p>출발지와 목적지를 검색하면 지도에 위치가 표시됩니다.</p>
+        </header>
+
+        <form className="search-panel" aria-label="경로 검색 조건" onSubmit={handleSubmit}>
+          <div className="place-stack">
+            {(['origin', 'destination'] as const).map((role) => (
+              <div className={`place-search ${role}`} key={role}>
+                <label>
+                  <span>{getLocationLabel(role)}</span>
+                  <div className="search-input-row">
+                    <input
+                      aria-label={getLocationLabel(role)}
+                      value={role === 'origin' ? origin : destination}
+                      onChange={(event) => updatePlaceQuery(role, event.target.value)}
+                      placeholder={role === 'origin' ? '예: 서울시청' : '예: 서울역'}
+                      autoComplete="off"
+                    />
+                    <button className="icon-button" type="button" onClick={() => searchPlaces(role)}>
+                      검색
+                    </button>
+                  </div>
+                </label>
+                {placeSearchMessage[role] ? (
+                  <p className="field-hint" role="status">
+                    {placeSearchMessage[role]}
+                  </p>
+                ) : null}
+                {selectedPlaces[role] ? (
+                  <p className="selected-place">
+                    {selectedPlaces[role]?.address}
+                    <br />
+                    {selectedPlaces[role]?.lat.toFixed(6)}, {selectedPlaces[role]?.lng.toFixed(6)}
+                  </p>
+                ) : null}
+                {searchResults[role].length > 0 ? (
+                  <ul className="place-results" aria-label={`${getLocationLabel(role)} 검색 결과`}>
+                    {searchResults[role].map((place) => (
+                      <li key={place.id}>
+                        <button type="button" onClick={() => selectPlace(role, place)}>
+                          <strong>{place.name}</strong>
+                          <span>{place.address}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <details className="condition-drawer">
+            <summary>이동 조건 설정</summary>
+            <fieldset>
+              <legend>이동수단 선택</legend>
+              <div className="option-row">
+                {transportOptions.map((option) => (
+                  <label className="check-card" key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTransportTypes.includes(option.value)}
+                      onChange={() => handleTransportToggle(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>우선순위 선택</legend>
+              <p className="field-hint">시간·비용·도보 기준을 1순위부터 3순위까지 정해주세요.</p>
+              <div className="priority-grid">
+                {priorityOrder.map((selectedPriority, index) => (
+                  <label key={`${index + 1}-priority`}>
+                    <span>{index + 1}순위</span>
+                    <select
+                      value={selectedPriority}
+                      onChange={(event) => handlePriorityChange(index, event.target.value)}
+                    >
+                      {priorityOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </details>
+
+          <button type="submit" disabled={!canSearch}>
+            경로검색
+          </button>
+        </form>
+
+        <section className="summary-card" aria-live="polite">
+          <h2>입력 조건 요약</h2>
+          {submittedSummary ? (
+            <p>{submittedSummary}</p>
+          ) : (
+            <p>출발지·목적지를 선택하면 검색 조건이 표시됩니다.</p>
+          )}
+        </section>
+      </aside>
     </main>
   )
 }
