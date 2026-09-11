@@ -52,12 +52,59 @@ select {
 }
 
 .search-panel,
-.summary-card {
+.summary-card,
+.map-card {
   padding: 28px;
   border: 1px solid #dbe4f0;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 20px 60px rgba(37, 54, 94, 0.12);
+}
+
+.map-card {
+  margin-bottom: 20px;
+}
+
+.map-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.map-toolbar h2,
+.map-toolbar p {
+  margin: 0;
+}
+
+.map-toolbar p {
+  color: #536079;
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-radius: 999px;
+  color: #5f6f8c;
+  background: #edf2f8;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.status-pill.ready {
+  color: #176b3a;
+  background: #e8f7ee;
+}
+
+.map-canvas {
+  min-height: 360px;
+  border: 1px solid #c9d4e4;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(49, 87, 199, 0.12), rgba(49, 87, 199, 0)),
+    #e9eef6;
+  overflow: hidden;
 }
 
 .field-grid {
@@ -106,6 +153,53 @@ fieldset {
   font-size: 0.95rem;
 }
 
+.place-search {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.selected-place {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  color: #25416f;
+  background: #eef4ff;
+  font-size: 0.92rem;
+}
+
+.place-results {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.place-results button {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #d5dfed;
+  border-radius: 14px;
+  color: #172033;
+  background: #ffffff;
+  text-align: left;
+}
+
+.place-results button:hover {
+  border-color: #3157c7;
+  background: #f6f8ff;
+}
+
+.place-results span {
+  color: #536079;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
 .option-row {
   display: flex;
   flex-wrap: wrap;
@@ -152,6 +246,18 @@ button {
   cursor: pointer;
 }
 
+.secondary-button {
+  margin-top: 0;
+  padding: 12px 14px;
+  border: 1px solid #3157c7;
+  color: #3157c7;
+  background: #ffffff;
+}
+
+.secondary-button:hover {
+  background: #f1f5ff;
+}
+
 button:disabled {
   background: #aeb9ce;
   cursor: not-allowed;
@@ -185,8 +291,17 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .map-toolbar {
+    display: grid;
+  }
+
+  .map-canvas {
+    min-height: 280px;
+  }
+
   .search-panel,
-  .summary-card {
+  .summary-card,
+  .map-card {
     padding: 20px;
     border-radius: 20px;
   }

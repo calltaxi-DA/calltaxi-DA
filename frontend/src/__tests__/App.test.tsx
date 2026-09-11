@@ -1,10 +1,13 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../App'
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
+  delete window.kakao
 })
 
 describe('App', () => {
@@ -12,10 +15,14 @@ describe('App', () => {
     render(<App />)
 
     expect(
-      screen.getByRole('heading', { name: /출발지와 목적지를 입력해 이동 조건을 설정하세요/i }),
+      screen.getByRole('heading', { name: /출발지와 목적지를 검색하고 지도에서 위치를 확인하세요/i }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText('출발지')).toBeInTheDocument()
     expect(screen.getByLabelText('목적지')).toBeInTheDocument()
+    expect(screen.getByLabelText('지도 위치 확인')).toBeInTheDocument()
+    expect(screen.getByText(/Kakao Maps 앱 키를 설정하면 지도와 장소검색을 사용할 수 있습니다/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '출발지 장소검색' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '목적지 장소검색' })).toBeInTheDocument()
     expect(screen.getByLabelText('장애인 콜택시')).toBeChecked()
     expect(screen.getByLabelText('지하철')).toBeChecked()
     expect(screen.getByLabelText('저상버스')).toBeChecked()
@@ -42,6 +49,78 @@ describe('App', () => {
         /서울시청에서 서울역까지 장애인 콜택시, 지하철, 저상버스 기준으로 1순위 도보 최소, 2순위 비용 최소, 3순위 시간 최소 경로를 검색합니다/,
       ),
     ).toBeInTheDocument()
+  })
+
+  it('guides users to wait when place search is used before the map service is ready', () => {
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
+    fireEvent.click(screen.getByRole('button', { name: '출발지 장소검색' }))
+
+    expect(screen.getByText('지도 서비스가 준비된 뒤 다시 검색하세요.')).toBeInTheDocument()
+  })
+
+  it('searches places, stores selected coordinates, and creates a map marker', async () => {
+    vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
+
+    const setCenter = vi.fn()
+    const setMap = vi.fn()
+    const keywordSearch = vi.fn((_keyword, callback) => {
+      callback(
+        [
+          {
+            id: 'place-1',
+            place_name: '서울시청',
+            address_name: '서울 중구 태평로1가',
+            road_address_name: '서울 중구 세종대로 110',
+            x: '126.9786567',
+            y: '37.566826',
+          },
+        ],
+        'OK',
+      )
+    })
+    const markerConstructor = vi.fn(function () {
+      return { setMap }
+    })
+
+    window.kakao = {
+      maps: {
+        load: (callback) => callback(),
+        Map: vi.fn(function () {
+          return { setCenter }
+        }),
+        LatLng: vi.fn(function (lat, lng) {
+          return { lat, lng }
+        }),
+        Marker: markerConstructor,
+        services: {
+          Places: vi.fn(function () {
+            return { keywordSearch }
+          }),
+          Status: {
+            OK: 'OK',
+          },
+        },
+      },
+    }
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('지도 준비 완료')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
+    fireEvent.click(screen.getByRole('button', { name: '출발지 장소검색' }))
+
+    expect(keywordSearch).toHaveBeenCalledWith('서울시청', expect.any(Function))
+    expect(screen.getByText('서울 중구 세종대로 110')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /서울시청/ }))
+
+    expect(screen.getByDisplayValue('서울시청')).toBeInTheDocument()
+    expect(screen.getByText(/좌표: 37.566826, 126.978657/)).toBeInTheDocument()
+    await waitFor(() => expect(markerConstructor).toHaveBeenCalledTimes(1))
+    expect(setCenter).toHaveBeenCalledTimes(1)
   })
 
   it('swaps priority ranks instead of allowing duplicate priority values', () => {

@@ -69,3 +69,21 @@
 - 다음 Phase가 이어받을 것:
   - 지도 SDK, 실제 위치 검색, backend API client 연결은 아직 구현하지 않는다.
   - 경로 결과 표시와 추천 정렬 UI는 backend 계약과 API가 준비된 뒤 진행한다.
+
+## Frontend Phase 2 — Kakao Map 및 장소검색 연동 (2026-09-11)
+
+- 브랜치: `frontend/phase2-kakao-map-search` (base: `dev`)
+- 한 일: 사용자가 Kakao 장소검색으로 실제 출발지·목적지를 검색하고 지도에서 선택 위치를 확인할 수 있게 했다. Kakao Maps JavaScript SDK를 `VITE_KAKAO_MAP_APP_KEY` 환경변수 기반으로 동적 로드하고, 장소검색 결과 선택 시 입력값·좌표를 저장하며 지도 중심 이동과 Marker 표시가 이루어지도록 했다. 실제 경로 검색 API 호출은 아직 연결하지 않고, 검색 조건 요약에 선택 좌표만 포함했다.
+- 산출물:
+  - `frontend/src/App.tsx` — Kakao Maps SDK 로딩, 장소검색, 출발지·목적지 좌표 상태, Marker 표시
+  - `frontend/src/index.css` — 지도 카드, 장소검색 결과, 선택 위치 표시 스타일
+  - `frontend/src/__tests__/App.test.tsx` — 지도/장소검색 UI 렌더링, SDK 미준비 상태 안내, 장소검색→위치 선택→Marker 생성 테스트
+  - `frontend/.env.example` — `VITE_KAKAO_MAP_APP_KEY` 자리 추가
+- 검증 결과:
+  - `npm test` — 8개 통과
+  - `npm run build` — TypeScript 빌드 및 Vite production build 통과
+  - `npm run lint` — oxlint 통과
+- 다음 Phase가 이어받을 것:
+  - 실제 경로검색 backend API 연결과 RouteResult 표시 UI는 아직 구현하지 않는다.
+  - Kakao REST API, TMAP/대중교통 경로 API, 추천 정렬은 이후 Backend/API 연동 Phase에서 구현한다.
+  - 지도에서 직접 클릭해 출발지·목적지를 지정하는 기능은 이번 Phase 범위에 포함하지 않았다.
