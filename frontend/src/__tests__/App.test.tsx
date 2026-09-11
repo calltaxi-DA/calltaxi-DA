@@ -28,7 +28,7 @@ function setupKakaoMock(
     callback([createPlace('place-1', '서울시청', '126.9786567', '37.566826')], 'OK')
   }),
 ) {
-  vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
+  vi.stubEnv('KAKAO_JS_KEY', 'test-kakao-map-key')
 
   const setCenter = vi.fn()
   const setMap = vi.fn()
@@ -70,6 +70,9 @@ afterEach(() => {
 
 describe('App', () => {
   it('renders the route search input UI', () => {
+    vi.stubEnv('KAKAO_JS_KEY', '')
+    vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', '')
+
     render(<App />)
 
     expect(
@@ -136,7 +139,7 @@ describe('App', () => {
   })
 
   it('shows an error when the Kakao script loads without the maps namespace', async () => {
-    vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
+    vi.stubEnv('KAKAO_JS_KEY', 'test-kakao-map-key')
 
     render(<App />)
 
@@ -233,7 +236,7 @@ describe('App', () => {
   })
 
   it('distinguishes a Kakao Places service error from no search results', async () => {
-    vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
+    vi.stubEnv('KAKAO_JS_KEY', 'test-kakao-map-key')
 
     const keywordSearch = vi.fn((_keyword, callback) => {
       callback([], 'ERROR')
