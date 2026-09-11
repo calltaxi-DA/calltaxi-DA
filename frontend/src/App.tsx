@@ -134,6 +134,10 @@ function App() {
     origin: null,
     destination: null,
   })
+  const placeSearchRequestRef = useRef<Record<LocationRole, number>>({
+    origin: 0,
+    destination: 0,
+  })
 
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
@@ -168,7 +172,7 @@ function App() {
   )
 
   const canSearch =
-    origin.trim().length > 0 && destination.trim().length > 0 && selectedTransportTypes.length > 0
+    selectedPlaces.origin !== null && selectedPlaces.destination !== null && selectedTransportTypes.length > 0
 
   useEffect(() => {
     let ignore = false
@@ -204,6 +208,10 @@ function App() {
   }, [kakaoMapAppKey])
 
   const updatePlaceQuery = (role: LocationRole, nextValue: string) => {
+    placeSearchRequestRef.current[role] += 1
+    markersRef.current[role]?.setMap(null)
+    markersRef.current[role] = null
+
     if (role === 'origin') {
       setOrigin(nextValue)
     } else {
@@ -249,6 +257,7 @@ function App() {
     }
 
     if (!placesRef.current || !window.kakao?.maps) {
+      placeSearchRequestRef.current[role] += 1
       setPlaceSearchMessage((current) => ({
         ...current,
         [role]: '지도 서비스가 준비된 뒤 다시 검색하세요.',
@@ -256,7 +265,14 @@ function App() {
       return
     }
 
+    const requestId = placeSearchRequestRef.current[role] + 1
+    placeSearchRequestRef.current[role] = requestId
+
     placesRef.current.keywordSearch(keyword, (results, status) => {
+      if (placeSearchRequestRef.current[role] !== requestId) {
+        return
+      }
+
       if (status === window.kakao?.maps.services.Status.ZERO_RESULT) {
         setSearchResults((current) => ({ ...current, [role]: [] }))
         setPlaceSearchMessage((current) => ({

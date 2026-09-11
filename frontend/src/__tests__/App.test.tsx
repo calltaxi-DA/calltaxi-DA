@@ -1,7 +1,65 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../App'
+
+type MockPlace = {
+  id: string
+  place_name: string
+  address_name: string
+  road_address_name: string
+  x: string
+  y: string
+}
+
+function createPlace(id: string, placeName: string, x: string, y: string): MockPlace {
+  return {
+    id,
+    place_name: placeName,
+    address_name: `${placeName} 지번주소`,
+    road_address_name: `${placeName} 도로명주소`,
+    x,
+    y,
+  }
+}
+
+function setupKakaoMock(
+  keywordSearch = vi.fn((_keyword, callback) => {
+    callback([createPlace('place-1', '서울시청', '126.9786567', '37.566826')], 'OK')
+  }),
+) {
+  vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
+
+  const setCenter = vi.fn()
+  const setMap = vi.fn()
+  const markerConstructor = vi.fn(function () {
+    return { setMap }
+  })
+
+  window.kakao = {
+    maps: {
+      load: (callback) => callback(),
+      Map: vi.fn(function () {
+        return { setCenter }
+      }),
+      LatLng: vi.fn(function (lat, lng) {
+        return { lat, lng }
+      }),
+      Marker: markerConstructor,
+      services: {
+        Places: vi.fn(function () {
+          return { keywordSearch }
+        }),
+        Status: {
+          OK: 'OK',
+          ZERO_RESULT: 'ZERO_RESULT',
+        },
+      },
+    },
+  }
+
+  return { keywordSearch, markerConstructor, setCenter, setMap }
+}
 
 afterEach(() => {
   cleanup()
@@ -32,21 +90,38 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '경로검색' })).toBeDisabled()
   })
 
-  it('allows users to enter search conditions and submit them', () => {
+  it('requires selected origin and destination places before users can submit', async () => {
+    const originPlace = createPlace('origin-place', '서울시청', '126.9786567', '37.566826')
+    const destinationPlace = createPlace('destination-place', '서울역', '126.970671', '37.554678')
+    setupKakaoMock(
+      vi.fn((keyword, callback) => {
+        callback([keyword === '서울역' ? destinationPlace : originPlace], 'OK')
+      }),
+    )
     render(<App />)
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
 
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
     fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '서울역' } })
     fireEvent.change(screen.getByLabelText('1순위'), { target: { value: 'walk' } })
 
     const searchButton = screen.getByRole('button', { name: '경로검색' })
+    expect(searchButton).toBeDisabled()
+
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.click(screen.getByRole('button', { name: /서울시청/ }))
+    expect(searchButton).toBeDisabled()
+
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[1])
+    fireEvent.click(screen.getByRole('button', { name: /서울역/ }))
     expect(searchButton).toBeEnabled()
 
     fireEvent.click(searchButton)
 
     expect(
       screen.getByText(
-        /서울시청에서 서울역까지 장애인 콜택시, 지하철, 저상버스 기준으로 1순위 도보 최소, 2순위 비용 최소, 3순위 시간 최소 경로를 검색합니다/,
+        /서울시청\(37.566826, 126.978657\)에서 서울역\(37.554678, 126.970671\)까지 장애인 콜택시, 지하철, 저상버스 기준으로 1순위 도보 최소, 2순위 비용 최소, 3순위 시간 최소 경로를 검색합니다/,
       ),
     ).toBeInTheDocument()
   })
@@ -76,10 +151,6 @@ describe('App', () => {
   })
 
   it('searches places, stores selected coordinates, and creates a map marker', async () => {
-    vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
-
-    const setCenter = vi.fn()
-    const setMap = vi.fn()
     const keywordSearch = vi.fn((_keyword, callback) => {
       callback(
         [
@@ -95,31 +166,7 @@ describe('App', () => {
         'OK',
       )
     })
-    const markerConstructor = vi.fn(function () {
-      return { setMap }
-    })
-
-    window.kakao = {
-      maps: {
-        load: (callback) => callback(),
-        Map: vi.fn(function () {
-          return { setCenter }
-        }),
-        LatLng: vi.fn(function (lat, lng) {
-          return { lat, lng }
-        }),
-        Marker: markerConstructor,
-        services: {
-          Places: vi.fn(function () {
-            return { keywordSearch }
-          }),
-          Status: {
-            OK: 'OK',
-            ZERO_RESULT: 'ZERO_RESULT',
-          },
-        },
-      },
-    }
+    const { markerConstructor, setCenter } = setupKakaoMock(keywordSearch)
 
     render(<App />)
 
@@ -138,6 +185,51 @@ describe('App', () => {
     expect(screen.getByText(/126.978657/)).toBeInTheDocument()
     await waitFor(() => expect(markerConstructor).toHaveBeenCalledTimes(1))
     expect(setCenter).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes an existing marker when the selected place input changes', async () => {
+    const { setMap } = setupKakaoMock()
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.click(screen.getByRole('button', { name: /서울시청/ }))
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '강남역' } })
+
+    expect(setMap).toHaveBeenCalledWith(null)
+    expect(screen.queryByText(/37.566826/)).not.toBeInTheDocument()
+  })
+
+  it('ignores stale place search responses when a newer search finishes first', async () => {
+    const callbacks: Array<(results: MockPlace[], status: string) => void> = []
+    const keywordSearch = vi.fn((_keyword, callback) => {
+      callbacks.push(callback)
+    })
+    setupKakaoMock(keywordSearch)
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '강남역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+
+    act(() => {
+      callbacks[1]([createPlace('place-2', '강남역', '127.027621', '37.497942')], 'OK')
+    })
+    await waitFor(() => expect(screen.getByText('강남역 도로명주소')).toBeInTheDocument())
+
+    act(() => {
+      callbacks[0]([createPlace('place-1', '서울역', '126.970671', '37.554678')], 'OK')
+    })
+    expect(screen.getByText('강남역 도로명주소')).toBeInTheDocument()
+    expect(screen.queryByText('서울역 도로명주소')).not.toBeInTheDocument()
   })
 
   it('distinguishes a Kakao Places service error from no search results', async () => {
@@ -201,17 +293,11 @@ describe('App', () => {
   it('allows users to select transport types', () => {
     render(<App />)
 
-    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
-    fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '서울역' } })
     fireEvent.click(screen.getByLabelText('지하철'))
 
     const searchButton = screen.getByRole('button', { name: '경로검색' })
-    expect(searchButton).toBeEnabled()
-
-    fireEvent.click(searchButton)
-
-    expect(screen.getByText(/장애인 콜택시, 저상버스 기준/)).toBeInTheDocument()
-    expect(screen.queryByText(/장애인 콜택시, 지하철, 저상버스 기준/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('지하철')).not.toBeChecked()
+    expect(searchButton).toBeDisabled()
   })
 
   it('disables search when all transport types are unchecked and enables it again', () => {
@@ -228,7 +314,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('지하철'))
 
-    expect(screen.getByRole('button', { name: '경로검색' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '경로검색' })).toBeDisabled()
   })
 
   it('keeps search disabled for whitespace-only origin or destination', () => {

@@ -73,15 +73,15 @@
 ## Frontend Phase 2 — Kakao Map 및 장소검색 연동 (2026-09-11)
 
 - 브랜치: `frontend/phase2-kakao-map-search` (base: `dev`)
-- 한 일: 사용자가 Kakao 장소검색으로 실제 출발지·목적지를 검색하고 지도에서 선택 위치를 확인할 수 있게 했다. Kakao Maps JavaScript SDK를 `VITE_KAKAO_MAP_APP_KEY` 환경변수 기반으로 동적 로드하고, 장소검색 결과 선택 시 입력값·좌표를 저장하며 지도 중심 이동과 Marker 표시가 이루어지도록 했다. 이후 화면을 일반 폼 중심이 아니라 지도 앱처럼 전체 지도 위에 검색 패널이 떠 있는 구조로 정리했다. 실제 경로 검색 API 호출은 아직 연결하지 않고, 검색 조건 요약에 선택 좌표만 포함했다.
+- 한 일: 사용자가 Kakao 장소검색으로 실제 출발지·목적지를 검색하고 지도에서 선택 위치를 확인할 수 있게 했다. Kakao Maps JavaScript SDK를 `VITE_KAKAO_MAP_APP_KEY` 환경변수 기반으로 동적 로드하고, 장소검색 결과 선택 시 입력값·좌표를 저장하며 지도 중심 이동과 Marker 표시가 이루어지도록 했다. 이후 화면을 일반 폼 중심이 아니라 지도 앱처럼 전체 지도 위에 검색 패널이 떠 있는 구조로 정리했다. 입력값 수정 시 이전 Marker와 선택 좌표를 함께 무효화하고, 오래된 장소검색 응답이 최신 결과를 덮어쓰지 않도록 role별 request id를 적용했다. 경로검색은 출발지·목적지 좌표가 모두 선택된 경우에만 가능하다. 실제 경로 검색 API 호출은 아직 연결하지 않고, 검색 조건 요약에 선택 좌표만 포함했다.
 - 산출물:
   - `frontend/src/App.tsx` — Kakao Maps SDK 로딩, 장소검색, 출발지·목적지 좌표 상태, Marker 표시
   - `frontend/src/index.css` — 지도 카드, 장소검색 결과, 선택 위치 표시 스타일
-  - `frontend/src/__tests__/App.test.tsx` — 지도/장소검색 UI 렌더링, SDK 미준비 상태 안내, SDK namespace 누락 실패 처리, 장소검색→위치 선택→Marker 생성, 장소검색 오류 구분 테스트
+  - `frontend/src/__tests__/App.test.tsx` — 지도/장소검색 UI 렌더링, SDK 미준비 상태 안내, SDK namespace 누락 실패 처리, 장소검색→위치 선택→Marker 생성, 입력 수정 시 Marker 제거, stale 검색 응답 무시, 장소검색 오류 구분, 좌표 선택 전 경로검색 비활성화 테스트
   - `frontend/.env.example` — `VITE_KAKAO_MAP_APP_KEY` 자리 추가
   - `docs/decisions/0003-frontend-map-sdk-exception.md` — Kakao Maps JavaScript SDK 브라우저 직접 사용 예외 기록
 - 검증 결과:
-  - `npm test` — 10개 통과
+  - `npm test` — 12개 통과
   - `npm run build` — TypeScript 빌드 및 Vite production build 통과
   - `npm run lint` — oxlint 통과
   - 실제 Kakao 앱키가 필요한 브라우저 smoke test는 로컬 `.env.local`의 `VITE_KAKAO_MAP_APP_KEY`와 Kakao Developers의 localhost 도메인 등록이 필요하므로, merge 전 사람이 `서울시청`/`서울역` 검색과 Marker 표시를 수동 확인한다.
