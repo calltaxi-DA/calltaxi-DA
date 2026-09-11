@@ -18,3 +18,18 @@
   - 화면 1(MAP) → 화면 2(경로 비교) → 화면 3(교통비 캘린더) 구체 설계 — 원 기획서에서 이미 다음 단계로 지정된 작업
   - 특장차/임차택시 Prediction 모델을 `analysis/`로 export하고, `ai/waiting_time/estimator.py`가 그 모델을 실제로 호출하도록 구현(현재는 `NotImplementedError`)
   - **Backend Phase 7**: 요금/시간/도보 우선순위 추천 정렬(Rule-based)을 `backend/`에 구현 — `ai/`가 아니라 `backend/`가 담당(ADR 0002)
+
+## Phase 0 — Backend 프로젝트 기반 보강 (2026-09-11)
+
+- 브랜치: `phase0-backend-bootstrap` (base: `feat/service-bootstrap`)
+- 한 일: FastAPI 백엔드 기본 골격에서 누락되어 있던 공통 예외 처리 레이어를 추가. 예상하지 못한 서버 예외는 상세 내용을 응답에 노출하지 않고 `500 {"detail": "Internal Server Error"}`로 변환하도록 했다. 기존 `/health`, 설정 로딩, JSON 로깅, 테스트 구조는 유지했다.
+- 산출물:
+  - `backend/app/core/exceptions.py` — 공통 500 예외 핸들러
+  - `backend/app/main.py` — 전역 예외 핸들러 등록
+  - `backend/tests/test_health.py` — `/health` 성공 응답과 안전한 500 응답 테스트
+- 검증 결과:
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 4개 통과
+  - `uvicorn app.main:app --host 127.0.0.1 --port 8010` 실행 후 `GET /health` — 200, `{"status":"ok"}` 확인
+- 다음 Phase가 이어받을 것:
+  - 화면/API 계약이 확정되기 전까지 경로 추천, 지도 API 연동, 대기시간 모델 연결은 구현하지 않는다.
+  - 새로운 백엔드 라우트가 추가되면 `backend/app/api/`에 라우터와 요청/응답 스키마를 두고 `backend/tests/`에 TestClient 기반 테스트를 함께 추가한다.
