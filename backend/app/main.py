@@ -31,7 +31,7 @@ def create_app(include_sample_routes: bool | None = None) -> FastAPI:
     app.include_router(health_router)
     should_include_sample_routes = include_sample_routes
     if should_include_sample_routes is None:
-        should_include_sample_routes = settings.env in {"local", "test"}
+        should_include_sample_routes = settings.enable_sample_routes
     if should_include_sample_routes:
         app.include_router(routes_router)
     return app

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     env: str = "local"
     port: int = 8000
     log_level: str = "INFO"
+    enable_sample_routes: bool = False
 
 
 @lru_cache

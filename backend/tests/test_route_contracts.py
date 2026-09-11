@@ -3,9 +3,9 @@ from pydantic import ValidationError
 import pytest
 
 from app.api.contracts import Location, RouteComparisonResponse, RouteResult, RouteStatus, TransportType
-from app.main import app, create_app
+from app.main import create_app
 
-client = TestClient(app)
+client = TestClient(create_app(include_sample_routes=True))
 
 
 def test_route_result_contract_handles_walking_distance_and_time() -> None:
@@ -258,3 +258,21 @@ def test_sample_routes_are_not_registered_when_disabled() -> None:
     response = production_like_client.get("/routes/sample")
 
     assert response.status_code == 404
+
+
+def test_sample_routes_are_not_registered_by_default() -> None:
+    default_app = create_app()
+    default_client = TestClient(default_app)
+
+    response = default_client.get("/routes/sample")
+
+    assert response.status_code == 404
+
+
+def test_sample_routes_are_registered_only_when_enabled() -> None:
+    sample_app = create_app(include_sample_routes=True)
+    sample_client = TestClient(sample_app)
+
+    response = sample_client.get("/routes/sample")
+
+    assert response.status_code == 200
