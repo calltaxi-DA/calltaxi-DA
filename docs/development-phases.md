@@ -33,3 +33,18 @@
 - 다음 Phase가 이어받을 것:
   - 화면/API 계약이 확정되기 전까지 경로 추천, 지도 API 연동, 대기시간 모델 연결은 구현하지 않는다.
   - 새로운 백엔드 라우트가 추가되면 `backend/app/api/`에 라우터와 요청/응답 스키마를 두고 `backend/tests/`에 TestClient 기반 테스트를 함께 추가한다.
+
+## Frontend Phase 1 — 기본 화면 및 사용자 입력 UI (2026-09-11)
+
+- 브랜치: `frontend/phase1-basic-input-ui` (base: `feat/service-bootstrap`)
+- 한 일: 사용자가 경로 검색에 필요한 조건을 입력할 수 있는 기본 화면을 구성했다. 출발지·목적지 입력창, 장애인 콜택시·지하철·저상버스 선택, 시간·비용·도보 최소 우선순위 선택, 경로검색 버튼과 입력 조건 요약 영역을 추가했다. 실제 경로 검색 API 호출과 지도 표시는 이후 Phase로 남겼다.
+- 산출물:
+  - `frontend/src/App.tsx` — 기본 입력 UI와 로컬 입력 상태
+  - `frontend/src/index.css` — 반응형 기본 스타일
+  - `frontend/src/__tests__/App.test.tsx` — 입력 UI 렌더링과 조건 입력/제출 테스트
+- 검증 결과:
+  - `npm test` — 2개 통과
+  - `npm run build` — TypeScript 빌드 및 Vite production build 통과
+- 다음 Phase가 이어받을 것:
+  - 지도 SDK, 실제 위치 검색, backend API client 연결은 아직 구현하지 않는다.
+  - 경로 결과 표시와 추천 정렬 UI는 backend 계약과 API가 준비된 뒤 진행한다.
