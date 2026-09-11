@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.health import router as health_router
+from app.api.routes import router as routes_router
 from app.core.config import get_settings
 from app.core.exceptions import internal_server_error_handler
 from app.core.logging import configure_logging
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="calltaxi-service", version="0.1.0", lifespan=lifespan)
     app.add_exception_handler(Exception, internal_server_error_handler)
     app.include_router(health_router)
+    app.include_router(routes_router)
     return app
 
 
