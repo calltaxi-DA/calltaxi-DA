@@ -49,6 +49,7 @@ declare global {
           Places: new () => KakaoPlaces
           Status: {
             OK: string
+            ZERO_RESULT: string
           }
         }
       }
@@ -89,16 +90,25 @@ function getLocationLabel(role: LocationRole) {
   return role === 'origin' ? '출발지' : '목적지'
 }
 
+function resolveKakaoMaps(resolve: () => void, reject: (reason: Error) => void) {
+  if (!window.kakao?.maps) {
+    reject(new Error('Kakao Maps SDK loaded without maps namespace'))
+    return
+  }
+
+  window.kakao.maps.load(resolve)
+}
+
 function loadKakaoMapSdk(appKey: string) {
   if (window.kakao?.maps) {
-    return new Promise<void>((resolve) => window.kakao?.maps.load(resolve))
+    return new Promise<void>((resolve, reject) => resolveKakaoMaps(resolve, reject))
   }
 
   return new Promise<void>((resolve, reject) => {
     const existingScript = document.querySelector<HTMLScriptElement>('script[data-kakao-map-sdk]')
 
     if (existingScript) {
-      existingScript.addEventListener('load', () => window.kakao?.maps.load(resolve), { once: true })
+      existingScript.addEventListener('load', () => resolveKakaoMaps(resolve, reject), { once: true })
       existingScript.addEventListener('error', () => reject(new Error('Kakao Maps SDK load failed')), {
         once: true,
       })
@@ -109,7 +119,7 @@ function loadKakaoMapSdk(appKey: string) {
     script.dataset.kakaoMapSdk = 'true'
     script.async = true
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&libraries=services&autoload=false`
-    script.onload = () => window.kakao?.maps.load(resolve)
+    script.onload = () => resolveKakaoMaps(resolve, reject)
     script.onerror = () => reject(new Error('Kakao Maps SDK load failed'))
     document.head.appendChild(script)
   })
@@ -247,7 +257,25 @@ function App() {
     }
 
     placesRef.current.keywordSearch(keyword, (results, status) => {
-      if (status !== window.kakao?.maps.services.Status.OK || results.length === 0) {
+      if (status === window.kakao?.maps.services.Status.ZERO_RESULT) {
+        setSearchResults((current) => ({ ...current, [role]: [] }))
+        setPlaceSearchMessage((current) => ({
+          ...current,
+          [role]: `${keyword} 검색 결과가 없습니다.`,
+        }))
+        return
+      }
+
+      if (status !== window.kakao?.maps.services.Status.OK) {
+        setSearchResults((current) => ({ ...current, [role]: [] }))
+        setPlaceSearchMessage((current) => ({
+          ...current,
+          [role]: '장소검색 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하세요.',
+        }))
+        return
+      }
+
+      if (results.length === 0) {
         setSearchResults((current) => ({ ...current, [role]: [] }))
         setPlaceSearchMessage((current) => ({
           ...current,

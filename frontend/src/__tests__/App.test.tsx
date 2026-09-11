@@ -60,6 +60,21 @@ describe('App', () => {
     expect(screen.getByText('지도 서비스가 준비된 뒤 다시 검색하세요.')).toBeInTheDocument()
   })
 
+  it('shows an error when the Kakao script loads without the maps namespace', async () => {
+    vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
+
+    render(<App />)
+
+    const script = document.querySelector<HTMLScriptElement>('script[data-kakao-map-sdk]')
+    script?.dispatchEvent(new Event('load'))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Kakao Maps SDK를 불러오지 못했습니다. 앱 키와 도메인 설정을 확인하세요.'),
+      ).toBeInTheDocument(),
+    )
+  })
+
   it('searches places, stores selected coordinates, and creates a map marker', async () => {
     vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
 
@@ -100,6 +115,7 @@ describe('App', () => {
           }),
           Status: {
             OK: 'OK',
+            ZERO_RESULT: 'ZERO_RESULT',
           },
         },
       },
@@ -122,6 +138,49 @@ describe('App', () => {
     expect(screen.getByText(/126.978657/)).toBeInTheDocument()
     await waitFor(() => expect(markerConstructor).toHaveBeenCalledTimes(1))
     expect(setCenter).toHaveBeenCalledTimes(1)
+  })
+
+  it('distinguishes a Kakao Places service error from no search results', async () => {
+    vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', 'test-kakao-map-key')
+
+    const keywordSearch = vi.fn((_keyword, callback) => {
+      callback([], 'ERROR')
+    })
+
+    window.kakao = {
+      maps: {
+        load: (callback) => callback(),
+        Map: vi.fn(function () {
+          return { setCenter: vi.fn() }
+        }),
+        LatLng: vi.fn(function (lat, lng) {
+          return { lat, lng }
+        }),
+        Marker: vi.fn(function () {
+          return { setMap: vi.fn() }
+        }),
+        services: {
+          Places: vi.fn(function () {
+            return { keywordSearch }
+          }),
+          Status: {
+            OK: 'OK',
+            ZERO_RESULT: 'ZERO_RESULT',
+          },
+        },
+      },
+    }
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+
+    expect(
+      screen.getByText('장소검색 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하세요.'),
+    ).toBeInTheDocument()
   })
 
   it('swaps priority ranks instead of allowing duplicate priority values', () => {

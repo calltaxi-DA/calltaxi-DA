@@ -6,7 +6,7 @@
 
 1. **`backend/`는 HTTP + 추천 정렬(Rule-based ranking)을 담당한다.** 대기시간 예측은 라우터 함수 안에 직접 작성하지 않고 `ai/`(AI Adapter)를 호출한다. 요금/시간/도보 우선순위 추천 로직은 `ai/`가 아니라 `backend/`에 둔다(Backend Phase 7, 아직 미착수).
 2. **`ai/`는 AI Adapter다 — 예측 모델을 호출하는 것 외의 로직(추천 정렬 등)을 갖지 않는다.** FastAPI/HTTP를 import하지 않고, 입력/출력은 일반 Python 타입(dataclass 등)으로만 주고받아 HTTP 없이도 단위 테스트가 가능해야 한다. 모델이 연결되지 않은 기능은 가짜 값을 반환하지 말고 `NotImplementedError`를 발생시킨다.
-3. **`frontend/`는 `backend/`의 API를 통해서만 데이터를 얻는다.** `data/`의 CSV나 `ai/` 코드를 직접 참조하지 않는다.
+3. **`frontend/`는 원칙적으로 `backend/`의 API를 통해서만 데이터를 얻는다.** 단, 지도 렌더링과 Kakao Maps JavaScript SDK의 브라우저 전용 기능(지도, Marker, Places 장소검색)은 `frontend/`에서 직접 사용할 수 있다(ADR 0003). 경로 계산, 추천, 요금/시간/도보 판단, 서비스 비즈니스 데이터는 `backend/` API를 통해서만 사용한다. `frontend/`는 `data/`의 CSV나 `ai/` 코드를 직접 참조하지 않는다.
 4. **서비스 코드(`backend/`, `frontend/`, `ai/`)는 `data/raw`, `data/processed`, `notebooks*/`의 파일 경로를 직접 참조하지 않는다.** 분석 결과가 필요하면 사람이 검토해서 `analysis/`에 export하고, `ai/`는 `analysis/`의 파일만 읽는다.
 5. **기존 `src/`, `notebooks*/`는 데이터분석 전용이다.** 서비스 기능을 이 폴더에 추가하지 않는다.
 6. **`analysis/`에는 노트북/스크립트가 자동으로 쓰지 않는다.** 분석이 끝나고 결과가 안정화된 뒤 사람이 수동으로 export한다(자세한 규칙은 `analysis/README.md`).

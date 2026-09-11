@@ -77,12 +77,14 @@
 - 산출물:
   - `frontend/src/App.tsx` — Kakao Maps SDK 로딩, 장소검색, 출발지·목적지 좌표 상태, Marker 표시
   - `frontend/src/index.css` — 지도 카드, 장소검색 결과, 선택 위치 표시 스타일
-  - `frontend/src/__tests__/App.test.tsx` — 지도/장소검색 UI 렌더링, SDK 미준비 상태 안내, 장소검색→위치 선택→Marker 생성 테스트
+  - `frontend/src/__tests__/App.test.tsx` — 지도/장소검색 UI 렌더링, SDK 미준비 상태 안내, SDK namespace 누락 실패 처리, 장소검색→위치 선택→Marker 생성, 장소검색 오류 구분 테스트
   - `frontend/.env.example` — `VITE_KAKAO_MAP_APP_KEY` 자리 추가
+  - `docs/decisions/0003-frontend-map-sdk-exception.md` — Kakao Maps JavaScript SDK 브라우저 직접 사용 예외 기록
 - 검증 결과:
-  - `npm test` — 8개 통과
+  - `npm test` — 10개 통과
   - `npm run build` — TypeScript 빌드 및 Vite production build 통과
   - `npm run lint` — oxlint 통과
+  - 실제 Kakao 앱키가 필요한 브라우저 smoke test는 로컬 `.env.local`의 `VITE_KAKAO_MAP_APP_KEY`와 Kakao Developers의 localhost 도메인 등록이 필요하므로, merge 전 사람이 `서울시청`/`서울역` 검색과 Marker 표시를 수동 확인한다.
 - 다음 Phase가 이어받을 것:
   - 실제 경로검색 backend API 연결과 RouteResult 표시 UI는 아직 구현하지 않는다.
   - Kakao REST API, TMAP/대중교통 경로 API, 추천 정렬은 이후 Backend/API 연동 Phase에서 구현한다.
