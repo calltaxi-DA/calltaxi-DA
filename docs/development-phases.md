@@ -45,8 +45,9 @@
   - `backend/tests/test_route_contracts.py` — 도보거리·도보시간 포함 여부, 음수 단위 거부, 이용불가 상태, 정확히 3개 이동수단·중복 금지, 좌표 범위 검증
   - `.github/workflows/backend-tests.yml` — PR/push 시 backend+ai pytest 자동 실행
 - 검증 결과:
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 24개 통과
-  - `uvicorn app.main:app --host 127.0.0.1 --port 8011` 실행 후 `GET /routes/sample` — 200, `calltaxi`, `subway`, `low_floor_bus` 3개 이동수단과 도보거리·도보시간 필드 포함 확인
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 26개 통과
+  - `APP_ENABLE_SAMPLE_ROUTES=true uvicorn app.main:app --host 127.0.0.1 --port 8011` 실행 후 `GET /routes/sample` — 200, `calltaxi`, `subway`, `low_floor_bus` 3개 이동수단과 도보거리·도보시간 필드 포함 확인
+  - 기본 설정으로 `uvicorn app.main:app --host 127.0.0.1 --port 8011` 실행 시 `GET /routes/sample` — 404 확인
   - `create_app()` 기본 설정과 `create_app(include_sample_routes=False)` 기준 `/routes/sample` — 404 확인
   - `create_app(include_sample_routes=True)` 기준 `/routes/sample` — 200 확인
 - 다음 Phase가 이어받을 것:
