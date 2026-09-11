@@ -25,11 +25,15 @@ async def lifespan(_: FastAPI):
     yield
 
 
-def create_app() -> FastAPI:
+def create_app(include_sample_routes: bool | None = None) -> FastAPI:
     app = FastAPI(title="calltaxi-service", version="0.1.0", lifespan=lifespan)
     app.add_exception_handler(Exception, internal_server_error_handler)
     app.include_router(health_router)
-    app.include_router(routes_router)
+    should_include_sample_routes = include_sample_routes
+    if should_include_sample_routes is None:
+        should_include_sample_routes = settings.env in {"local", "test"}
+    if should_include_sample_routes:
+        app.include_router(routes_router)
     return app
 
 

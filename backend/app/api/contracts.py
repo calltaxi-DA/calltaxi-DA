@@ -8,7 +8,7 @@
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TransportType(StrEnum):
@@ -19,12 +19,19 @@ class TransportType(StrEnum):
     LOW_FLOOR_BUS = "low_floor_bus"
 
 
+class RouteStatus(StrEnum):
+    """이동수단별 경로 계산 가능 여부."""
+
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+
+
 class Location(BaseModel):
     """출발지·목적지 등 위치 표현."""
 
     name: str | None = Field(default=None, description="사용자에게 보여줄 장소명")
-    latitude: float = Field(description="WGS84 위도")
-    longitude: float = Field(description="WGS84 경도")
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False, description="WGS84 위도")
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False, description="WGS84 경도")
     address: str | None = Field(default=None, description="주소 또는 행정구역명")
 
 
@@ -32,13 +39,50 @@ class RouteResult(BaseModel):
     """이동수단별 경로 결과의 공통 응답 단위."""
 
     transport_type: TransportType
-    total_time_seconds: int = Field(ge=0, description="총 소요 시간(초)")
-    total_distance_meters: int = Field(ge=0, description="총 이동 거리(미터)")
-    total_cost_won: int = Field(ge=0, description="예상 비용(원)")
-    walking_distance_meters: int = Field(ge=0, description="도보 거리(미터)")
-    walking_time_seconds: int = Field(ge=0, description="도보 시간(초)")
+    status: RouteStatus = Field(description="경로 계산 가능 여부")
+    total_time_seconds: int | None = Field(
+        default=None,
+        ge=0,
+        description="총 소요 시간(초). 장애인 콜택시는 대기시간과 차량 이동시간을 포함한다.",
+    )
+    total_distance_meters: int | None = Field(
+        default=None,
+        ge=0,
+        description="총 이동 거리(미터). 도보 구간을 포함한 전체 경로 거리다.",
+    )
+    total_cost_won: int | None = Field(default=None, ge=0, description="예상 비용(원)")
+    walking_distance_meters: int | None = Field(default=None, ge=0, description="도보 거리(미터)")
+    walking_time_seconds: int | None = Field(default=None, ge=0, description="도보 시간(초)")
+    unavailable_reason: str | None = Field(default=None, description="경로 계산 불가 사유")
     summary: str | None = Field(default=None, description="경로 요약 문구")
     warnings: list[str] = Field(default_factory=list, description="주의 조건")
+
+    @model_validator(mode="after")
+    def validate_route_status_and_units(self) -> "RouteResult":
+        numeric_fields = (
+            self.total_time_seconds,
+            self.total_distance_meters,
+            self.total_cost_won,
+            self.walking_distance_meters,
+            self.walking_time_seconds,
+        )
+
+        if self.status == RouteStatus.UNAVAILABLE:
+            if any(value is not None for value in numeric_fields):
+                raise ValueError("unavailable route must not include numeric route metrics")
+            if not self.unavailable_reason:
+                raise ValueError("unavailable route requires unavailable_reason")
+            return self
+
+        if any(value is None for value in numeric_fields):
+            raise ValueError("available route requires all numeric route metrics")
+        if self.unavailable_reason:
+            raise ValueError("available route must not include unavailable_reason")
+        if self.walking_time_seconds > self.total_time_seconds:
+            raise ValueError("walking_time_seconds must be less than or equal to total_time_seconds")
+        if self.walking_distance_meters > self.total_distance_meters:
+            raise ValueError("walking_distance_meters must be less than or equal to total_distance_meters")
+        return self
 
 
 class RouteComparisonResponse(BaseModel):
@@ -46,4 +90,12 @@ class RouteComparisonResponse(BaseModel):
 
     origin: Location
     destination: Location
-    routes: list[RouteResult]
+    routes: list[RouteResult] = Field(min_length=3, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_exactly_one_route_per_transport_type(self) -> "RouteComparisonResponse":
+        expected = set(TransportType)
+        actual = [route.transport_type for route in self.routes]
+        if set(actual) != expected or len(actual) != len(set(actual)):
+            raise ValueError("routes must contain each TransportType exactly once")
+        return self

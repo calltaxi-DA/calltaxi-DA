@@ -1,11 +1,12 @@
-"""경로 비교 API 계약 확인용 라우터.
+"""경로 비교 API 계약 확인용 개발 라우터.
 
 실제 경로 계산, 외부 지도 API 호출, 추천 정렬은 이후 Phase에서 구현한다.
+TODO: 실제 경로 비교 API가 구현되면 이 개발용 샘플 라우터를 제거하거나 대체한다.
 """
 
 from fastapi import APIRouter
 
-from app.api.contracts import Location, RouteComparisonResponse, RouteResult, TransportType
+from app.api.contracts import Location, RouteComparisonResponse, RouteResult, RouteStatus, TransportType
 
 router = APIRouter(prefix="/routes", tags=["routes"])
 
@@ -33,6 +34,7 @@ def get_sample_routes() -> RouteComparisonResponse:
         routes=[
             RouteResult(
                 transport_type=TransportType.CALLTAXI,
+                status=RouteStatus.AVAILABLE,
                 total_time_seconds=1800,
                 total_distance_meters=3200,
                 total_cost_won=0,
@@ -42,6 +44,7 @@ def get_sample_routes() -> RouteComparisonResponse:
             ),
             RouteResult(
                 transport_type=TransportType.SUBWAY,
+                status=RouteStatus.AVAILABLE,
                 total_time_seconds=1500,
                 total_distance_meters=2800,
                 total_cost_won=0,
@@ -51,6 +54,7 @@ def get_sample_routes() -> RouteComparisonResponse:
             ),
             RouteResult(
                 transport_type=TransportType.LOW_FLOOR_BUS,
+                status=RouteStatus.AVAILABLE,
                 total_time_seconds=1700,
                 total_distance_meters=3000,
                 total_cost_won=0,
