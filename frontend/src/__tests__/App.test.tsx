@@ -71,7 +71,6 @@ afterEach(() => {
 describe('App', () => {
   it('renders the route search input UI', () => {
     vi.stubEnv('KAKAO_JS_KEY', '')
-    vi.stubEnv('VITE_KAKAO_MAP_APP_KEY', '')
 
     render(<App />)
 

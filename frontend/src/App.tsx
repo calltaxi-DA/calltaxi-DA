@@ -126,8 +126,7 @@ function loadKakaoMapSdk(appKey: string) {
 }
 
 function App() {
-  const kakaoMapAppKey = (import.meta.env.KAKAO_JS_KEY ||
-    import.meta.env.VITE_KAKAO_MAP_APP_KEY) as string | undefined
+  const kakaoMapAppKey = import.meta.env.KAKAO_JS_KEY as string | undefined
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<KakaoMap | null>(null)
   const placesRef = useRef<KakaoPlaces | null>(null)
