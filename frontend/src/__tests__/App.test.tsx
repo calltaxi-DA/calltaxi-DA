@@ -44,6 +44,21 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
+  it('swaps priority ranks instead of allowing duplicate priority values', () => {
+    render(<App />)
+
+    const firstPriority = screen.getByLabelText('1순위') as HTMLSelectElement
+    const secondPriority = screen.getByLabelText('2순위') as HTMLSelectElement
+    const thirdPriority = screen.getByLabelText('3순위') as HTMLSelectElement
+
+    fireEvent.change(firstPriority, { target: { value: 'walk' } })
+
+    expect(firstPriority).toHaveValue('walk')
+    expect(secondPriority).toHaveValue('cost')
+    expect(thirdPriority).toHaveValue('time')
+    expect(new Set([firstPriority.value, secondPriority.value, thirdPriority.value]).size).toBe(3)
+  })
+
   it('allows users to select transport types', () => {
     render(<App />)
 
