@@ -1,8 +1,193 @@
 :root {
-  color-scheme: light dark;
+  color: #172033;
+  color-scheme: light;
+  background: #f4f7fb;
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
+  min-width: 320px;
   margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(78, 115, 223, 0.16), transparent 32rem),
+    #f4f7fb;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 56px 0;
+}
+
+.hero {
+  margin-bottom: 28px;
+}
+
+.hero h1 {
+  max-width: 720px;
+  margin: 8px 0 12px;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.08;
+}
+
+.hero p {
+  max-width: 680px;
+  margin: 0;
+  color: #536079;
+}
+
+.eyebrow {
+  font-weight: 700;
+  color: #3157c7;
+}
+
+.search-panel,
+.summary-card {
+  padding: 28px;
+  border: 1px solid #dbe4f0;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 20px 60px rgba(37, 54, 94, 0.12);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+label span,
+legend {
+  font-weight: 700;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+}
+
+input[type='text'],
+input:not([type]),
+select {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #c9d4e4;
+  border-radius: 14px;
+  color: #172033;
+  background: #ffffff;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 3px solid rgba(49, 87, 199, 0.28);
+  outline-offset: 2px;
+}
+
+fieldset {
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.field-hint {
+  margin: 8px 0 0;
+  color: #536079;
+  font-size: 0.95rem;
+}
+
+.option-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.priority-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.check-card,
+.radio-card {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  border: 1px solid #c9d4e4;
+  border-radius: 999px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.check-card input,
+.radio-card input {
+  width: 18px;
+  height: 18px;
+  accent-color: #3157c7;
+}
+
+button {
+  width: 100%;
+  margin-top: 28px;
+  padding: 15px 18px;
+  border: 0;
+  border-radius: 16px;
+  color: #ffffff;
+  background: #3157c7;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #aeb9ce;
+  cursor: not-allowed;
+}
+
+.summary-card {
+  margin-top: 20px;
+}
+
+.summary-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.summary-card p {
+  margin: 0;
+  color: #536079;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    width: min(100% - 20px, 960px);
+    padding: 32px 0;
+  }
+
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .priority-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-panel,
+  .summary-card {
+    padding: 20px;
+    border-radius: 20px;
+  }
 }
