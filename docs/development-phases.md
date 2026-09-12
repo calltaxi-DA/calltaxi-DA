@@ -139,3 +139,28 @@
   - 기준에 맞는 대기시간 전처리 산출 CSV 또는 모델/lookup 산출물을 사람이 검토해 `analysis/`에 export한다.
   - `ai/waiting_time/estimator.py`는 export 산출물이 준비된 뒤에만 실제 모델 호출로 대체한다.
   - 서비스 연결 Phase에서는 예측 실패/미연결 상태를 명시적으로 처리한다.
+
+## Analysis Phase 2 — 장애인 콜택시 이용패턴 분석 근거 정리 (2026-09-12)
+
+- 브랜치: `analysis/phase2-usage-pattern-evidence` (base: `dev`)
+- 한 일: 기존에 완료된 장애인 콜택시 이용패턴 분석 Notebook을 재실행하지 않고 확인해, 통합 대기시간 Prediction 모델의 입력 해석과 결과 검증에 활용할 분석 근거를 문서화했다. 임차택시·특장차 바로콜의 대기시간 분포, 시간대·요일별 이용패턴, 전일접수 포함 시 시간대 평균이 왜곡되는 현상, 취소 패턴, 수요 proxy와 장시간 대기율 proxy의 성능 개선 근거, leakage 방지 기준을 정리했다.
+- 산출물:
+  - `analysis/waiting_time/usage_pattern_evidence.md` — 이용패턴 분석 근거와 모델 검증 활용 기준
+  - `analysis/README.md` — 이용패턴 근거 문서 위치 추가
+- 검증 결과:
+  - 기존 Notebook/output 읽기 확인: `notebooks_waiting_time/02_rental_wait_time_analysis.ipynb`, `notebooks_waiting_time/04_special_vehicle_wait_time_analysis.ipynb`, `notebooks_lye/5-1_plan_시간대별평균대기시간.ipynb`, `notebooks_waiting_time/05_calltaxi_wait_time_modeling.ipynb`, `notebooks_waiting_time/06_calltaxi_wait_time_feature_experiments.ipynb`, `notebooks_waiting_time/07_calltaxi_wait_time_hgb_modeling.ipynb`, `notebooks_waiting_time/08_calltaxi_wait_time_feature_set_v2.ipynb`, `notebooks_waiting_time/corr_original.ipynb`
+  - 데이터 재생성, Notebook 수정, `data/` 파일 변경 없음
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 46개 통과
+- 확정 기준 요약:
+  - 모델 검증은 전체 평균만 보지 않고 `model_group`, 시간대, 요일, 세부이동유형별 분포와 오차를 함께 확인한다.
+  - 서비스 target은 `접수_승차_분`이며, 장시간 대기 위험 기준은 train set의 `접수_승차_분` 90분위수 기준으로 평가한다.
+  - 새벽 02~06시는 제거 대상이 아니라 별도 위험 시간대 또는 segment 검증 대상으로 유지한다.
+  - 전일접수·심야시간 사전예약은 1차 바로콜 모델에서 제외하고, 시간대 평균 분석에서도 왜곡 요인으로 분리한다.
+  - 직전 30분/60분 rolling 수요량 proxy는 현재 실시간 전체 접수 stream/API/DB가 없으므로 1차 production feature에서는 제외하고 offline 실험 근거로만 유지한다.
+  - 장시간 대기율 proxy는 train 기준 통계 또는 out-of-fold 방식으로만 생성하며, production 사용은 `analysis/` lookup export와 inference-safe key 재정의 이후 판단한다.
+  - 기존 Notebook의 `model_group`은 offline evaluation segment로만 사용하고, production feature에는 inference 시점에 안전하게 알 수 있는 `차량구분`을 사용한다.
+- 다음 Phase가 이어받을 것:
+  - 학습용 바로콜 dataset export 시 row count, target 결측/음수 제외 건수, `model_group`별 건수, 시간대별 건수, 취소 제외 건수를 함께 기록한다.
+  - 모델 학습 Phase에서는 전체 MAE/RMSE뿐 아니라 `model_group`·시간대·요일·이동유형별 성능표와 장시간 대기 Precision/Recall/F1을 함께 남긴다.
+  - production feature set 확정 전, 각 feature가 inference 시점에 생성 가능한지와 데이터 출처가 무엇인지 다시 검증한다.
+  - `analysis/`에 실제 모델/lookup 산출물을 export하기 전까지 `ai/waiting_time/estimator.py`는 미연결 상태를 유지한다.
