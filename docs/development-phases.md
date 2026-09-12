@@ -311,8 +311,18 @@
   - 차량별 저상 여부가 안정적으로 확인되면 “노선 단위 접근성”과 “실시간 차량 단위 접근성”을 분리해 `analysis/` 기준 문서를 갱신한다.
   - 필요한 경우 backend는 공식 API client를 구현하되, `data/raw`나 `data/processed`를 직접 읽지 않는다.
 
-## Analysis Phase 6-2 — 버스 공식 API 실제 호출 및 수집 방법 검증 (다음 Phase)
+## Analysis Phase 6-2 — 버스 공식 API 호출 가능성 및 수집 방법 검증 (2026-09-12)
 
 - 브랜치: `analysis/phase6-2-bus-api-validation-from-6-1` (base: `dev`)
-- 상태: 미완료
-- 상세 검증 기준과 현재 blocker: `analysis/bus/bus_api_validation_criteria.md`
+- 한 일: 사용자가 확인한 서울 버스 위치·도착 API의 활용승인 상태와 공식 endpoint를 바탕으로, 키를 보내지 않은 HTTP 요청과 HTTPS 연결을 검증했다. 공식 endpoint는 HTTP로만 도달 가능하고 HTTPS는 timeout이 발생해 인증키를 전송하지 않았다. ODsay 버스 경로 API는 HTTPS로 실제 호출했으나 `[ApiKeyAuthFailed]`가 재현됐다. T-DATA 재차인원 파일·Open API의 제공 단위와 활용신청 조건을 확인해 각 후보를 `가능`, `조건부`, `불가`로 판정했다.
+- 산출물:
+  - `analysis/bus/bus_api_validation_criteria.md` — 실제 확인 결과, 보안·인증 blocker, 항목별 최종 판정과 재검토 조건
+- 검증 결과:
+  - `가능`: 노선 단위 저상버스 접근성, 2025년 집계 기반 혼잡 위험 보조지표
+  - `조건부`: T-DATA 재차인원 오프라인 분석·검토 후 `analysis/` export, ODsay ↔ 서울 BIS/ARS ID mapping
+  - `불가`: 현재 endpoint 기준 서울 실시간 위치·도착 직접 연동, 차량별 저상 여부, 실시간 혼잡도, 실시간 배차간격·headway
+  - 서울 버스 API 키는 HTTP query로 전송하지 않았고, ODsay 키 값과 요청 query string은 기록하지 않았다.
+- 다음 Phase가 이어받을 것:
+  - 공식 HTTPS gateway가 제공되면 서울 버스 위치·도착 응답과 차량유형·혼잡도 코드를 재검증한다.
+  - ODsay 서버 인증을 정상화한 뒤 실제 버스 경로 응답의 `busID`·정류장 ID 매핑률을 검증한다.
+  - T-DATA 활용승인과 실제 데이터 시점·ID를 검증한 뒤 서비스에 필요한 집계만 사람이 `analysis/`로 export한다.
