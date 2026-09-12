@@ -2,7 +2,16 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pytest
 
-from app.api.contracts import Location, RouteComparisonResponse, RouteResult, RouteStatus, TransportType
+from app.api.contracts import (
+    AccessibilityStatus,
+    Location,
+    MetricAvailability,
+    RouteComparisonResponse,
+    RouteMetricAvailability,
+    RouteResult,
+    RouteStatus,
+    TransportType,
+)
 from app.main import create_app
 
 client = TestClient(create_app(include_sample_routes=True))
@@ -73,7 +82,7 @@ def test_unavailable_route_requires_reason() -> None:
         )
 
 
-def test_available_route_requires_all_metrics() -> None:
+def test_available_route_requires_values_for_available_metrics() -> None:
     with pytest.raises(ValidationError):
         RouteResult(
             transport_type=TransportType.CALLTAXI,
@@ -82,6 +91,46 @@ def test_available_route_requires_all_metrics() -> None:
             total_distance_meters=3000,
             total_cost_won=0,
             walking_distance_meters=100,
+        )
+
+
+def test_calltaxi_available_route_can_express_unknown_walking_metrics() -> None:
+    route = RouteResult(
+        transport_type=TransportType.CALLTAXI,
+        status=RouteStatus.AVAILABLE,
+        total_time_seconds=4200,
+        total_distance_meters=12_500,
+        total_cost_won=2300,
+        walking_distance_meters=None,
+        walking_time_seconds=None,
+        metric_availability=RouteMetricAvailability(
+            walking_distance_meters=MetricAvailability.NOT_AVAILABLE,
+            walking_time_seconds=MetricAvailability.NOT_AVAILABLE,
+        ),
+        accessibility_status=AccessibilityStatus.NOT_VERIFIED,
+    )
+
+    assert route.walking_distance_meters is None
+    assert route.walking_time_seconds is None
+    assert route.metric_availability is not None
+    assert route.metric_availability.walking_distance_meters == MetricAvailability.NOT_AVAILABLE
+    assert route.accessibility_status == AccessibilityStatus.NOT_VERIFIED
+
+
+def test_not_available_metric_rejects_numeric_value() -> None:
+    with pytest.raises(ValidationError):
+        RouteResult(
+            transport_type=TransportType.CALLTAXI,
+            status=RouteStatus.AVAILABLE,
+            total_time_seconds=4200,
+            total_distance_meters=12_500,
+            total_cost_won=2300,
+            walking_distance_meters=0,
+            walking_time_seconds=None,
+            metric_availability=RouteMetricAvailability(
+                walking_distance_meters=MetricAvailability.NOT_AVAILABLE,
+                walking_time_seconds=MetricAvailability.NOT_AVAILABLE,
+            ),
         )
 
 
@@ -240,6 +289,8 @@ def test_sample_routes_return_three_transport_types_with_same_shape() -> None:
             "total_cost_won",
             "walking_distance_meters",
             "walking_time_seconds",
+            "metric_availability",
+            "accessibility_status",
             "unavailable_reason",
             "summary",
             "warnings",

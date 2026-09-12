@@ -20,17 +20,17 @@ notebooks*/ (모델 학습·검증) → analysis/ (장애인 콜택시 통합 �
 
 `ai/`는 오직 `analysis/`의 산출물만 참조하며, 모델이 아직 연결되지 않은 동안에는 가짜 값을 반환하지 않고 명확히 실패(`NotImplementedError`)한다 — `backend/`가 "예측 불가" 상태를 받아 처리하도록 강제한다.
 
-> 요금/시간/도보 우선순위에 따른 **추천 로직(Rule-based ranking)은 `ai/`에 두지 않는다.** `ai/`는 예측 모델 어댑터 전용이고, 추천 정렬은 백엔드 개발 로드맵의 **Backend Phase 7**에서 `backend/` 쪽에 구현할 예정이다(아직 미착수).
+> 요금/시간/도보 우선순위에 따른 **추천 로직(Rule-based ranking)은 `ai/`가 아니라 `backend/`가 담당한다.** Backend Phase 7-1에서 경로 지표 가용 상태, 접근성 상태, 정렬 서비스와 Backend-owned provider 경계를 구현했다. 통합 provider는 대기시간 모델 연결 후 완성한다(ADR 0004).
 
 ## 서비스 개요 (기획 요약)
 
 출발지·목적지를 입력하면 지하철·저상버스·장애인콜택시의 이동시간/비용/도보거리를 비교하고, 장애인콜택시는 분석으로 산출한 예상 대기시간을 총 이동시간에 반영해 추천한다(핵심 지표: `총 이동시간 = 예상 대기시간 + 차량 이동시간`). 추천은 복잡한 ML 모델이 아니라 Rule-based(요금/시간/도보 우선순위 정렬)로 계산한다. 부가 기능으로 월별 교통비 지원 현황을 보여주는 캘린더가 있다.
 
-> 화면 구성(MAP/경로비교/캘린더)과 대부분의 API 스펙은 아직 확정되지 않았다. 다만 Backend Phase 1에서 이동수단 경로 비교의 공통 응답 계약(`Location`, `TransportType`, `RouteStatus`, `RouteResult`, `RouteComparisonResponse`)은 확정했다. 실제 외부 경로 API 연동과 추천 정렬 API가 정해지면 이 문서와 `backend/app/api/`, `frontend/src/`를 함께 갱신한다.
+> 화면 구성(MAP/경로비교/캘린더)의 전체 스펙은 아직 확정되지 않았다. 이동수단 경로 비교의 공통 응답 계약(`Location`, `TransportType`, `RouteStatus`, `RouteResult`, `RouteComparisonResponse`)과 추천 요청·응답 계약은 확정했다. `RouteResult`는 경로 상태와 별도로 numeric field별 가용 상태 및 접근성 확인 상태를 표현한다. 공개 추천 요청은 출발지·목적지·우선순위만 받고 경로 결과는 Backend provider가 생성한다(ADR 0004).
 
 ## 폴더 책임
 
-- **`backend/`** — FastAPI HTTP 계층. 요청을 받아 `ai/`(예측)를 호출하고, 요금/시간/도보 우선순위 추천 정렬(Rule-based, Backend Phase 7 예정)도 여기서 구현한다. 대기시간 예측 모델 자체는 갖지 않는다.
+- **`backend/`** — FastAPI HTTP 계층. 요청을 받아 `ai/`(예측)를 호출하고, 요금/시간/도보 우선순위 추천 정렬(Rule-based)도 여기서 구현한다. 대기시간 예측 모델 자체는 갖지 않는다.
 - **`ai/`** — **AI Adapter.** `analysis/`의 장애인 콜택시 통합 대기시간 Prediction 모델을 호출하는 어댑터. 순수 Python이며 FastAPI/HTTP를 알지 못한다(단독 테스트·재사용 가능해야 함). 예측 로직·추천 로직을 직접 갖지 않는다 — 모델이 없으면 `NotImplementedError`로 실패한다.
 - **`frontend/`** — 사용자 화면. 원칙적으로 `backend/`가 노출하는 API만 호출하고, 데이터 파일이나 `ai/`를 직접 참조하지 않는다. 예외적으로 지도 렌더링과 Kakao Maps JavaScript SDK의 브라우저 전용 기능(지도, Marker, Places 장소검색)은 `frontend/`에서 직접 사용할 수 있다. 다만 경로 계산, 추천, 요금/시간/도보 판단, 서비스 비즈니스 데이터는 `backend/` API를 통해서만 사용한다(ADR 0003).
 - **`analysis/`** — 분석이 만들어낸 Prediction 모델/산출물 중 서비스가 쓰기로 확정된 것만 모아두는 export 공간. 노트북이 자동으로 쓰지 않고 사람이 검토 후 옮긴다. 자세한 규칙은 [`analysis/README.md`](../analysis/README.md).

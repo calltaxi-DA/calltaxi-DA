@@ -11,6 +11,7 @@ from app.services.subway import (
     OdsayRouteError,
     OdsaySubwayRouteClient,
     SubwayAccessibilityProvider,
+    assess_accessibility_status,
     build_accessibility_warnings,
 )
 
@@ -57,6 +58,7 @@ def calculate_subway_route(
         ) from exc
 
     warnings = build_accessibility_warnings(route.station_keys, accessibility_provider)
+    accessibility_status = assess_accessibility_status(route.station_keys, accessibility_provider)
     warnings.append(
         "walking_time_seconds와 walking_distance_meters는 ODsay가 제공한 도보 subPath 기준입니다. 지하철 환승 내부 도보시간·거리는 별도 검증 전까지 총 도보값으로 단정하지 않습니다."
     )
@@ -69,6 +71,7 @@ def calculate_subway_route(
         total_cost_won=route.fare_won,
         walking_distance_meters=route.walking_distance_meters,
         walking_time_seconds=route.walking_time_seconds,
+        accessibility_status=accessibility_status,
         summary=route.summary,
         warnings=warnings,
     )

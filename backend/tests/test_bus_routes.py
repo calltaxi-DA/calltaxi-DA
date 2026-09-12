@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.api.bus import get_odsay_low_floor_bus_route_client
-from app.api.contracts import RouteResult, RouteStatus, TransportType
+from app.api.contracts import AccessibilityStatus, RouteResult, RouteStatus, TransportType
 from app.core.config import get_settings
 from app.main import create_app
 from app.services.bus import LowFloorBusRouteMetrics, LowFloorBusRouteUnavailableError, OdsayBusRouteError, SelectedBusLane
@@ -55,6 +55,7 @@ def test_bus_route_returns_low_floor_route_with_total_walking_metrics() -> None:
     assert route.walking_distance_meters == 780
     assert route.walking_time_seconds == 720
     assert route.summary == "7016 → N31 저상버스 경로"
+    assert route.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
     assert any("특정 시간·정류장" in warning for warning in route.warnings)
     assert any("모든 도보 subPath" in warning for warning in route.warnings)
 
@@ -70,6 +71,7 @@ def test_bus_route_returns_unavailable_without_fake_metrics() -> None:
     assert route.total_time_seconds is None
     assert route.walking_distance_meters is None
     assert route.unavailable_reason
+    assert route.accessibility_status == AccessibilityStatus.VERIFIED_UNAVAILABLE
 
 
 def test_bus_route_returns_503_without_odsay_key(monkeypatch) -> None:
