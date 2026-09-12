@@ -156,8 +156,19 @@ def test_recommendations_rejects_client_supplied_routes() -> None:
     assert response.status_code == 422
 
 
-def test_recommendations_fail_closed_until_backend_provider_is_connected() -> None:
-    response = client.post("/routes/recommendations", json=_payload(["time", "cost", "walk"]))
+def test_recommendations_fail_closed_per_route_when_service_keys_are_missing(monkeypatch) -> None:
+    monkeypatch.setenv("APP_TMAP_APP_KEY", "")
+    monkeypatch.setenv("TMAP_APP_KEY", "")
+    monkeypatch.setenv("APP_ODSAY_API_KEY", "")
+    monkeypatch.setenv("ODSAY_API_KEY", "")
+    from app.core.config import get_settings
 
-    assert response.status_code == 503
-    assert response.json() == {"detail": "Integrated route provider is not available"}
+    get_settings.cache_clear()
+    response = TestClient(create_app()).post(
+        "/routes/recommendations", json=_payload(["time", "cost", "walk"])
+    )
+
+    assert response.status_code == 200
+    assert response.json()["recommendations"] == []
+    assert len(response.json()["excluded_routes"]) == 3
+    get_settings.cache_clear()
