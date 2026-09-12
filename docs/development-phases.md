@@ -387,6 +387,9 @@
   - `analysis/README.md` — Phase 7 비교 기준 문서 링크
 - 확정 기준:
   - 장애인 콜택시 총 이동시간은 검증된 `예측 대기시간 + 차량 이동시간`이며, 모델 연결 전에는 차량시간만으로 다른 수단과 순위를 비교하지 않는다.
+  - 예측 대기시간은 콜택시 총 이동시간의 전용 구성요소이며 세 이동수단 공통 정렬 지표로 직접 비교하지 않는다.
+  - 콜택시 도보값 미확정과 현 `RouteResult`의 available numeric field 필수 계약은 충돌한다. Backend Phase 7에서 지표별 `available`/`not_available`을 표현하도록 계약을 변경하기 전에는 도보값을 0으로 채우거나 콜택시 공통 비교 결과를 완성 처리하지 않는다.
+  - 접근성 공통 상태는 `verified_available`, `verified_unavailable`, `not_verified`로 구분한다. 콜택시는 현재 `not_verified`이며 이를 정상 접근성으로 해석하지 않는다.
   - 지하철·저상버스 도보값은 ODsay 도보 subPath 합계이고, 환승 내부 무장애 동선이나 실제 보행로 전체로 단정하지 않는다.
   - 지하철 접근성은 모든 이용역의 엘리베이터 조건을 핵심으로 보고, 저상버스 접근성은 노선 단위 정보로만 해석한다.
   - 기존 지역·월별 수요, 시설 부담, 집계 혼잡 분석은 추천 점수가 아니라 사후 검증과 분석 참고 자료로 사용한다.
@@ -394,8 +397,10 @@
 - 검증 결과:
   - `analysis/transport_comparison_criteria.md`의 내부 경로 8개가 모두 존재함을 확인
   - 비교 문서가 세 이동수단과 5개 핵심 지표를 모두 명시하고, 추천 입력·표시/주의·오프라인 분석·사용 금지의 네 범주를 포함함을 확인
+  - 후속 계약 예시에서 `calltaxi available + walking metrics null/not_available + accessibility not_verified` 상태를 손실 없이 표현하고, Backend Phase 7 필수 테스트 케이스로 지정
   - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 118개 통과, 기존 의존성의 `DeprecationWarning` 1건 외 실패 없음
 - 다음 Phase가 이어받을 것:
+  - Backend Phase 7에서 경로 상태와 별도로 지표별 가용 상태 및 접근성 상태를 표현하도록 공통 계약을 먼저 변경한다.
   - 통합 대기시간 Prediction 모델을 검증·export하고 `ai/` Adapter에 연결해 콜택시 총 이동시간을 완성한다.
-  - Backend Phase 7에서 사용자 우선순위, 동률, 누락값, 접근성 적격성 규칙을 포함한 Rule-based 추천 정렬 계약과 테스트를 구현한다.
+  - Backend Phase 7에서 사용자 우선순위, 동률, 누락값, 접근성 적격성 규칙을 포함한 Rule-based 추천 정렬 계약과 테스트를 구현한다. `calltaxi available + walking unknown`, 세 이동수단 접근성 상태 혼합, 선택 지표 미확인 경로 제외를 반드시 검증한다.
   - 지하철 환승 내부 무장애 동선, 콜택시 승하차 접근 도보, 차량 단위 저상버스 실시간 정보는 검증된 데이터가 확보된 뒤 별도 Phase에서 확장한다.
