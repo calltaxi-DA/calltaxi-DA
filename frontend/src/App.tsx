@@ -325,6 +325,8 @@ function App() {
   }
 
   const selectPlace = (role: LocationRole, place: PlaceSelection) => {
+    placeSearchRequestRef.current[role] += 1
+
     if (role === 'origin') {
       setOrigin(place.name)
     } else {

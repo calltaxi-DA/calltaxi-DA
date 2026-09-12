@@ -23,8 +23,9 @@ Frontend Phase 2에서는 사용자가 실제 장소를 검색하고 지도에�
    - 서비스 비즈니스 데이터 조회
 3. **`frontend/`는 분석 데이터와 AI 코드를 직접 참조하지 않는다.**
    - `data/raw`, `data/processed`, `notebooks*/`, `src/`, `ai/` 직접 참조 금지 규칙은 유지한다.
-4. **브라우저 SDK 키는 `frontend/.env.local`에서 관리하고 커밋하지 않는다.**
-   - 커밋되는 파일에는 `frontend/.env.example`의 변수 자리만 둔다.
+4. **브라우저 SDK 키는 저장소 루트 `.env`의 `KAKAO_JS_KEY`로 관리하고 커밋하지 않는다.**
+   - 커밋되는 파일에는 루트 `.env.example`의 `KAKAO_JS_KEY=` 자리만 둔다.
+   - `KAKAO_JS_KEY`는 브라우저에 노출되는 JavaScript SDK 키로만 사용한다. 같은 prefix로 비밀값이나 서버 전용 키를 만들지 않는다.
 
 ## 영향
 

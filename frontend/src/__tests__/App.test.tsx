@@ -234,6 +234,45 @@ describe('App', () => {
     expect(screen.queryByText('서울역 도로명주소')).not.toBeInTheDocument()
   })
 
+  it('ignores pending place search responses after a place is selected', async () => {
+    const callbacks: Array<(results: MockPlace[], status: string) => void> = []
+    const keywordSearch = vi.fn((_keyword, callback) => {
+      callbacks.push(callback)
+    })
+    setupKakaoMock(keywordSearch)
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+
+    act(() => {
+      callbacks[0]([createPlace('place-1', '서울역', '126.970671', '37.554678')], 'OK')
+    })
+    await waitFor(() => expect(screen.getByText('서울역 도로명주소')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /서울역/ }))
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '강남역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+
+    act(() => {
+      callbacks[2]([createPlace('place-3', '서울역', '126.970671', '37.554678')], 'OK')
+    })
+    await waitFor(() => expect(screen.getByText('서울역 도로명주소')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /서울역/ }))
+
+    act(() => {
+      callbacks[1]([createPlace('place-2', '강남역', '127.027621', '37.497942')], 'OK')
+    })
+    await waitFor(() => expect(screen.getByText(/서울역 도로명주소/)).toBeInTheDocument())
+    expect(screen.queryByText(/강남역 도로명주소/)).not.toBeInTheDocument()
+  })
+
   it('distinguishes a Kakao Places service error from no search results', async () => {
     vi.stubEnv('KAKAO_JS_KEY', 'test-kakao-map-key')
 
