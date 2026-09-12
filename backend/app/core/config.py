@@ -6,6 +6,7 @@
 
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
     enable_sample_routes: bool = False
-    tmap_app_key: str | None = None
+    tmap_app_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_TMAP_APP_KEY", "TMAP_APP_KEY"))
 
 
 @lru_cache

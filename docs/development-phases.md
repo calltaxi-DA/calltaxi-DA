@@ -99,13 +99,13 @@
   - `backend/app/api/calltaxi.py` — `POST /routes/calltaxi` 라우터 추가
   - `backend/app/services/calltaxi.py` — TMAP 자동차 경로안내 클라이언트, `totalDistance`·`totalTime` 파싱, 서울 장애인콜택시 예상요금 계산
   - `backend/app/main.py` — 장애인 콜택시 라우터 등록
-  - `backend/app/core/config.py`, `backend/.env.example` — `APP_TMAP_APP_KEY` 설정 추가
+  - `backend/app/core/config.py`, `backend/.env.example` — `APP_TMAP_APP_KEY` 설정 추가, 로컬 호환을 위해 `TMAP_APP_KEY`도 읽도록 지원
   - `backend/tests/test_calltaxi_routes.py` — 라우터 응답, 좌표 검증, 키 누락, TMAP 실패·invalid JSON 처리 테스트
   - `backend/tests/test_calltaxi_service.py` — 요금 계산, TMAP 응답 파싱, outbound 요청 URL·헤더·payload 검증 테스트
   - `docs/troubleshooting.md` — 실제 TMAP smoke test `403 Forbidden` 이슈 기록
 - 검증 결과:
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 41개 통과
-  - 로컬 `APP_TMAP_APP_KEY` 존재 확인 — 키 값은 출력하지 않고 존재 여부만 확인
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 44개 통과
+  - 로컬 `APP_TMAP_APP_KEY` 또는 `TMAP_APP_KEY` 존재 확인 — 키 값은 출력하지 않고 존재 여부만 확인
   - 실제 TMAP 자동차 경로안내 smoke test — `403 Forbidden`으로 실패. 코드 요청/응답 처리 검증은 완료됐지만, 실제 키의 자동차 경로안내 API 상품 권한 또는 제한 설정 확인이 필요하다.
 - 다음 Phase가 이어받을 것:
   - TMAP 개발자 콘솔에서 App Key가 자동차 경로안내 API를 사용할 수 있는지 확인하고 실제 smoke test를 재실행한다.
