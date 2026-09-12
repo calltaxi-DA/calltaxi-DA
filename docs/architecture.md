@@ -32,7 +32,7 @@ notebooks*/ (모델 학습·검증) → analysis/ (장애인 콜택시 통합 �
 
 - **`backend/`** — FastAPI HTTP 계층. 요청을 받아 `ai/`(예측)를 호출하고, 요금/시간/도보 우선순위 추천 정렬(Rule-based, Backend Phase 7 예정)도 여기서 구현한다. 대기시간 예측 모델 자체는 갖지 않는다.
 - **`ai/`** — **AI Adapter.** `analysis/`의 장애인 콜택시 통합 대기시간 Prediction 모델을 호출하는 어댑터. 순수 Python이며 FastAPI/HTTP를 알지 못한다(단독 테스트·재사용 가능해야 함). 예측 로직·추천 로직을 직접 갖지 않는다 — 모델이 없으면 `NotImplementedError`로 실패한다.
-- **`frontend/`** — 사용자 화면. `backend/`가 노출하는 API만 호출하고, 데이터 파일이나 `ai/`를 직접 참조하지 않는다.
+- **`frontend/`** — 사용자 화면. 원칙적으로 `backend/`가 노출하는 API만 호출하고, 데이터 파일이나 `ai/`를 직접 참조하지 않는다. 예외적으로 지도 렌더링과 Kakao Maps JavaScript SDK의 브라우저 전용 기능(지도, Marker, Places 장소검색)은 `frontend/`에서 직접 사용할 수 있다. 다만 경로 계산, 추천, 요금/시간/도보 판단, 서비스 비즈니스 데이터는 `backend/` API를 통해서만 사용한다(ADR 0003).
 - **`analysis/`** — 분석이 만들어낸 Prediction 모델/산출물 중 서비스가 쓰기로 확정된 것만 모아두는 export 공간. 노트북이 자동으로 쓰지 않고 사람이 검토 후 옮긴다. 자세한 규칙은 [`analysis/README.md`](../analysis/README.md).
 - **`data/`, `notebooks*/`, `src/`** — 기존 데이터분석 자산(탐색적, 원본/중간 산출물). 서비스 코드(`backend/`, `frontend/`, `ai/`)가 이 폴더의 파일 경로를 직접 참조하지 않는다 — 필요하면 `analysis/`를 거친다.
 - **`docs/`** — 이 저장소를 다루는 데 필요한 설계/운영 문서. 노트북 단위의 분석 계획 문서는 `notebooks_docs_lye/`(gitignore 대상, 팀 공유 문서 아님)에 남는다.
