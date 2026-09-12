@@ -164,3 +164,28 @@
   - 모델 학습 Phase에서는 전체 MAE/RMSE뿐 아니라 `model_group`·시간대·요일·이동유형별 성능표와 장시간 대기 Precision/Recall/F1을 함께 남긴다.
   - production feature set 확정 전, 각 feature가 inference 시점에 생성 가능한지와 데이터 출처가 무엇인지 다시 검증한다.
   - `analysis/`에 실제 모델/lookup 산출물을 export하기 전까지 `ai/waiting_time/estimator.py`는 미연결 상태를 유지한다.
+
+## Analysis Phase 4 — 지하철 접근성 데이터 분석 기준 정리 (2026-09-12)
+
+- 브랜치: `analysis/phase4-subway-accessibility` (base: `dev`)
+- 한 일: 기존에 완료된 지하철 데이터 전처리와 지하철·콜택시 비교 분석 Notebook을 재실행하지 않고 확인해, ODsay 지하철 경로와 접근성 시설 데이터를 연결하기 위한 기준을 문서화했다. 역명·호선 매핑 기준, 엘리베이터 설치정보·위치·운행구간, 휠체어리프트·안전발판·장애인화장실 보조 정보, 서울 25개 구 기준 지하철·콜택시 비교 분석 활용 범위를 정리했다.
+- 산출물:
+  - `analysis/subway/accessibility_mapping_criteria.md` — 지하철 접근성 데이터 연결 기준과 ODsay 매핑 후보 key
+  - `analysis/README.md` — 지하철 접근성 기준 문서 위치 추가
+- 검증 결과:
+  - 기존 Notebook 읽기 확인: `parkchansik/10_subway_data_preprocessing.ipynb`, `parkchansik/11_subway_calltaxi_comparison_analysis.ipynb`
+  - 현재 존재 파일 확인: `data/processed/서울교통공사_장애인_지하철_승하차인원_정제_20251231.csv`, `data/raw/교통약자이용정보_엘리베이터.csv`, `data/raw/교통약자이용정보_휠체어리프트.csv`, `data/raw/교통약자이용정보_안전발판보유현황.csv`, `data/raw/교통약자이용정보_장애인화장실.csv`, `data/raw/교통약자이용정보_휠체어급속충전기.csv`
+  - 데이터 재생성, Notebook 수정, `data/` 파일 변경 없음
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 46개 통과
+- 확정 기준 요약:
+  - processed 지하철 접근성 데이터의 내부 연결 key는 `노선명 + 역명 정규화`로 둔다.
+  - `고유역번호(외부역코드)`는 서울교통공사 원본 검증용 보조 key이며, ODsay stationID와 동일하다고 가정하지 않는다.
+  - ODsay stationID 매핑 테이블은 아직 없으므로 후속 API 연동 Phase에서 stationID·역명·노선명 응답을 확인한 뒤 별도 매핑 테이블로 확정한다.
+  - 1차 접근성 판단은 `운행엘리베이터보유여부`, `운행엘리베이터수`, `엘리베이터연결층`, `엘리베이터설치위치`를 우선 사용한다.
+  - 휠체어리프트, 안전발판, 장애인화장실, 휠체어 급속충전기는 보조 접근성 정보로 사용한다.
+  - 지하철·콜택시 비교 분석 결과는 추천 로직이 아니라 서비스 분석 근거와 검증 지표로 사용한다.
+- 다음 Phase가 이어받을 것:
+  - ODsay 지하철 경로 응답 샘플을 확보해 stationID, 역명, 노선명 필드를 확인한다.
+  - ODsay stationID와 `노선명+역명정규화`를 연결하는 매핑 테이블을 만들고 매핑 성공률, 미매핑 역, 다중 매칭 역을 기록한다.
+  - 검토 완료된 지하철 접근성 lookup만 `analysis/`에 export한다.
+  - backend/frontend는 `data/processed`를 직접 읽지 않고, 검토 완료된 `analysis/` 산출물만 사용한다.
