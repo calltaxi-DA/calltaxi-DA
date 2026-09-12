@@ -8,6 +8,50 @@
 
 ## 기록된 이슈
 
+### 2026-09-12 — ODsay 버스 route mapping smoke test ApiKeyAuthFailed
+
+- **문제 상황**: Analysis Phase 5-2 시작 시 로컬 `.env`의 `ODSAY_API_KEY`를 사용해 `https://api.odsay.com/v1/api/searchPubTransPathT` 버스 경로 API를 실제 호출했지만, HTTP 상태는 `200`이고 본문은 ODsay application error로 반환됐다.
+
+  ```text
+  [ApiKeyAuthFailed] ApiKey authentication failed.
+  ```
+
+- **영향**: 현재 키 상태에서는 실제 ODsay 버스 경로 응답 샘플을 확보할 수 없다. 따라서 Analysis Phase 5-2의 핵심 검증 대상인 버스 구간의 `busID`, 노선번호, 버스 유형 필드명과 표기 방식, `analysis/bus/low_floor_bus_route_master.csv`와의 매핑 성공률을 확인할 수 없다.
+- **재현 방법**:
+  1. 루트 `.env`에 `APP_ODSAY_API_KEY` 또는 호환 변수 `ODSAY_API_KEY`를 설정한다.
+  2. 서울시청→홍대입구, 강남역→잠실역, 서울역→이태원 같은 샘플 좌표로 `searchPubTransPathT`를 호출한다.
+  3. 요청 파라미터에는 `SearchType=0`, `SearchPathType=2`, `SX`, `SY`, `EX`, `EY`, `apiKey`를 포함한다.
+  4. 응답 본문에 `error`가 포함되고 `[ApiKeyAuthFailed] ApiKey authentication failed.`가 반환된다.
+- **확인된 사실**:
+  - 루트 `.env`에는 `APP_ODSAY_API_KEY`는 없고 `ODSAY_API_KEY`가 존재한다.
+  - 첫 시도에서 로컬 Python SSL 인증서 오류가 발생했지만, 프로젝트 venv의 `httpx`로 재시도해 SSL 문제는 해소됐다.
+  - 요청 자체는 ODsay 서버에 도달했고 HTTP `200` 응답을 받았다.
+  - 응답 본문은 정상 `result.path`가 아니라 application-level `ApiKeyAuthFailed` 오류였다.
+  - 키가 URL-encoded 형태로 저장됐을 가능성을 확인하기 위해 raw 값과 URL-decoded 값을 각각 사용했지만 둘 다 같은 인증 오류가 반환됐다.
+  - 따라서 현재 확인된 범위에서는 JSON 파싱 문제, 네트워크 연결 실패, 단순 URL 인코딩 문제가 아니라 ODsay 인증 단계에서 실패한 것이다.
+- **확정 원인**: 아직 확인되지 않았다.
+- **미확정 원인 후보**:
+  - 현재 키가 backend/server 호출용 키가 아닐 가능성
+  - ODsay 대중교통/버스 경로 API 권한이 활성화되지 않았을 가능성
+  - Server Key에 필요한 IP 등록이 누락됐을 가능성
+  - ODsay 콘솔의 키 제한 설정과 현재 호출 환경이 맞지 않을 가능성
+- **검토한 대안**:
+  - 인증 실패 상태에서 mock 응답으로 busID/노선번호 매핑을 확정: 실제 ODsay 응답 필드 검증이라는 Phase 목적에 맞지 않아 제외했다.
+  - `route_number_normalized` 단독으로 실제 연결 가능하다고 간주: ODsay 노선번호 필드와 표기 방식을 아직 확인하지 못했으므로 제외했다.
+  - ODsay 실제 키가 정상화될 때까지 Phase 5-2를 보류: 실제 응답 기반 매핑 검증이라는 Phase 목적에 가장 맞는 방식으로 판단했다.
+- **상태**: 미해결
+- **다음 확인 절차**:
+  1. ODsay 콘솔에서 현재 키가 backend/server 호출용 키인지 확인한다.
+  2. 대중교통/버스 경로 API 권한 또는 상품이 활성화되어 있는지 확인한다.
+  3. IP 제한이 있다면 현재 호출 환경의 IP가 등록되어 있는지 확인한다.
+  4. 동일한 샘플 요청을 다시 실행해 정상 `result.path`가 반환되는지 확인한다.
+  5. 정상 응답이 확인되면 버스 구간의 `busID`, 노선번호, 버스 유형 필드를 추출해 `analysis/bus/low_floor_bus_route_master.csv`와 매핑 성공률을 검증한다.
+  6. 원인이 확인되면 이 문서의 `확정 원인`과 해결 내용을 갱신한다.
+- **검증 결과**:
+  - `backend/.venv/bin/python` + `httpx` 기준 실제 ODsay 호출은 수행됨
+  - 샘플 요청 모두 HTTP `200` + ODsay `error` 본문 반환
+- **남은 한계**: 올바른 ODsay 키/권한/IP 등록이 준비되기 전까지 Analysis Phase 5-2의 실제 버스 응답 샘플 확보와 route master 매핑 검증은 진행할 수 없다.
+
 ### 2026-09-12 — ODsay 지하철 경로 smoke test ApiKeyAuthFailed
 
 - **문제 상황**: Backend Phase 5-2 시작 시 로컬 `.env`의 ODsay 키를 사용해 `https://api.odsay.com/v1/api/searchPubTransPathT` 지하철 경로 API를 실제 호출했지만, 모든 샘플 경로에서 HTTP 상태는 `200`이고 본문은 ODsay application error로 반환됐다.
