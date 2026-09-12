@@ -113,3 +113,27 @@
   - 프론트엔드 경로검색 버튼과 `/routes/calltaxi` 연결은 이번 Phase 범위가 아니므로 이후 Frontend/API 연동 Phase에서 진행한다.
   - 장애인 콜택시 대기시간 예측 모델 연결과 총 이동시간에 대기시간을 합산하는 작업은 AI Adapter/대기시간 Phase에서 진행한다.
   - 지하철·저상버스 경로 API와 추천 정렬은 별도 Backend Phase에서 구현한다.
+
+## Analysis Phase — 통합 대기시간 Prediction 데이터 기준 확정 (2026-09-12)
+
+- 브랜치: `analysis/waiting-time-data-criteria` (base: `dev`)
+- 한 일: 이미 작성된 장애인 콜택시 대기시간 전처리 Notebook과 특장차 전처리 스크립트를 재실행하지 않고 확인해, 통합 대기시간 Prediction 모델과 서비스 개발에서 사용할 데이터 기준을 문서화했다. 임차택시와 특장차의 차량구분 기준, 결측치·이상치 처리, 날짜·시간 파생 변수, 전일접수·당일접수·심야시간 사전예약 기준, 대기시간 목표값 기준을 하나의 기준 문서로 확정했다. 현재 저장소에는 공통 정제 탑승내역은 존재하지만 대기시간 전처리 산출 CSV는 존재하지 않으므로, 실제 모델 export 전 사람이 이 기준에 맞는 산출물을 검토해 `analysis/`에 export해야 함을 명시했다.
+- 산출물:
+  - `analysis/waiting_time/data_criteria.md` — 통합 대기시간 Prediction 데이터 기준 문서
+  - `analysis/README.md` — 대기시간 기준 문서 위치와 현재 export 상태 갱신
+- 검증 결과:
+  - 기존 Notebook/스크립트 읽기 확인: `notebooks_waiting_time/01_rental_wait_time_data_preprocessing.ipynb`, `notebooks_waiting_time/03_wait_time_data_preprocessing.ipynb`, `notebooks_waiting_time/04_special_vehicle_wait_time_analysis.ipynb`, `src/waiting_time/special_vehicle_preprocessing.py`
+  - 현재 존재 파일 확인: `data/processed/서울시설공단_장애인콜택시 탑승내역_정제_20251231.csv` 존재 및 필수 컬럼 샘플 확인
+  - 현재 미존재 파일 확인: `data/processed/임차택시_대기시간_전처리.csv`, `data/processed/특장차_대기시간_전처리.csv`, `data/processed/특장차_대기시간_전처리_접수유형분류.csv`
+  - 데이터 재생성, Notebook 수정, `data/` 파일 변경 없음
+- 확정 기준 요약:
+  - 통합 모델은 하나로 가져가되 `차량구분`과 특장차 접수유형 후보를 feature 또는 세그먼트로 포함한다.
+  - 1차 target은 `접수_배차_분`으로 둔다.
+  - `접수_승차_분`은 보조 목표 또는 검증 지표로 유지한다.
+  - 임차택시는 예약 목적이 아니고 `접수_승차_분`이 0~250분인 건을 바로콜 기준으로 본다.
+  - 특장차 바로콜은 전일접수·심야시간 사전예약 후보를 제외하고, 당일 접수·당일 승차 또는 자정 넘김 0~200분 이내 건으로 본다.
+  - 전일접수·심야시간 사전예약은 바로콜과 섞지 않고 `예정일시` 기준 파생 변수를 함께 사용한다.
+- 다음 Phase가 이어받을 것:
+  - 기준에 맞는 대기시간 전처리 산출 CSV 또는 모델/lookup 산출물을 사람이 검토해 `analysis/`에 export한다.
+  - `ai/waiting_time/estimator.py`는 export 산출물이 준비된 뒤에만 실제 모델 호출로 대체한다.
+  - 서비스 연결 Phase에서는 예측 실패/미연결 상태를 명시적으로 처리한다.
