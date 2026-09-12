@@ -67,13 +67,6 @@ class SubwayAccessibilityProvider(Protocol):
         ...
 
 
-class EmptySubwayAccessibilityProvider:
-    """아직 접근성 lookup export가 없을 때 사용하는 기본 provider."""
-
-    def get_station_accessibility(self, station_key: SubwayStationKey) -> StationAccessibility | None:
-        return None
-
-
 class CsvSubwayAccessibilityProvider:
     """검토 완료된 `analysis/` station accessibility master CSV provider."""
 

@@ -144,7 +144,7 @@ analysis/subway/station_accessibility_master.csv
 
 ### ODsay 연결 후보 key
 
-이번 Phase에서는 ODsay 실제 응답 샘플을 호출하지 않았으므로, 최종 ODsay mapping key를 검증 완료 상태로 확정하지 않는다. 대신 후속 ODsay 연동 Phase에서 검증할 내부 canonical key와 매핑 전략을 아래처럼 확정한다. Backend Phase 5는 stationID 매핑 테이블이 생기기 전까지 `노선명 + 역명정규화` 기준으로 `analysis/subway/station_accessibility_master.csv`를 조회한다.
+이번 Phase에서는 ODsay 실제 응답 샘플을 호출하지 않았으므로, 최종 ODsay mapping key를 검증 완료 상태로 확정하지 않는다. 대신 후속 ODsay 연동 Phase에서 검증할 내부 canonical key와 매핑 전략을 아래처럼 확정한다. Backend Phase 5-1은 stationID 매핑 테이블이 생기기 전까지 `노선명 + 역명정규화` 기준으로 `analysis/subway/station_accessibility_master.csv`를 조회한다.
 
 ODsay 지하철 경로 결과와 접근성 lookup을 연결할 때는 다음 순서를 사용한다.
 
@@ -272,9 +272,9 @@ walking_distance_meters = ODsay trafficType=3 distance 합
 - 환승역별 내부 무장애 동선 거리·시간 공식 데이터 확보
 - 공식/실측 근거가 있는 환승역별 lookup을 `analysis/`에 export한 뒤 backend에서 보완
 
-## Backend Phase 5 export
+## Backend Phase 5-1 export
 
-`analysis/subway/station_accessibility_master.csv`는 Backend Phase 5에서 다음 기준으로 생성했다.
+`analysis/subway/station_accessibility_master.csv`는 Backend Phase 5-1에서 다음 기준으로 생성했다.
 
 | 항목 | 값 |
 |---|---:|
@@ -293,7 +293,7 @@ walking_distance_meters = ODsay trafficType=3 distance 합
 1. 월별 승하차 데이터와 station accessibility master를 분리한다.
 2. station accessibility master의 canonical key는 `노선명 + 역명 정규화`로 둔다.
 3. 현재 processed CSV 기준 `노선명 + 역명정규화`는 월별 데이터에서 중복되지만, 최신월 1건 기준 station master에서는 158개 key가 unique함을 확인했다.
-4. Backend Phase 5에서 사용할 reviewed accessibility lookup은 `analysis/subway/station_accessibility_master.csv`로 export했다.
+4. Backend Phase 5-1에서 사용할 reviewed accessibility lookup은 `analysis/subway/station_accessibility_master.csv`로 export했다.
 5. ODsay stationID 최종 mapping key는 아직 검증 완료 상태가 아니며, 후속 API 연동 Phase에서 실제 응답 샘플로 확정한다.
 6. 엘리베이터는 1차 접근성 판단의 핵심 시설로 사용한다.
 7. 접근성 평가는 출발역, 모든 환승역, 도착역에 대해 수행한다.
@@ -307,5 +307,6 @@ walking_distance_meters = ODsay trafficType=3 distance 합
 - ODsay stationID와 station accessibility master의 `노선명+역명정규화`를 연결하는 매핑 테이블을 만든다.
 - 매핑 성공률, 미매핑 역, 다중 매칭 역을 문서화한다.
 - 환승 0회, 1회, 2회 경로 샘플에서 출발역·모든 환승역·도착역 접근성 lookup이 모두 검사되는지 검증한다.
-- 검토 완료된 지하철 접근성 lookup만 `analysis/`에 export한다.
+- 환승 내부 무장애 동선 거리·시간을 포함한 실제 총 도보거리·총 도보시간을 Backend Phase 5-2에서 별도로 확정한다.
+- 실제 총 도보값 보완에 필요한 환승역별 동선 lookup은 검토 완료된 산출물만 `analysis/`에 export한다.
 - backend는 `data/processed`를 직접 읽지 않고, 검토 완료된 `analysis/` 산출물만 사용한다.
