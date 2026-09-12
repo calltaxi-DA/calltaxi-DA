@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     enable_sample_routes: bool = False
     tmap_app_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_TMAP_APP_KEY", "TMAP_APP_KEY"))
+    odsay_api_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_ODSAY_API_KEY", "ODSAY_API_KEY"))
 
 
 @lru_cache

@@ -67,7 +67,13 @@ station accessibility master 생성 기준은 다음과 같다.
 3. 최종 master에서 `노선명 + 역명정규화` 중복이 0건인지 assertion으로 검증한다.
 4. 월별 승하차 수요 컬럼(`장애인승차인원수`, `장애인하차인원수`, `장애인총승하차인원수`)은 station master의 primary 정보로 사용하지 않는다. 필요하면 별도 월별 수요 테이블에서 참조한다.
 
-현재 processed CSV 기준으로 최신월 1건을 선택하면 station master는 160행이며, `노선명 + 역명정규화` 중복 key는 0건으로 확인된다.
+현재 processed CSV 기준으로 최신월 1건을 선택하면 station master는 158행이며, `노선명 + 역명정규화` 중복 key는 0건으로 확인된다. 이 기준으로 검토한 export 파일은 다음에 둔다.
+
+```text
+analysis/subway/station_accessibility_master.csv
+```
+
+이 CSV는 backend가 직접 사용할 수 있는 접근성 lookup이며, `data/processed`를 서비스 코드에서 직접 읽지 않기 위한 reviewed export다.
 
 ## 전처리 기준 확인
 
@@ -138,7 +144,7 @@ station accessibility master 생성 기준은 다음과 같다.
 
 ### ODsay 연결 후보 key
 
-이번 Phase에서는 ODsay 실제 응답 샘플을 호출하지 않았으므로, 최종 ODsay mapping key를 검증 완료 상태로 확정하지 않는다. 대신 후속 ODsay 연동 Phase에서 검증할 내부 canonical key와 매핑 전략을 아래처럼 확정한다.
+이번 Phase에서는 ODsay 실제 응답 샘플을 호출하지 않았으므로, 최종 ODsay mapping key를 검증 완료 상태로 확정하지 않는다. 대신 후속 ODsay 연동 Phase에서 검증할 내부 canonical key와 매핑 전략을 아래처럼 확정한다. Backend Phase 5-1은 stationID 매핑 테이블이 생기기 전까지 `노선명 + 역명정규화` 기준으로 `analysis/subway/station_accessibility_master.csv`를 조회한다.
 
 ODsay 지하철 경로 결과와 접근성 lookup을 연결할 때는 다음 순서를 사용한다.
 
@@ -249,15 +255,49 @@ ODsay 지하철 경로 결과와 접근성 lookup을 연결할 때는 다음 순
 
 `운행엘리베이터보유여부`는 원본 접근성 CSV의 기준일/운행상태를 집계한 값이다. 실시간 고장·점검 상태를 보장하지 않으므로 서비스 문구는 “접근성 데이터 기준 운행 가능한 엘리베이터 보유”처럼 표현한다.
 
+### 도보거리·도보시간 산정 기준
+
+ODsay 응답의 도보 subPath는 출발지→역, 역→목적지 도보구간을 포함하지만 지하철↔지하철 환승 내부 도보시간·도보거리를 0 또는 과소 제공할 수 있다. 현재 저장소에는 환승역별 무장애 내부 동선 거리·시간의 공식/실측 lookup이 없다.
+
+```text
+walking_time_seconds = ODsay trafficType=3 sectionTime 합
+walking_distance_meters = ODsay trafficType=3 distance 합
+```
+
+근거 없는 임의 추정값을 `walking_time_seconds`나 `walking_distance_meters`에 섞지 않는다. 따라서 이 두 값은 현재 “ODsay가 제공한 도보 subPath 기준”이며, 실제 환승 내부 동선까지 포함한 총 도보시간·총 도보거리로 단정하지 않는다.
+
+후속 Phase에서 실제 총 도보값을 제공하려면 다음 중 하나가 필요하다.
+
+- ODsay 실제 응답 샘플에서 환승 내부 도보시간·도보거리가 항상 제공되는지 검증
+- 환승역별 내부 무장애 동선 거리·시간 공식 데이터 확보
+- 공식/실측 근거가 있는 환승역별 lookup을 `analysis/`에 export한 뒤 backend에서 보완
+
+## Backend Phase 5-1 export
+
+`analysis/subway/station_accessibility_master.csv`는 Backend Phase 5-1에서 다음 기준으로 생성했다.
+
+| 항목 | 값 |
+|---|---:|
+| 원천 reviewed 파일 | `data/processed/서울교통공사_장애인_지하철_승하차인원_정제_20251231.csv` |
+| 선택 기준 | 최신 `사용월 = 2025-12` |
+| export 행 수 | 158 |
+| unique key | `노선명 + 역명정규화` |
+| 중복 key 수 | 0 |
+
+포함 컬럼은 역 식별자와 접근성 판단에 필요한 엘리베이터·휠체어리프트·안전발판·장애인화장실 보조 정보로 제한한다. 월별 이용량 수치(`장애인승차인원수`, `장애인하차인원수`, `장애인총승하차인원수`)는 station master에 넣지 않는다.
+
+주의: 이 export는 실시간 엘리베이터 고장·점검 상태를 보장하지 않는다. 또한 ODsay stationID와의 전체 매핑 테이블이 아니므로, 후속 Phase에서 실제 ODsay 응답 샘플 기반 stationID 매핑 검증을 별도로 수행해야 한다.
+
 ## 이번 Phase에서 확정한 활용 대상
 
 1. 월별 승하차 데이터와 station accessibility master를 분리한다.
 2. station accessibility master의 canonical key는 `노선명 + 역명 정규화`로 둔다.
-3. 현재 processed CSV 기준 `노선명 + 역명정규화`는 월별 데이터에서 중복되지만, 최신월 1건 기준 station master에서는 160개 key가 unique함을 확인했다.
-4. ODsay stationID 최종 mapping key는 아직 검증 완료 상태가 아니며, 후속 API 연동 Phase에서 실제 응답 샘플로 확정한다.
-5. 엘리베이터는 1차 접근성 판단의 핵심 시설로 사용한다.
-6. 접근성 평가는 출발역, 모든 환승역, 도착역에 대해 수행한다.
-7. 휠체어리프트, 안전발판, 장애인화장실, 급속충전기는 보조 접근성 정보로 사용한다.
+3. 현재 processed CSV 기준 `노선명 + 역명정규화`는 월별 데이터에서 중복되지만, 최신월 1건 기준 station master에서는 158개 key가 unique함을 확인했다.
+4. Backend Phase 5-1에서 사용할 reviewed accessibility lookup은 `analysis/subway/station_accessibility_master.csv`로 export했다.
+5. ODsay stationID 최종 mapping key는 아직 검증 완료 상태가 아니며, 후속 API 연동 Phase에서 실제 응답 샘플로 확정한다.
+6. 엘리베이터는 1차 접근성 판단의 핵심 시설로 사용한다.
+7. 접근성 평가는 출발역, 모든 환승역, 도착역에 대해 수행한다.
+8. 휠체어리프트, 안전발판, 장애인화장실, 급속충전기는 보조 접근성 정보로 사용한다.
 8. 지하철·콜택시 비교 분석 결과는 서비스 추천 로직이 아니라 분석 근거와 검증 지표로 사용한다.
 9. 서울 25개 구 기준 분석 결과와 수도권 전체 경로 추천은 범위가 다르므로 후속 확장 시 별도 기준을 둔다.
 
@@ -267,5 +307,6 @@ ODsay 지하철 경로 결과와 접근성 lookup을 연결할 때는 다음 순
 - ODsay stationID와 station accessibility master의 `노선명+역명정규화`를 연결하는 매핑 테이블을 만든다.
 - 매핑 성공률, 미매핑 역, 다중 매칭 역을 문서화한다.
 - 환승 0회, 1회, 2회 경로 샘플에서 출발역·모든 환승역·도착역 접근성 lookup이 모두 검사되는지 검증한다.
-- 검토 완료된 지하철 접근성 lookup만 `analysis/`에 export한다.
+- 환승 내부 무장애 동선 거리·시간을 포함한 실제 총 도보거리·총 도보시간을 Backend Phase 5-2에서 별도로 확정한다.
+- 실제 총 도보값 보완에 필요한 환승역별 동선 lookup은 검토 완료된 산출물만 `analysis/`에 export한다.
 - backend는 `data/processed`를 직접 읽지 않고, 검토 완료된 `analysis/` 산출물만 사용한다.
