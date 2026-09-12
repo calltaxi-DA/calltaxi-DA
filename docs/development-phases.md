@@ -326,3 +326,30 @@
   - 공식 HTTPS gateway가 제공되면 서울 버스 위치·도착 응답과 차량유형·혼잡도 코드를 재검증한다.
   - ODsay 서버 인증을 정상화한 뒤 실제 버스 경로 응답의 `busID`·정류장 ID 매핑률을 검증한다.
   - T-DATA 활용승인과 실제 데이터 시점·ID를 검증한 뒤 서비스에 필요한 집계만 사람이 `analysis/`로 export한다.
+
+## Backend Phase 6 — 저상버스 경로 및 데이터 연동 (2026-09-12)
+
+- 브랜치: `backend/phase6-low-floor-bus-routes` (base: `dev`)
+- 한 일: `POST /routes/bus`를 추가해 ODsay 버스 전용 경로를 조회하고, 각 버스 구간의 `lane[].busNo`를 `analysis/bus/low_floor_bus_route_master.csv`의 `route_number_normalized`와 매칭한다. 모든 버스 구간에서 `available` 노선을 하나 이상 선택할 수 있는 첫 경로만 저상버스 경로로 반환한다. `unavailable`, `unknown`, 미매핑 노선만 있는 구간은 이용 가능한 저상버스 경로로 간주하지 않는다. ODsay의 모든 도보 `subPath`를 합산해 출발지→정류장, 버스 환승, 정류장→목적지의 총 도보거리와 총 도보시간을 공통 `RouteResult` 계약으로 반환한다.
+- 산출물:
+  - `backend/app/services/bus.py` — ODsay 버스 경로 client·parser, route master provider, 저상버스 경로 선택과 도보 합산
+  - `backend/app/api/bus.py` — `POST /routes/bus`, 외부 API 오류·경로 없음 처리
+  - `backend/tests/test_bus_service.py`, `backend/tests/test_bus_routes.py` — 파서·매칭·도보 합산·HTTP 응답 테스트
+  - `backend/app/core/logging.py`, `backend/tests/test_logging.py` — HTTP client URL의 query API 키 로그 노출 방지
+  - `docs/troubleshooting.md` — ODsay Web/Server Key 불일치와 query API 키 로그 노출의 재현·원인·해결 기록
+- 검증 결과:
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 77개 통과
+  - 실제 route master 로딩: `100`, `101`은 `available`, `1155`는 `unknown`으로 조회됨
+  - OpenAPI schema에서 `POST /routes/bus` 등록 확인
+  - 실제 ODsay 단일 버스 경로: 서울시청→강남역 `402`, 서울역→강남역 `402`, 홍대입구→잠실역 `N73`, 서울대입구→광화문 `501` 확인
+  - 실제 ODsay 환승 경로: 노원역→구로디지털단지역에서 `1138 → 150`, 버스 2구간, 도보 3구간 확인
+  - 환승 경로 합계: 총 6,240초, 총 30,992m, 도보 300초, 도보 357m 반환
+  - 실제 smoke test에서 `httpx` 요청 URL과 ODsay API 키가 로그에 출력되지 않음을 확인
+- 확정 기준:
+  - 저상버스 접근성은 노선 단위 정보이며 특정 시간·정류장에 도착하는 차량이 저상버스임을 보장하지 않는다.
+  - 총 도보거리·총 도보시간은 ODsay가 반환한 모든 도보 `subPath`의 합계이며 실제 보행로 실측값으로 단정하지 않는다. ODsay가 제공하지 않은 실제 보행경로나 임의 보정값은 추가하지 않는다.
+  - 실시간 위치·도착·차량별 저상 여부·실시간 혼잡도는 Analysis Phase 6-2 판정에 따라 이번 API에 포함하지 않는다.
+- 다음 Phase가 이어받을 것:
+  - Analysis Phase 5-2에서 ODsay `busID`와 서울 route master의 전체 매핑 성공률·미매핑·다중 매칭을 검증한다.
+  - 고정 공인 IP 또는 배포 환경의 고정 egress IP를 ODsay Server 플랫폼에 등록한다.
+  - Backend Phase 7에서 콜택시·지하철·저상버스 결과의 Rule-based 추천 정렬을 구현한다.

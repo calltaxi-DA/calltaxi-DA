@@ -30,3 +30,8 @@ def configure_logging(level: str = "INFO") -> None:
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(level.upper())
+
+    # httpx/httpcore의 INFO 로그에는 query string 전체가 포함될 수 있다.
+    # ODsay처럼 query parameter로 인증키를 받는 API의 비밀값 노출을 막는다.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)

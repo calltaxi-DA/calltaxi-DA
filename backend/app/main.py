@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.bus import router as bus_router
 from app.api.calltaxi import router as calltaxi_router
 from app.api.health import router as health_router
 from app.api.routes import router as routes_router
@@ -33,6 +34,7 @@ def create_app(include_sample_routes: bool | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(calltaxi_router)
     app.include_router(subway_router)
+    app.include_router(bus_router)
     should_include_sample_routes = include_sample_routes
     if should_include_sample_routes is None:
         should_include_sample_routes = settings.enable_sample_routes
