@@ -311,35 +311,8 @@
   - 차량별 저상 여부가 안정적으로 확인되면 “노선 단위 접근성”과 “실시간 차량 단위 접근성”을 분리해 `analysis/` 기준 문서를 갱신한다.
   - 필요한 경우 backend는 공식 API client를 구현하되, `data/raw`나 `data/processed`를 직접 읽지 않는다.
 
-## Analysis Phase 6-2 — 버스 공식 API 실제 호출 및 수집 방법 검증 (미완료)
+## Analysis Phase 6-2 — 버스 공식 API 실제 호출 및 수집 방법 검증 (다음 Phase)
 
-- 브랜치: `analysis/phase6-2-bus-api-validation-from-6-1` (base: `analysis/phase6-bus-data-discovery`)
-- 상태: 미완료 / 서울 버스 API 전용 키 준비 필요
-- 목표: 버스 추가 데이터 후보를 실제 공식 API 응답으로 검증하고, 각 항목의 확보 가능 여부와 수집 방법을 `가능`/`조건부`/`불가`로 확정한다.
-- 한 일:
-  - 서울 버스위치정보조회/버스도착정보조회 실제 호출을 준비했으나, 루트 `.env`에 서울 버스 API 전용으로 식별되는 `SEOUL_BUS_API_KEY` 또는 `SEOUL_API_KEY`가 없음을 확인했다.
-  - `MOBILITY_API_KEY`는 존재하지만 해당 키의 용도와 호출 대상이 서울 버스 API라고 확정되지 않았고, 일부 서울 버스 API 후보 endpoint가 `http://ws.bus.go.kr` 평문 HTTP를 사용하므로 임의 전송하지 않았다.
-  - 실제 API 검증 시 필요한 표준 검증 항목을 `호출 성공 여부`, `응답 예시`, `필드명`, `필드 코드 의미`, `갱신주기`, `호출 제한`, `ID mapping 가능 여부`, `서비스 적용 여부`로 정리했다.
-- 산출물:
-  - `analysis/bus/bus_api_validation_criteria.md` — 버스 공식 API 실제 검증 기준, blocker, 후속 검증 절차
-  - `analysis/README.md` — 버스 API 검증 기준 문서 위치와 현재 미완료 상태 추가
-- 검증 결과:
-  - 루트 `.env` 확인: `MOBILITY_API_KEY`는 존재, `SEOUL_BUS_API_KEY`/`SEOUL_API_KEY`는 미존재
-  - 서울 버스 API 전용 키가 확인되지 않아 실제 API 호출은 수행하지 않음
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 62개 통과
-- 남은 blocker:
-  - 서울 버스 API 전용 키 준비 필요
-  - HTTP endpoint만 제공되는 API의 키 전송 보안 허용 여부 확인 필요
-  - ODsay 버스 응답 인증 문제 해결 전까지 ODsay ↔ 서울 BIS/ARS 정류장 ID mapping 검증 불가
-  - 차량유형 코드가 저상버스 여부를 의미하는지 공식 코드표 또는 샘플 대조 필요
-  - 배차간격은 공식 필드 제공 여부 또는 실시간 위치·도착정보 기반 headway 계산 가능성을 아직 검증하지 못함
-- 다음에 이어받을 것:
-  - `SEOUL_BUS_API_KEY` 등 명확한 서울 버스 API 전용 키를 준비한다.
-  - 서울 버스위치정보조회 API 실제 호출 성공 여부를 확인한다.
-  - 차량 ID, 차량유형, 혼잡도, 저상버스 여부 관련 필드 실제 값과 코드 의미를 확인한다.
-  - 서울 버스도착정보조회 API 실제 응답을 확보한다.
-  - 정류장 ID, ARS ID, ODsay 정류장 ID mapping 가능성을 확인한다.
-  - 배차간격이 공식 필드로 제공되는지 확인하고, 없으면 실시간 위치·도착정보 기반 headway 계산 가능성을 검증한다.
-  - 교통카드 빅데이터의 공식 재차인원/혼잡도 데이터 권한, 갱신주기, 호출 제한을 확인한다.
-  - 공식 확보가 불가능한 항목을 최종 판정하고, 필요한 경우에만 크롤링 검토 범위를 분리한다.
-- 주의: 이 Phase가 완료되기 전까지 실시간 저상버스 도착, 차량별 저상 여부, 실시간 혼잡도, 실시간 배차간격은 서비스에서 확정 기능으로 표시하지 않는다.
+- 브랜치: `analysis/phase6-2-bus-api-validation-from-6-1` (base: `dev`)
+- 상태: 미완료
+- 상세 검증 기준과 현재 blocker: `analysis/bus/bus_api_validation_criteria.md`
