@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from app.api.calltaxi import router as calltaxi_router
 from app.api.health import router as health_router
 from app.api.routes import router as routes_router
+from app.api.subway import router as subway_router
 from app.core.config import get_settings
 from app.core.exceptions import internal_server_error_handler
 from app.core.logging import configure_logging
@@ -31,6 +32,7 @@ def create_app(include_sample_routes: bool | None = None) -> FastAPI:
     app.add_exception_handler(Exception, internal_server_error_handler)
     app.include_router(health_router)
     app.include_router(calltaxi_router)
+    app.include_router(subway_router)
     should_include_sample_routes = include_sample_routes
     if should_include_sample_routes is None:
         should_include_sample_routes = settings.enable_sample_routes

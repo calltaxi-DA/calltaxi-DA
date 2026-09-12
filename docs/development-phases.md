@@ -193,3 +193,26 @@
   - 환승 0회, 1회, 2회 경로 샘플에서 출발역·모든 환승역·도착역 접근성 lookup이 모두 검사되는지 검증한다.
   - 검토 완료된 지하철 접근성 lookup만 `analysis/`에 export한다.
   - backend/frontend는 `data/processed`를 직접 읽지 않고, 검토 완료된 `analysis/` 산출물만 사용한다.
+
+## Backend Phase 5 — 지하철 경로 및 접근성 연동 (2026-09-12)
+
+- 브랜치: `backend/phase5-subway-accessibility-route` (base: `dev`)
+- 한 일: ODsay 지하철 경로 응답을 backend에서 받아 공통 `RouteResult` 계약으로 반환하는 `/routes/subway` API를 추가했다. ODsay 응답의 총 이동시간, 총 이동거리, 요금, 도보 subPath를 파싱해 총 도보거리와 총 도보시간을 반환한다. 접근성 데이터는 아직 `analysis/`에 lookup export가 없으므로 `data/processed`를 직접 읽지 않고, 후속 Phase에서 station accessibility master를 주입할 수 있는 provider 경계만 추가했다. 테스트에서는 fake provider로 출발역·환승역·도착역 접근성 검사가 모두 수행되는지 확인했다.
+- 산출물:
+  - `backend/app/api/subway.py` — `POST /routes/subway` 라우터
+  - `backend/app/services/subway.py` — ODsay 지하철 경로 클라이언트, 응답 파서, 접근성 warning 생성
+  - `backend/app/main.py` — 지하철 라우터 등록
+  - `backend/app/core/config.py`, `backend/.env.example` — `APP_ODSAY_API_KEY` 설정 추가, 로컬 호환을 위해 `ODSAY_API_KEY`도 읽도록 지원
+  - `backend/tests/test_subway_routes.py` — 라우터 응답, 좌표 검증, 키 누락, ODsay 실패 처리, 접근성 warning 테스트
+  - `backend/tests/test_subway_service.py` — ODsay 응답 파싱, 도보거리·도보시간 합산, outbound 요청 검증, 환승역 접근성 검사 테스트
+  - `backend/tests/test_config.py` — ODsay API key alias 설정 로딩 테스트
+- 검증 결과:
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 57개 통과
+  - Mock ODsay 응답 기준 `totalTime`, `totalDistance`, `payment`, 도보 subPath 합산 확인
+  - 환승 1회 경로에서 출발역, 환승역의 각 노선 구간, 도착역 접근성 lookup 호출 확인
+  - 실제 ODsay smoke test는 수행하지 않았다. 운영 적용 전 `APP_ODSAY_API_KEY`와 실제 ODsay 응답의 stationID/역명/노선명 형식 확인이 필요하다.
+- 다음 Phase가 이어받을 것:
+  - 실제 ODsay API 응답 샘플로 stationID, 역명, 노선명 필드를 확인하고 `analysis/subway/accessibility_mapping_criteria.md`의 canonical key와 매칭 성공률을 검증한다.
+  - 검토 완료된 station accessibility master를 `analysis/`에 export한 뒤, `EmptySubwayAccessibilityProvider`를 실제 lookup provider로 대체한다.
+  - 환승 0회, 1회, 2회 실제 경로 샘플에서 출발역·모든 환승역·도착역 접근성 검사가 모두 이루어지는지 검증한다.
+  - 지하철 접근성 결과를 frontend에 표시하는 작업은 별도 Frontend/API 연동 Phase에서 진행한다.
