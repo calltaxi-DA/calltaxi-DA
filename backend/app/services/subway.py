@@ -1,11 +1,13 @@
 """ODsay 지하철 경로 응답 파싱과 접근성 검사.
 
 이번 Phase는 ODsay 지하철 경로 API 응답에서 총 이동시간과 도보 구간을
-계산하고, 검토 완료된 접근성 lookup이 주입될 수 있는 경계를 만든다.
+계산하고, 검토 완료된 접근성 lookup을 연결한다.
 서비스 코드는 `data/processed`를 직접 읽지 않는다.
 """
 
+import csv
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
@@ -13,8 +15,10 @@ import httpx
 from app.api.contracts import Location
 
 ODSAY_SUBWAY_ROUTE_URL = "https://api.odsay.com/v1/api/searchPubTransPathT"
+DEFAULT_SUBWAY_ACCESSIBILITY_MASTER_PATH = Path("analysis/subway/station_accessibility_master.csv")
 WALKING_TRAFFIC_TYPE = 3
 SUBWAY_TRAFFIC_TYPE = 1
+SUBWAY_PATH_TYPE = 1
 
 
 class OdsayRouteError(RuntimeError):
@@ -75,6 +79,68 @@ class EmptySubwayAccessibilityProvider:
         return None
 
 
+class CsvSubwayAccessibilityProvider:
+    """검토 완료된 `analysis/` station accessibility master CSV provider."""
+
+    def __init__(self, csv_path: Path = DEFAULT_SUBWAY_ACCESSIBILITY_MASTER_PATH) -> None:
+        self.csv_path = csv_path
+        self._lookup = self._load_lookup(csv_path)
+
+    def get_station_accessibility(self, station_key: SubwayStationKey) -> StationAccessibility | None:
+        normalized_key = SubwayStationKey(
+            line_name=_canonical_line_name(station_key.line_name),
+            station_name=_normalize_station_name(station_key.station_name) or station_key.station_name,
+        )
+        return self._lookup.get(normalized_key)
+
+    @staticmethod
+    def _load_lookup(csv_path: Path) -> dict[SubwayStationKey, StationAccessibility]:
+        if not csv_path.exists():
+            raise OdsayRouteError("subway accessibility master file is missing", reason="missing_accessibility_master")
+
+        lookup: dict[SubwayStationKey, StationAccessibility] = {}
+        with csv_path.open(encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            required_columns = {
+                "노선명",
+                "역명정규화",
+                "운행엘리베이터보유여부",
+                "운행엘리베이터수",
+                "엘리베이터설치위치",
+                "엘리베이터연결층",
+            }
+            missing_columns = required_columns.difference(reader.fieldnames or [])
+            if missing_columns:
+                raise OdsayRouteError(
+                    "subway accessibility master file has invalid columns",
+                    reason="invalid_accessibility_master",
+                )
+
+            for row in reader:
+                station_name = _normalize_station_name(row.get("역명정규화"))
+                line_name = _canonical_line_name(str(row.get("노선명") or ""))
+                if not station_name or not line_name:
+                    continue
+                key = SubwayStationKey(line_name=line_name, station_name=station_name)
+                if key in lookup:
+                    raise OdsayRouteError(
+                        "subway accessibility master key must be unique",
+                        reason="duplicate_accessibility_master_key",
+                    )
+                lookup[key] = StationAccessibility(
+                    has_operating_elevator=_coerce_bool_flag(row.get("운행엘리베이터보유여부")),
+                    elevator_count=_coerce_optional_non_negative_int(
+                        row.get("운행엘리베이터수"),
+                        default=0,
+                        field_name="운행엘리베이터수",
+                    ),
+                    elevator_location=_blank_to_none(row.get("엘리베이터설치위치")),
+                    elevator_floor_connection=_blank_to_none(row.get("엘리베이터연결층")),
+                )
+
+        return lookup
+
+
 class OdsaySubwayRouteClient:
     """ODsay 대중교통 경로 API 클라이언트."""
 
@@ -98,6 +164,8 @@ class OdsaySubwayRouteClient:
             "SY": origin.latitude,
             "EX": destination.longitude,
             "EY": destination.latitude,
+            "SearchType": 0,
+            "SearchPathType": SUBWAY_PATH_TYPE,
             "apiKey": self.api_key,
         }
 
@@ -122,6 +190,9 @@ class OdsaySubwayRouteClient:
             payload = response.json()
         except ValueError as exc:
             raise OdsayRouteError("ODsay subway route API returned invalid JSON", reason="invalid_json") from exc
+
+        if isinstance(payload, dict) and "error" in payload:
+            raise OdsayRouteError("ODsay subway route API returned an application error", reason="odsay_api_error")
 
         return parse_odsay_subway_route(payload)
 
@@ -198,16 +269,27 @@ def _select_first_subway_path(payload: dict[str, Any]) -> dict[str, Any]:
     paths = _require_list(result.get("path"), reason="missing_path")
     for path in paths:
         path_mapping = _require_mapping(path, reason="invalid_path")
-        if _path_has_subway(path_mapping):
+        if _is_subway_only_path(path_mapping):
             return path_mapping
-    raise OdsayRouteError("ODsay response does not include a subway route", reason="missing_subway_route")
+    raise OdsayRouteError("ODsay response does not include a subway-only route", reason="missing_subway_route")
 
 
-def _path_has_subway(path: dict[str, Any]) -> bool:
+def _is_subway_only_path(path: dict[str, Any]) -> bool:
+    if path.get("pathType") != SUBWAY_PATH_TYPE:
+        return False
     sub_paths = path.get("subPath")
     if not isinstance(sub_paths, list):
         return False
-    return any(isinstance(section, dict) and section.get("trafficType") == SUBWAY_TRAFFIC_TYPE for section in sub_paths)
+    has_subway = False
+    for section in sub_paths:
+        if not isinstance(section, dict):
+            return False
+        traffic_type = section.get("trafficType")
+        if traffic_type == SUBWAY_TRAFFIC_TYPE:
+            has_subway = True
+        elif traffic_type != WALKING_TRAFFIC_TYPE:
+            return False
+    return has_subway
 
 
 def _sum_walking_distance_meters(sub_paths: list[Any]) -> int:
@@ -344,3 +426,19 @@ def _coerce_optional_non_negative_int(value: Any, default: int, field_name: str)
     if value is None:
         return default
     return _coerce_non_negative_int(value, field_name=field_name)
+
+
+def _coerce_bool_flag(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    text = str(value).strip().lower()
+    return text in {"1", "true", "t", "y", "yes", "있음"}
+
+
+def _blank_to_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.contracts import RouteRequest, RouteResult, RouteStatus, TransportType
 from app.core.config import get_settings
 from app.services.subway import (
-    EmptySubwayAccessibilityProvider,
+    CsvSubwayAccessibilityProvider,
     OdsayRouteError,
     OdsaySubwayRouteClient,
     SubwayAccessibilityProvider,
@@ -29,9 +29,14 @@ def get_odsay_subway_route_client() -> OdsaySubwayRouteClient:
 
 
 def get_subway_accessibility_provider() -> SubwayAccessibilityProvider:
-    # TODO: 지하철 접근성 lookup이 analysis/에 export되면
-    # 해당 station accessibility master를 읽는 provider로 교체한다.
-    return EmptySubwayAccessibilityProvider()
+    try:
+        return CsvSubwayAccessibilityProvider()
+    except OdsayRouteError as exc:
+        logger.warning("subway_accessibility_lookup_unavailable reason=%s", exc.reason)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Subway accessibility lookup is not available",
+        ) from exc
 
 
 @router.post("/subway", response_model=RouteResult)
@@ -51,6 +56,11 @@ def calculate_subway_route(
             detail="Failed to calculate subway route",
         ) from exc
 
+    warnings = build_accessibility_warnings(route.station_keys, accessibility_provider)
+    warnings.append(
+        "도보시간은 ODsay가 제공한 도보 subPath 기준이며, 지하철 환승 내부 도보시간은 실제보다 적게 반영될 수 있습니다."
+    )
+
     return RouteResult(
         transport_type=TransportType.SUBWAY,
         status=RouteStatus.AVAILABLE,
@@ -60,5 +70,5 @@ def calculate_subway_route(
         walking_distance_meters=route.walking_distance_meters,
         walking_time_seconds=route.walking_time_seconds,
         summary=route.summary,
-        warnings=build_accessibility_warnings(route.station_keys, accessibility_provider),
+        warnings=warnings,
     )

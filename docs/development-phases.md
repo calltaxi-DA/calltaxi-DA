@@ -175,7 +175,7 @@
 - 검증 결과:
   - 기존 Notebook 읽기 확인: `parkchansik/10_subway_data_preprocessing.ipynb`, `parkchansik/11_subway_calltaxi_comparison_analysis.ipynb`
   - 현재 존재 파일 확인: `data/processed/서울교통공사_장애인_지하철_승하차인원_정제_20251231.csv`, `data/raw/교통약자이용정보_엘리베이터.csv`, `data/raw/교통약자이용정보_휠체어리프트.csv`, `data/raw/교통약자이용정보_안전발판보유현황.csv`, `data/raw/교통약자이용정보_장애인화장실.csv`, `data/raw/교통약자이용정보_휠체어급속충전기.csv`
-  - key 중복 확인: 월별 processed CSV는 `노선명+역명정규화` 160개 key가 12개월씩 반복되며, 최신월 기준 station master로 분리하면 160행·중복 0건으로 확인
+  - key 중복 확인: 월별 processed CSV는 `노선명+역명정규화` 160개 key가 최대 12개월씩 반복되며, 최신월 기준 station master로 분리하면 158행·중복 0건으로 확인
   - 데이터 재생성, Notebook 수정, `data/` 파일 변경 없음
   - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 46개 통과
 - 확정 기준 요약:
@@ -197,22 +197,27 @@
 ## Backend Phase 5 — 지하철 경로 및 접근성 연동 (2026-09-12)
 
 - 브랜치: `backend/phase5-subway-accessibility-route` (base: `dev`)
-- 한 일: ODsay 지하철 경로 응답을 backend에서 받아 공통 `RouteResult` 계약으로 반환하는 `/routes/subway` API를 추가했다. ODsay 응답의 총 이동시간, 총 이동거리, 요금, 도보 subPath를 파싱해 총 도보거리와 총 도보시간을 반환한다. 접근성 데이터는 아직 `analysis/`에 lookup export가 없으므로 `data/processed`를 직접 읽지 않고, 후속 Phase에서 station accessibility master를 주입할 수 있는 provider 경계만 추가했다. 테스트에서는 fake provider로 출발역·환승역·도착역 접근성 검사가 모두 수행되는지 확인했다.
+- 한 일: ODsay 지하철 경로 응답을 backend에서 받아 공통 `RouteResult` 계약으로 반환하는 `/routes/subway` API를 추가했다. ODsay 요청에는 `SearchType=0`, `SearchPathType=1`을 넣어 지하철 전용 경로만 요청하고, 응답에서도 `pathType=1`이며 지하철/도보 subPath만 포함된 경로만 선택하도록 방어했다. ODsay 응답의 총 이동시간, 총 이동거리, 요금, ODsay가 제공한 도보 subPath를 파싱해 도보거리와 도보시간을 반환한다. 단, ODsay가 지하철↔지하철 환승 내부 도보시간을 항상 제공하지 않을 수 있으므로 API warning에 “ODsay 제공 도보 subPath 기준”이라는 한계를 명시했다. 접근성 데이터는 `analysis/subway/station_accessibility_master.csv`로 export한 reviewed station master를 backend provider가 읽어 출발역·환승역·도착역 접근성을 검사한다.
 - 산출물:
   - `backend/app/api/subway.py` — `POST /routes/subway` 라우터
-  - `backend/app/services/subway.py` — ODsay 지하철 경로 클라이언트, 응답 파서, 접근성 warning 생성
+  - `backend/app/services/subway.py` — ODsay 지하철 경로 클라이언트, 응답 파서, CSV 기반 접근성 lookup provider, 접근성 warning 생성
   - `backend/app/main.py` — 지하철 라우터 등록
   - `backend/app/core/config.py`, `backend/.env.example` — `APP_ODSAY_API_KEY` 설정 추가, 로컬 호환을 위해 `ODSAY_API_KEY`도 읽도록 지원
+  - `analysis/subway/station_accessibility_master.csv` — 최신월 기준 검토 완료 station accessibility master export
+  - `analysis/subway/accessibility_mapping_criteria.md`, `analysis/README.md` — station master export 상태와 ODsay 환승 도보시간 한계 반영
   - `backend/tests/test_subway_routes.py` — 라우터 응답, 좌표 검증, 키 누락, ODsay 실패 처리, 접근성 warning 테스트
-  - `backend/tests/test_subway_service.py` — ODsay 응답 파싱, 도보거리·도보시간 합산, outbound 요청 검증, 환승역 접근성 검사 테스트
+  - `backend/tests/test_subway_service.py` — ODsay 응답 파싱, 도보거리·도보시간 합산, outbound 요청 검증, 혼합 버스+지하철 경로 제외, CSV 접근성 provider 로딩, 환승역 접근성 검사 테스트
   - `backend/tests/test_config.py` — ODsay API key alias 설정 로딩 테스트
 - 검증 결과:
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 57개 통과
-  - Mock ODsay 응답 기준 `totalTime`, `totalDistance`, `payment`, 도보 subPath 합산 확인
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 61개 통과
+  - Mock ODsay 응답 기준 `totalTime`, `totalDistance`, `payment`, ODsay 도보 subPath 합산 확인
+  - ODsay outbound 요청에 `SearchType=0`, `SearchPathType=1` 포함 확인
+  - 응답 첫 번째 경로가 버스+지하철 혼합 경로여도 `/routes/subway`는 순수 지하철 경로만 선택하는지 확인
+  - `analysis/subway/station_accessibility_master.csv` 로딩과 `노선명+역명정규화` lookup 확인
   - 환승 1회 경로에서 출발역, 환승역의 각 노선 구간, 도착역 접근성 lookup 호출 확인
-  - 실제 ODsay smoke test는 수행하지 않았다. 운영 적용 전 `APP_ODSAY_API_KEY`와 실제 ODsay 응답의 stationID/역명/노선명 형식 확인이 필요하다.
+  - 실제 ODsay smoke test는 수행하지 않았다. 운영 적용 전 backend용 ODsay Server Key/IP 등록, 실제 응답의 stationID/역명/노선명 형식, 환승 0회·1회·2회 경로의 도보 subPath 제공 여부 확인이 필요하다.
 - 다음 Phase가 이어받을 것:
   - 실제 ODsay API 응답 샘플로 stationID, 역명, 노선명 필드를 확인하고 `analysis/subway/accessibility_mapping_criteria.md`의 canonical key와 매칭 성공률을 검증한다.
-  - 검토 완료된 station accessibility master를 `analysis/`에 export한 뒤, `EmptySubwayAccessibilityProvider`를 실제 lookup provider로 대체한다.
-  - 환승 0회, 1회, 2회 실제 경로 샘플에서 출발역·모든 환승역·도착역 접근성 검사가 모두 이루어지는지 검증한다.
+  - ODsay가 제공하지 않는 지하철 환승 내부 도보시간을 보완할 별도 데이터 또는 추정 규칙이 필요한지 결정한다.
+  - 환승 0회, 1회, 2회 실제 경로 샘플에서 출발역·모든 환승역·도착역 접근성 검사가 모두 이루어지는지와 환승 도보시간 한계 문구가 적절한지 검증한다.
   - 지하철 접근성 결과를 frontend에 표시하는 작업은 별도 Frontend/API 연동 Phase에서 진행한다.

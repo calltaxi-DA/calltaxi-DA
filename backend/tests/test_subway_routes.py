@@ -78,6 +78,7 @@ def test_subway_route_returns_route_result_with_total_walking_distance_and_time(
     assert route.walking_time_seconds == 660
     assert route.summary == "서울역 → 강남역 지하철 경로"
     assert any("2호선 시청" in warning for warning in route.warnings)
+    assert any("환승 내부 도보시간" in warning for warning in route.warnings)
 
 
 def test_subway_route_requires_valid_coordinates() -> None:
