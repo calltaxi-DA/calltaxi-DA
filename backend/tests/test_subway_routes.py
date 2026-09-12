@@ -18,7 +18,8 @@ class FakeOdsaySubwayRouteClient:
             total_time_seconds=2_220,
             total_distance_meters=9_200,
             walking_distance_meters=680,
-            walking_time_seconds=660,
+            walking_time_seconds=840,
+            estimated_transfer_walking_time_seconds=180,
             fare_won=1_400,
             station_keys=(
                 SubwayStationKey("1호선", "서울"),
@@ -75,10 +76,10 @@ def test_subway_route_returns_route_result_with_total_walking_distance_and_time(
     assert route.total_distance_meters == 9_200
     assert route.total_cost_won == 1_400
     assert route.walking_distance_meters == 680
-    assert route.walking_time_seconds == 660
+    assert route.walking_time_seconds == 840
     assert route.summary == "서울역 → 강남역 지하철 경로"
     assert any("2호선 시청" in warning for warning in route.warnings)
-    assert any("환승 내부 도보시간" in warning for warning in route.warnings)
+    assert any("내부 환승 도보시간 보수 추정" in warning for warning in route.warnings)
 
 
 def test_subway_route_requires_valid_coordinates() -> None:

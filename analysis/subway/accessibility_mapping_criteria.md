@@ -255,6 +255,18 @@ ODsay 지하철 경로 결과와 접근성 lookup을 연결할 때는 다음 순
 
 `운행엘리베이터보유여부`는 원본 접근성 CSV의 기준일/운행상태를 집계한 값이다. 실시간 고장·점검 상태를 보장하지 않으므로 서비스 문구는 “접근성 데이터 기준 운행 가능한 엘리베이터 보유”처럼 표현한다.
 
+### 총 도보시간 산정 기준
+
+ODsay 응답의 도보 subPath는 출발지→역, 역→목적지 도보구간을 포함하지만 지하철↔지하철 환승 내부 도보시간을 0분 또는 과소 제공할 수 있다. 따라서 Backend Phase 5의 `walking_time_seconds`는 다음 기준으로 산정한다.
+
+```text
+walking_time_seconds
+= ODsay trafficType=3 sectionTime 합
++ max(0, 환승 1회당 5분 - ODsay가 해당 환승 사이에 제공한 도보시간)
+```
+
+즉 환승 내부 도보시간은 1회당 최소 5분을 보장하는 보수 추정값으로 보완한다. 실제 환승역별 무장애 동선 이동시간 데이터를 확보하기 전까지 이 값을 MVP 기준으로 사용하고, 후속 Phase에서 역별 lookup이 생기면 해당 lookup으로 대체한다.
+
 ## Backend Phase 5 export
 
 `analysis/subway/station_accessibility_master.csv`는 Backend Phase 5에서 다음 기준으로 생성했다.

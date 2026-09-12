@@ -19,6 +19,7 @@ DEFAULT_SUBWAY_ACCESSIBILITY_MASTER_PATH = Path("analysis/subway/station_accessi
 WALKING_TRAFFIC_TYPE = 3
 SUBWAY_TRAFFIC_TYPE = 1
 SUBWAY_PATH_TYPE = 1
+MIN_TRANSFER_WALKING_TIME_SECONDS = 5 * 60
 
 
 class OdsayRouteError(RuntimeError):
@@ -47,6 +48,7 @@ class SubwayRouteMetrics:
     total_distance_meters: int
     walking_distance_meters: int
     walking_time_seconds: int
+    estimated_transfer_walking_time_seconds: int
     fare_won: int
     station_keys: tuple[SubwayStationKey, ...]
     summary: str
@@ -61,12 +63,7 @@ class StationAccessibility:
 
 
 class SubwayAccessibilityProvider(Protocol):
-    """지하철 접근성 lookup provider.
-
-    후속 Phase에서 `analysis/`에 export된 station accessibility master를
-    읽는 구현으로 대체한다. 이번 Phase의 기본 구현은 아무 lookup도
-    제공하지 않는다.
-    """
+    """지하철 접근성 lookup provider."""
 
     def get_station_accessibility(self, station_key: SubwayStationKey) -> StationAccessibility | None:
         ...
@@ -209,7 +206,9 @@ def parse_odsay_subway_route(payload: dict[str, Any]) -> SubwayRouteMetrics:
     total_distance_meters = _coerce_optional_non_negative_int(info.get("totalDistance"), default=0, field_name="totalDistance")
 
     walking_distance_meters = _sum_walking_distance_meters(sub_paths)
-    walking_time_seconds = _sum_walking_time_seconds(sub_paths)
+    odsay_walking_time_seconds = _sum_walking_time_seconds(sub_paths)
+    estimated_transfer_walking_time_seconds = _estimate_missing_transfer_walking_time_seconds(sub_paths)
+    walking_time_seconds = odsay_walking_time_seconds + estimated_transfer_walking_time_seconds
     station_keys = tuple(_extract_station_keys(sub_paths))
 
     if total_distance_meters == 0:
@@ -226,6 +225,7 @@ def parse_odsay_subway_route(payload: dict[str, Any]) -> SubwayRouteMetrics:
         total_distance_meters=total_distance_meters,
         walking_distance_meters=walking_distance_meters,
         walking_time_seconds=walking_time_seconds,
+        estimated_transfer_walking_time_seconds=estimated_transfer_walking_time_seconds,
         fare_won=fare_won,
         station_keys=station_keys,
         summary=_build_summary(station_keys),
@@ -306,6 +306,28 @@ def _sum_walking_time_seconds(sub_paths: list[Any]) -> int:
         if isinstance(section, dict) and section.get("trafficType") == WALKING_TRAFFIC_TYPE:
             total_minutes += _coerce_optional_non_negative_int(section.get("sectionTime"), default=0, field_name="walk_sectionTime")
     return total_minutes * 60
+
+
+def _estimate_missing_transfer_walking_time_seconds(sub_paths: list[Any]) -> int:
+    """ODsay가 누락하거나 과소 제공한 지하철 환승 내부 도보시간을 보정한다.
+
+    ODsay는 지하철↔지하철 환승 사이 내부 도보시간을 항상 제공하지 않을 수 있다.
+    순수 지하철 경로에서 연속된 지하철 구간 사이를 환승으로 보고, 환승 1회당
+    최소 5분을 보장하도록 부족분만 더한다.
+    """
+
+    additional_seconds = 0
+    last_subway_index: int | None = None
+
+    for index, section in enumerate(sub_paths):
+        if not isinstance(section, dict) or section.get("trafficType") != SUBWAY_TRAFFIC_TYPE:
+            continue
+        if last_subway_index is not None:
+            provided_seconds = _sum_walking_time_seconds(sub_paths[last_subway_index + 1 : index])
+            additional_seconds += max(0, MIN_TRANSFER_WALKING_TIME_SECONDS - provided_seconds)
+        last_subway_index = index
+
+    return additional_seconds
 
 
 def _sum_non_walking_distance_meters(sub_paths: list[Any]) -> int:

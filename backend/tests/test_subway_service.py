@@ -59,7 +59,8 @@ def test_parse_odsay_subway_route_sums_total_walking_distance_and_time() -> None
     assert route.total_time_seconds == 37 * 60
     assert route.total_distance_meters == 9_200
     assert route.walking_distance_meters == 680
-    assert route.walking_time_seconds == 11 * 60
+    assert route.walking_time_seconds == 14 * 60
+    assert route.estimated_transfer_walking_time_seconds == 3 * 60
     assert route.fare_won == 1_400
     assert route.station_keys == (
         SubwayStationKey(line_name="1호선", station_name="서울"),
@@ -120,10 +121,22 @@ def test_parse_odsay_subway_route_skips_bus_and_subway_mixed_route() -> None:
     route = parse_odsay_subway_route(payload)
 
     assert route.total_time_seconds == 30 * 60
+    assert route.walking_time_seconds == 3 * 60
+    assert route.estimated_transfer_walking_time_seconds == 0
     assert route.station_keys == (
         SubwayStationKey(line_name="2호선", station_name="서울"),
         SubwayStationKey(line_name="2호선", station_name="강남"),
     )
+
+
+def test_parse_odsay_subway_route_estimates_missing_transfer_walking_time() -> None:
+    payload = _odsay_payload()
+    payload["result"]["path"][0]["subPath"][2]["sectionTime"] = 0
+
+    route = parse_odsay_subway_route(payload)
+
+    assert route.walking_time_seconds == 14 * 60
+    assert route.estimated_transfer_walking_time_seconds == 5 * 60
 
 
 def test_odsay_subway_route_client_sends_expected_request_without_logging_api_key() -> None:
