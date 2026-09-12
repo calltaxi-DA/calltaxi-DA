@@ -47,7 +47,7 @@
 
 모델 활용:
 
-- `model_group = 임차택시_바로콜`의 baseline 분포로 사용한다.
+- `model_group = 임차택시_바로콜`은 offline evaluation segment의 baseline 분포로 사용한다.
 - 예측값 검증 시 임차택시의 일반 대기시간은 `접수_승차_분` 중앙값·90분위수와 비교한다.
 - `접수_배차_분`은 서비스 target이 아니라 배차 병목 설명용 KPI로 유지한다.
 
@@ -81,8 +81,8 @@
 
 모델 활용:
 
-- `model_group = 특장차_바로콜`의 baseline 분포로 사용한다.
-- 특장차 바로콜은 임차택시 바로콜과 같은 통합 모델에 포함하되, `model_group` 또는 `차량구분`으로 구분한다.
+- `model_group = 특장차_바로콜`은 offline evaluation segment의 baseline 분포로 사용한다.
+- 특장차 바로콜은 임차택시 바로콜과 같은 통합 모델에 포함하되, production feature에는 offline 바로콜 판정값인 `model_group`을 직접 넣지 않고 inference 시점에 알 수 있는 `차량구분`을 사용한다.
 - 전일접수·심야시간 사전예약은 예정시각 기준 Prediction을 설계하는 후속 Phase로 넘긴다.
 
 ### 3. 시간대별 이용량과 대기 위험
@@ -196,9 +196,30 @@
 
 모델 활용:
 
-- `request_count_prev_30m`, `request_count_prev_60m`, `model_group_request_count_prev_60m`, `origin_gu_request_count_prev_60m`는 export Phase에서 생성 후보로 둔다.
-- `origin_gu_hour_long_wait_rate`, `model_group_hour_long_wait_rate`는 train 기준 통계 또는 out-of-fold 방식으로만 생성한다.
-- `세부이동유형`은 모델 feature 후보로 유지한다.
+- `request_count_prev_30m`, `request_count_prev_60m`, `model_group_request_count_prev_60m`, `origin_gu_request_count_prev_60m`는 현재 서비스 아키텍처에서 실시간 전체 접수 stream/API/DB가 없으므로 1차 production feature set에서는 제외한다.
+- 위 rolling 수요량 feature는 기존 실험에서 성능 개선 근거로만 유지하고, 실시간 접수 데이터 소스가 확정되는 후속 Phase에서 production feature 편입 여부를 다시 판단한다.
+- `origin_gu_hour_long_wait_rate`, `model_group_hour_long_wait_rate`는 train 기준 통계 또는 out-of-fold 방식으로만 생성한다. 이 값도 production에서 사용할 경우 학습 시점에 저장된 lookup table을 `analysis/`에 export해야 하며, validation/test target이나 실시간 이후 결과를 사용해 계산하지 않는다.
+- `세부이동유형`은 출발지·목적지로 inference 시점에 계산 가능하므로 production feature 후보로 유지한다.
+
+### 6-1. Feature별 train/inference 생성 가능성
+
+현재 기준으로 production feature 여부는 “서비스 요청 시점에 생성 가능한가”를 우선한다.
+
+| feature | train 생성 가능 | inference 생성 가능 | 데이터 출처/조건 | 1차 production feature 여부 |
+|---|---|---|---|---|
+| `차량구분` | 가능 | 가능 | 사용자가 선택하거나 서비스가 경로 후보별로 지정 | 포함 |
+| `hour`, `dayofweek`, `month`, `is_weekend`, `is_night`, `is_commute` | 가능 | 가능 | 요청시각 또는 접수시각 | 포함 |
+| `출발구`, `목적구` | 가능 | 가능 | 장소검색/좌표→행정구 매핑 | 포함 |
+| `세부이동유형` | 가능 | 가능 | 출발구·목적구 기준 생성 | 포함 |
+| `request_count_prev_30m` | 가능 | 현재 불가 | 최근 30분 전체 장애인콜택시 접수 stream/API/DB 필요 | 제외 |
+| `request_count_prev_60m` | 가능 | 현재 불가 | 최근 60분 전체 장애인콜택시 접수 stream/API/DB 필요 | 제외 |
+| `model_group_request_count_prev_60m` | 가능 | 현재 불가 | 차량·호출유형별 최근 접수 stream/API/DB 필요 | 제외 |
+| `origin_gu_request_count_prev_60m` | 가능 | 현재 불가 | 출발구별 최근 접수 stream/API/DB 필요 | 제외 |
+| `origin_gu_hour_long_wait_rate` | 가능 | lookup 방식만 가능 | train 기준 집계 후 `analysis/` export 필요 | 보류 |
+| `model_group_hour_long_wait_rate` | 가능 | lookup 방식만 가능 | train 기준 집계 후 `analysis/` export 필요. 단 `model_group`은 evaluation segment 기준이므로 production에서는 `차량구분` 기반 lookup으로 재정의 필요 | 보류 |
+| `model_group` | 가능 | 기존 offline 정의는 불가 | offline 바로콜 분류에 사후 결과가 포함될 수 있음 | feature 제외, evaluation segment 전용 |
+
+따라서 1차 production feature set은 `차량구분`, 시간 변수, 출발·목적 위치, 세부이동유형처럼 inference 시점에 생성 가능한 값으로 제한한다. rolling 수요량 feature는 실시간 수요 데이터 소스가 확정될 때까지 offline 실험 결과로만 보관한다.
 
 ### 7. 원본 컬럼 기준 leakage 방지
 
@@ -218,7 +239,8 @@
 모델 활용:
 
 - 상관관계가 높아도 사후 결과 컬럼은 feature로 사용하지 않는다.
-- 원본 컬럼 기반 1차 후보는 `model_group`, `출발구`, `목적구`, `세부이동유형`, `이용목적`, `장애유형`, `hour`, `dayofweek`, `month` 정도로 제한한다.
+- 원본 컬럼 기반 1차 production 후보는 `차량구분`, `출발구`, `목적구`, `세부이동유형`, `이용목적`, `장애유형`, `hour`, `dayofweek`, `month` 정도로 제한한다.
+- 기존 Notebook의 `model_group`은 offline 분류와 평가 segment에는 사용할 수 있지만, production feature로는 사용하지 않는다. 1차 모델은 바로콜만 대상으로 하므로 서비스 입력 feature는 `model_group` 대신 inference 시점에 안전하게 알 수 있는 `차량구분`을 사용한다.
 - 실제 `승차거리_km`는 서비스 요청 시점에 확정되지 않으므로, 사용할 경우 TMAP 등 경로 API 기반 예상거리로 대체해야 한다.
 
 ## Prediction 모델 검증에 사용할 기준
@@ -227,7 +249,7 @@
 
 | 검증 항목 | 확인 내용 |
 |---|---|
-| model_group별 분포 | 임차택시_바로콜, 특장차_바로콜의 `접수_승차_분` 중앙값·90분위수가 기존 분석과 크게 어긋나지 않는지 확인 |
+| model_group별 분포 | offline evaluation segment인 임차택시_바로콜, 특장차_바로콜의 `접수_승차_분` 중앙값·90분위수가 기존 분석과 크게 어긋나지 않는지 확인 |
 | 시간대별 분포 | 새벽 02~06시, 04시 전후, 출퇴근 시간대의 오차와 예측 분포를 별도로 확인 |
 | 요일별 분포 | 금요일, 주말 구간의 예측 오차를 별도로 확인 |
 | 이동유형별 분포 | 구 내 이동, 구 간 이동, 서울→서울 외, 서울 외→서울을 분리해 오차 확인 |
@@ -239,12 +261,12 @@
 
 통합 대기시간 Prediction 모델의 입력 해석 또는 검증에 사용할 분석 결과는 다음으로 확정한다.
 
-1. `model_group`별 `접수_승차_분` 분포
+1. offline evaluation segment(`model_group`)별 `접수_승차_분` 분포
 2. 시간대별 `접수_승차_분` 및 `접수_배차_분` 분포
 3. 요일별 `접수_승차_분` 분포
 4. 세부이동유형별 대기시간 차이
-5. 직전 수요량 proxy의 성능 개선 근거
-6. train 기준 장시간 대기율 proxy의 성능 개선 근거와 leakage 점검 결과
+5. 직전 수요량 proxy의 offline 성능 개선 근거. 단, 실시간 접수 데이터 소스가 없으므로 1차 production feature에서는 제외
+6. train 기준 장시간 대기율 proxy의 성능 개선 근거와 leakage 점검 결과. 단, production 사용은 `analysis/` lookup export와 inference-safe key 재정의 이후 판단
 7. 취소 건은 target 학습에서 제외하고 운영 분석 보조 지표로만 사용하는 기준
 
 ## 다음 Phase가 해야 할 일
@@ -254,3 +276,4 @@
 - `접수_승차_분 ≈ 접수_배차_분 + 배차_승차_분` 관계를 검증하고 오차/결측 건수를 기록한다.
 - 모델 학습 Phase에서는 전체 MAE만 보지 않고 model_group·시간대·요일·이동유형별 성능표를 함께 남긴다.
 - 새벽 위험 시간대는 삭제 대상이 아니라 별도 안내 또는 segment 검증 대상으로 유지한다.
+- production feature set 확정 전, 각 feature가 inference 시점에 생성 가능한지와 데이터 출처가 무엇인지 다시 검증한다.

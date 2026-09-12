@@ -156,8 +156,11 @@
   - 서비스 target은 `접수_승차_분`이며, 장시간 대기 위험 기준은 train set의 `접수_승차_분` 90분위수 기준으로 평가한다.
   - 새벽 02~06시는 제거 대상이 아니라 별도 위험 시간대 또는 segment 검증 대상으로 유지한다.
   - 전일접수·심야시간 사전예약은 1차 바로콜 모델에서 제외하고, 시간대 평균 분석에서도 왜곡 요인으로 분리한다.
-  - 직전 수요량 proxy와 장시간 대기율 proxy는 모델 입력 후보로 유지하되, 장시간 대기율 proxy는 train 기준 통계 또는 out-of-fold 방식으로만 생성한다.
+  - 직전 30분/60분 rolling 수요량 proxy는 현재 실시간 전체 접수 stream/API/DB가 없으므로 1차 production feature에서는 제외하고 offline 실험 근거로만 유지한다.
+  - 장시간 대기율 proxy는 train 기준 통계 또는 out-of-fold 방식으로만 생성하며, production 사용은 `analysis/` lookup export와 inference-safe key 재정의 이후 판단한다.
+  - 기존 Notebook의 `model_group`은 offline evaluation segment로만 사용하고, production feature에는 inference 시점에 안전하게 알 수 있는 `차량구분`을 사용한다.
 - 다음 Phase가 이어받을 것:
   - 학습용 바로콜 dataset export 시 row count, target 결측/음수 제외 건수, `model_group`별 건수, 시간대별 건수, 취소 제외 건수를 함께 기록한다.
   - 모델 학습 Phase에서는 전체 MAE/RMSE뿐 아니라 `model_group`·시간대·요일·이동유형별 성능표와 장시간 대기 Precision/Recall/F1을 함께 남긴다.
+  - production feature set 확정 전, 각 feature가 inference 시점에 생성 가능한지와 데이터 출처가 무엇인지 다시 검증한다.
   - `analysis/`에 실제 모델/lookup 산출물을 export하기 전까지 `ai/waiting_time/estimator.py`는 미연결 상태를 유지한다.
