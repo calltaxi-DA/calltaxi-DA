@@ -235,10 +235,11 @@
   - backend가 ODsay 제공 도보 subPath와 환승 동선 lookup을 합산해 실제 총 도보거리·총 도보시간을 반환하도록 보완
 - 주의: 이 Phase가 완료되기 전까지 `walking_time_seconds`, `walking_distance_meters`를 실제 환승 내부 동선까지 포함한 총 도보값으로 표시하지 않는다.
 
-## Analysis Phase 5 — 저상버스 데이터 분석 기준 정리 (2026-09-12)
+## Analysis Phase 5-1 — 저상버스 데이터 분석 및 route master 정리 (2026-09-12)
 
 - 브랜치: `analysis/phase5-low-floor-bus` (base: `dev`)
-- 한 일: 현재 확보한 저상버스 노선 metadata와 2025년 버스 승하차/혼잡 대체지표를 재생성하지 않고 확인해, 후속 ODsay 버스 경로와 저상버스 접근성 데이터를 연결하기 위한 노선 단위 canonical key와 route master를 정리했다. 노선번호 정규화 기준, 노선별 인가대수·저상버스대수·저상버스비율, 저상버스 접근성 상태, 혼잡 대체지표의 활용 한계, 데이터 기준일 관리 기준을 문서화했다.
+- 범위 조정: 원래 Analysis Phase 5 요구사항의 “ODsay에서 조회한 버스 경로와 기존 저상버스 데이터를 연결하여 노선별 저상버스 접근성 정보를 제공할 수 있음”은 실제 ODsay 버스 응답 샘플 검증이 필요하다. 이번 PR은 **Analysis Phase 5-1**로 범위를 낮춰 저상버스 데이터 분석, 후보 route mapping key 정의, route master export까지만 완료 처리하고, 실제 ODsay 버스 응답 기반 매핑 성공률 검증은 **Phase 5-2**로 분리한다.
+- 한 일: 현재 확보한 저상버스 노선 metadata와 2025년 버스 승하차/혼잡 대체지표를 재생성하지 않고 확인해, 후속 ODsay 버스 경로와 저상버스 접근성 데이터를 연결하기 위한 노선 단위 후보 canonical key와 route master를 정리했다. 노선번호 정규화 기준, 노선별 인가대수·저상버스대수·저상버스비율, 저상버스 접근성 상태, 혼잡 대체지표의 활용 한계, 데이터 기준일 관리 기준을 문서화했다.
 - 산출물:
   - `analysis/bus/low_floor_bus_mapping_criteria.md` — 저상버스 데이터 연결 기준, 노선번호 정규화, ODsay 버스 경로 mapping 전략, 데이터 기준일 관리
   - `analysis/bus/low_floor_bus_route_master.csv` — 후속 서비스 연동 후보 route master
@@ -250,17 +251,32 @@
   - 정류장 순서 보유 노선 362개, 정류장 순서 미보유 노선 2개 확인
   - `버스_저상노선_시간대별_추정재차인원_혼잡도_2025.csv`의 320개 노선이 route master 노선번호와 모두 매칭됨을 확인
   - `analysis/bus/low_floor_bus_route_master.csv` export 결과 364행, `route_number_normalized` 중복 0건, 혼잡 대체지표 매칭 노선 320개 확인
+  - `ridership_basis_year=2025`, `route_metadata_as_of=unknown`으로 승하차/혼잡 지표 기준연도와 저상버스 노선 metadata 기준일을 분리
   - 데이터 재생성, Notebook 수정, `data/` 파일 변경 없음
   - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 62개 통과
 - 확정 기준 요약:
-  - 저상버스 route master의 1차 canonical key는 `route_number_normalized`로 둔다.
+  - 저상버스 route master의 1차 후보 canonical key는 `route_number_normalized`로 둔다.
   - ODsay `busID`와 서울시/내부 `seoul_route_id`는 동일하다고 가정하지 않는다.
-  - 후속 ODsay 버스 연동 Phase에서 실제 응답 샘플을 확보해 `busID`, 노선번호, 버스유형의 매핑 성공률을 검증한다.
+  - 이번 Phase는 ODsay 실제 연결 검증 완료가 아니라 route master와 후보 key 정리 단계다.
+  - 후속 ODsay 버스 연동 Phase 5-2에서 실제 응답 샘플을 확보해 `busID`, 노선번호, 버스유형의 매핑 성공률을 검증한다.
   - 노선별 저상버스 접근성 상태는 `available`, `unavailable`, `unknown`으로 구분한다.
   - `저상버스1대당_추정재차인원`은 2025년 연간 승하차 집계와 정류장 순서 누적 방식으로 만든 혼잡 대체지표이며, 실시간 재차인원으로 사용하지 않는다.
   - 서비스 코드는 `data/raw`나 `data/processed`를 직접 읽지 않고, 검토 완료된 `analysis/bus/low_floor_bus_route_master.csv`만 사용한다.
 - 다음 Phase가 이어받을 것:
   - ODsay 버스 경로 실제 응답 샘플을 확보해 노선번호, busID, 버스 유형 필드를 확인한다.
   - ODsay busID와 `analysis/bus/low_floor_bus_route_master.csv`의 매핑 성공률, 미매핑 노선, 다중 매칭 노선을 기록한다.
+  - `route_type_code`가 비어 있는 노선의 ODsay 매핑 처리 기준을 별도로 확정한다.
   - 실시간 저상버스 도착정보가 필요하면 별도 API/데이터 소스를 확보한다.
   - 저상버스 혼잡도는 실시간 값이 아니므로 추천 로직에 직접 반영하기 전에 별도 검증 기준을 둔다.
+
+## Analysis Phase 5-2 — ODsay 버스 route mapping 실제 검증 (다음 Phase)
+
+- 상태: 미완료 / 후속 Phase로 분리
+- 목표: 실제 ODsay 버스 경로 응답의 `busID`, 노선번호, 버스 유형 필드를 확인하고, `analysis/bus/low_floor_bus_route_master.csv`와 연결 가능한지 검증한다.
+- 필요한 일:
+  - ODsay 버스 경로 실제 응답 샘플 10~20개 이상 확보
+  - 응답에서 버스 구간의 `busID`, 노선번호, 버스 유형 필드명과 표기 방식 확인
+  - `route_number_normalized`, `route_type_code`, `seoul_route_id`와의 매핑 성공률 산출
+  - 미매핑 노선, 다중 매칭 노선, `route_type_code` 결측 노선 처리 기준 기록
+  - 검토 완료된 ODsay busID ↔ route master mapping table이 필요하면 `analysis/`에 별도 export
+- 주의: 이 Phase가 완료되기 전까지 `analysis/bus/low_floor_bus_route_master.csv`는 실제 ODsay 경로 연결 검증 완료 산출물이 아니라 후보 route master로 본다.
