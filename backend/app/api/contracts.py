@@ -99,3 +99,24 @@ class RouteComparisonResponse(BaseModel):
         if set(actual) != expected or len(actual) != len(set(actual)):
             raise ValueError("routes must contain each TransportType exactly once")
         return self
+
+
+class RouteRequest(BaseModel):
+    """출발지·목적지 기반 단일 경로 계산 요청."""
+
+    origin: Location
+    destination: Location
+
+
+class CalltaxiRouteResponse(BaseModel):
+    """장애인 콜택시 차량 경로 계산 응답.
+
+    이번 응답은 대기시간을 포함한 최종 RouteResult가 아니라
+    TMAP 자동차 경로안내로 계산한 차량 이동 정보와 거리 기반 예상요금이다.
+    """
+
+    transport_type: TransportType = Field(default=TransportType.CALLTAXI)
+    vehicle_distance_meters: int = Field(ge=0, description="TMAP 자동차 경로 기준 차량 이동거리(미터)")
+    vehicle_time_seconds: int = Field(ge=0, description="TMAP 자동차 경로 기준 차량 이동시간(초)")
+    estimated_fare_won: int = Field(ge=0, description="서울 장애인콜택시 거리요금 기준 예상요금(원)")
+    warnings: list[str] = Field(default_factory=list, description="예상요금 산정 시 제외된 비용 등 안내")
