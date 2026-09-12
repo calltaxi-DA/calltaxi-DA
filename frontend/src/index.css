@@ -100,7 +100,7 @@ button {
 .panel-header,
 .search-panel,
 .summary-card,
-.subway-result-card {
+.route-result-card {
   border: 1px solid rgba(219, 228, 240, 0.92);
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 20px 60px rgba(37, 54, 94, 0.18);
@@ -360,7 +360,7 @@ button:disabled {
   display: none;
 }
 
-.subway-result-card {
+.route-result-card {
   padding: 20px;
   border-radius: 24px;
 }
@@ -465,14 +465,23 @@ button:disabled {
   font-size: 0.9rem;
 }
 
-.subway-result-card.unavailable,
-.subway-result-card.error-state {
+.route-result-card.unavailable,
+.route-result-card.error-state {
   border-color: #f2c9c1;
   background: rgba(255, 249, 247, 0.96);
 }
 
 .loading-state {
   color: #3157c7;
+}
+
+.route-result-region {
+  display: grid;
+  gap: 14px;
+}
+
+.transport-badge.bus {
+  background: #167052;
 }
 
 .error-state h2 {
