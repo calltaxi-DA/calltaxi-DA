@@ -29,5 +29,6 @@ Backend Phase 7은 세 이동수단을 사용자 우선순위로 정렬해야 �
 - 기존 지하철·저상버스 API는 numeric metric을 모두 제공하므로 생략된 `metric_availability`가 모두 `available`로 해석된다.
 - 기존 응답에는 `metric_availability`, `accessibility_status` 필드가 추가된다. 필드 추가를 반영하는 Frontend 연동은 별도 Phase에서 진행한다.
 - `POST /routes/recommendations` 요청에는 `routes`가 존재하지 않으며 추가 필드도 거부한다. 서로 다른 출발지·목적지의 결과를 클라이언트가 조합하거나 지표를 조작할 수 없다.
-- 현재 대기시간 모델이 없어 운영용 통합 provider는 연결하지 않았다. dependency override 기반으로 Backend provider→통합→정렬 경계를 검증했지만 기본 endpoint는 `503`을 반환한다.
-- 따라서 Backend Phase 7 전체는 완료가 아니며, 이번 산출물은 Phase 7-1 추천 계약·정렬 엔진 및 Backend-owned orchestration 경계까지만 완료한 것이다.
+- Backend Phase 7-2에서 TMAP 콜택시, ODsay 지하철·저상버스와 AI Adapter를 조합하는 운영 provider를 연결했다. 한 이동수단의 설정·외부 호출·예측이 불가능하면 해당 경로만 `unavailable`로 만들고 나머지 후보는 계속 추천한다.
+- 현재 대기시간 모델이 없어 콜택시는 실제 요청에서 `unavailable`이다. 모델 연결 테스트에서는 예측 대기시간과 차량 이동시간의 합산 및 세 이동수단 생성을 검증했다.
+- 따라서 Backend Phase 7 전체의 실제 TOP 3 완료 조건은 아직 충족하지 못했다. 검증된 Prediction 산출물과 inference 계약을 `analysis/`에 export하고 AI Adapter를 연결해야 한다.

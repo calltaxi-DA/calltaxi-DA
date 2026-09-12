@@ -444,3 +444,37 @@
   - 운영 provider와 함께 콜택시 `total_time_seconds`를 실제 통합 결과로 생성하고, 공개 endpoint에서 조건을 만족하는 최대 TOP 3 반환을 검증한 뒤 Backend Phase 7 전체를 완료 처리한다.
   - Frontend는 추가된 지표·접근성 상태와 추천·제외 결과를 별도 Phase에서 연결한다.
   - 검증된 콜택시 승하차 접근 도보 데이터가 확보되면 도보 1순위 TOP 3 가능 여부를 재검토한다.
+
+## Backend Phase 7-2 — 운영 이동수단 통합 provider (2026-09-12)
+
+- 브랜치: `backend/phase7-2-route-orchestration` (base: `dev`)
+- 완료 범위: 공개 추천 API가 TMAP 콜택시, ODsay 지하철·저상버스와 AI Adapter를 Backend 내부에서 조합하는 운영 `RecommendationRouteProvider`를 사용하도록 연결했다. 개별 이동수단의 설정·외부 호출·접근성 lookup·대기시간 예측이 실패하면 해당 경로만 `unavailable`로 만들고 다른 이동수단은 계속 추천한다. 검증된 대기시간 모델이 연결된 주입 테스트에서는 콜택시 총 이동시간과 세 이동수단 통합을 확인했다.
+- 전체 Phase 상태: **미완료**. 현재 `analysis/`에 Prediction 모델/lookup이 없고 `ai/waiting_time/estimator.py`가 `NotImplementedError`를 발생시키므로 실제 운영 요청에서 콜택시를 포함한 시간·비용 TOP 3을 반환할 수 없다. 가짜 대기시간은 사용하지 않는다.
+- 산출물:
+  - `backend/app/services/route_orchestration.py` — 콜택시·지하철·저상버스 생성, 오류 격리, 대기시간 합산
+  - `backend/app/api/recommendation.py` — 설정 기반 TMAP·ODsay client, 접근성 provider, AI Adapter 조합
+  - `backend/tests/test_route_orchestration.py` — 모델 연결/미연결/잘못된 예측 결과의 통합 동작 검증
+  - `backend/tests/test_recommendation_routes.py` — 설정 키가 없을 때 세 경로를 개별 이용불가로 반환하는 fail-closed 검증
+- 확정 동작:
+  - 콜택시: `predicted waiting seconds + TMAP vehicle seconds`를 총 이동시간으로 사용하고 도보는 `null/not_available`, 접근성은 `not_verified`로 유지한다.
+  - 지하철: ODsay 경로와 모든 이용역의 accessibility lookup을 결합한다. lookup을 읽지 못하면 경로 수치는 유지하되 접근성은 `not_verified`다.
+  - 저상버스: 검토된 route mapping을 사용하는 ODsay 저상버스 client 결과만 사용한다.
+  - 대기시간 모델 미연결·예측값 NaN/음수/비수치, 외부 경로 실패, 키 누락은 임의 수치로 대체하지 않는다.
+- 필수 선행조건:
+  - `analysis/`에 검증 완료된 통합 대기시간 Prediction 모델 또는 lookup export
+  - 실제 모델의 inference 입력 계약 확정. 최소한 현재 Adapter의 `hour_of_day`만으로 충분한지, 분석 기준의 차량구분·요일·출발/목적 지역·이용목적·예상 이동거리/시간을 받을지 결정 필요
+  - `ai/waiting_time/estimator.py`가 해당 export만 읽어 검증된 예측을 반환하도록 구현 및 AI 단위 테스트 추가
+  - 실호출 환경의 `APP_TMAP_APP_KEY`, `APP_ODSAY_API_KEY`와 ODsay Server Key 등록 IP 준비
+- 검증 결과:
+  - 예측 대기시간 30분 + 차량시간 1,800초 = 콜택시 총 3,600초 확인
+  - 모델 미연결 시 콜택시만 `unavailable`, 지하철·저상버스는 `available` 유지 확인
+  - NaN 예측값을 거부하고 콜택시 수치를 `null`로 유지하는지 확인
+  - TMAP·ODsay 지하철·ODsay 버스 호출 실패를 각 경로의 `unavailable`로 격리하고 수치를 `null`로 유지하는지 확인
+  - 키 미설정 추천 요청에서 200 응답과 추천 0개·제외 3개 사유 반환 확인
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 142개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - `cd frontend && npm test -- --run` — 19개 통과
+  - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
+  - OpenAPI schema에서 `POST /routes/recommendations` 등록 확인
+- 다음 작업:
+  - 위 Prediction 선행조건을 충족한 뒤 실제 모델 입력으로 운영 provider smoke test를 수행한다.
+  - 실제 콜택시·지하철·저상버스 결과가 준비된 시간·비용 기준에서 최대 TOP 3을 확인한 뒤 Backend Phase 7 전체를 완료 처리한다.

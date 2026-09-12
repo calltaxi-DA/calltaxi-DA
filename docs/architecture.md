@@ -20,7 +20,7 @@ notebooks*/ (모델 학습·검증) → analysis/ (장애인 콜택시 통합 �
 
 `ai/`는 오직 `analysis/`의 산출물만 참조하며, 모델이 아직 연결되지 않은 동안에는 가짜 값을 반환하지 않고 명확히 실패(`NotImplementedError`)한다 — `backend/`가 "예측 불가" 상태를 받아 처리하도록 강제한다.
 
-> 요금/시간/도보 우선순위에 따른 **추천 로직(Rule-based ranking)은 `ai/`가 아니라 `backend/`가 담당한다.** Backend Phase 7-1에서 경로 지표 가용 상태, 접근성 상태, 정렬 서비스와 Backend-owned provider 경계를 구현했다. 통합 provider는 대기시간 모델 연결 후 완성한다(ADR 0004).
+> 요금/시간/도보 우선순위에 따른 **추천 로직(Rule-based ranking)은 `ai/`가 아니라 `backend/`가 담당한다.** Backend Phase 7-1에서 경로 지표 가용 상태, 접근성 상태와 정렬 서비스를 구현했고, Phase 7-2에서 TMAP·ODsay·AI Adapter를 조합하는 Backend-owned provider를 연결했다. 대기시간 모델 미연결 시 콜택시는 개별 `unavailable`로 처리한다(ADR 0004).
 
 ## 서비스 개요 (기획 요약)
 
