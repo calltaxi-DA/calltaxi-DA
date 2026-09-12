@@ -7,6 +7,11 @@ export default defineConfig({
   envDir: import.meta.dirname ? `${import.meta.dirname}/..` : '..',
   envPrefix: ['VITE_', 'KAKAO_JS_'],
   plugins: [react()],
+  server: {
+    proxy: {
+      '/routes': 'http://127.0.0.1:8000',
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],

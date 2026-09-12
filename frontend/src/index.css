@@ -30,7 +30,7 @@ button {
 .app-shell {
   position: relative;
   min-height: 100vh;
-  overflow: hidden;
+  overflow: auto;
   background: #dfe7f2;
 }
 
@@ -99,7 +99,8 @@ button {
 
 .panel-header,
 .search-panel,
-.summary-card {
+.summary-card,
+.subway-result-card {
   border: 1px solid rgba(219, 228, 240, 0.92);
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 20px 60px rgba(37, 54, 94, 0.18);
@@ -353,6 +354,130 @@ button:disabled {
   margin: 0;
   color: #536079;
   font-size: 0.94rem;
+}
+
+.route-result-region:empty {
+  display: none;
+}
+
+.subway-result-card {
+  padding: 20px;
+  border-radius: 24px;
+}
+
+.result-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.result-heading h2,
+.result-kicker {
+  margin: 0;
+}
+
+.result-heading h2 {
+  font-size: 1.1rem;
+}
+
+.result-kicker {
+  color: #536079;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.transport-badge {
+  display: grid;
+  min-width: 58px;
+  min-height: 58px;
+  place-items: center;
+  border-radius: 18px;
+  color: #ffffff;
+  background: #3157c7;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.route-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.metric {
+  padding: 13px;
+  border: 1px solid #e2e9f3;
+  border-radius: 16px;
+  background: #f8faff;
+}
+
+.metric.emphasis {
+  border-color: #b9c9f8;
+  background: #edf2ff;
+}
+
+.metric dt {
+  color: #61708a;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.metric dd {
+  margin: 2px 0 0;
+  color: #172033;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.accessibility-note {
+  padding: 14px;
+  border-radius: 16px;
+  background: #eef8f2;
+}
+
+.accessibility-note h3,
+.accessibility-note p,
+.accessibility-note ul {
+  margin: 0;
+}
+
+.accessibility-note h3 {
+  color: #176a46;
+  font-size: 0.92rem;
+}
+
+.accessibility-note ul {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding-left: 20px;
+  color: #355849;
+  font-size: 0.86rem;
+}
+
+.accessibility-note p,
+.result-message,
+.loading-state p,
+.error-state p {
+  margin-top: 8px;
+  color: #536079;
+  font-size: 0.9rem;
+}
+
+.subway-result-card.unavailable,
+.subway-result-card.error-state {
+  border-color: #f2c9c1;
+  background: rgba(255, 249, 247, 0.96);
+}
+
+.loading-state {
+  color: #3157c7;
+}
+
+.error-state h2 {
+  margin: 0;
+  font-size: 1rem;
 }
 
 @media (max-width: 760px) {

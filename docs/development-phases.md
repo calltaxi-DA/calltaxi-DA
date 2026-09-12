@@ -350,3 +350,30 @@
   - 새 ODsay 노선은 실제 응답 검토 후 명시적 mapping export에 추가하며, 미등록 lane은 계속 fail-closed 한다.
   - 고정 공인 IP 또는 배포 환경의 고정 egress IP를 ODsay Server 플랫폼에 등록한다.
   - Backend Phase 7에서 콜택시·지하철·저상버스 결과의 Rule-based 추천 정렬을 구현한다.
+
+## Frontend Phase 5 — 지하철 경로 결과 UI (2026-09-12)
+
+- 브랜치: `frontend/phase5-subway-route-ui` (base: `dev`)
+- 한 일: 경로검색 시 선택한 출발지·목적지 좌표를 기존 `POST /routes/subway` 계약으로 보내고, 지하철 결과의 총 예상시간·예상비용·도보거리·도보시간·경로 요약·엘리베이터 접근성 경고를 한 카드에서 확인할 수 있도록 구현했다. 요청 중·실패·경로 없음 상태를 구분하며, 지하철을 선택하지 않은 경우에는 지하철 API를 호출하지 않는다. ODsay 도보 `subPath` 기준이라는 Backend warning을 그대로 표시하고 환승 내부 보행값을 프론트에서 추정하지 않는다.
+- 산출물:
+  - `frontend/src/api/subway.ts` — `RouteRequest`·`RouteResult`에 대응하는 타입과 지하철 API client
+  - `frontend/src/components/SubwayRouteCard.tsx` — 시간·비용·도보 부담·접근성 결과 카드
+  - `frontend/src/App.tsx`, `frontend/src/index.css` — 기존 장소선택 흐름과 API 호출·결과 영역·반응형 스타일 연결
+  - `frontend/src/__tests__/App.test.tsx` — 실제 요청 body, loading, 성공 지표·접근성 안내, 오류 상태 렌더 검증
+  - `frontend/vite.config.ts`, `frontend/.env.example` — 로컬 동일 출처 `/routes` 개발 프록시
+  - `docs/troubleshooting.md` — 서로 다른 localhost origin의 CORS 차단과 개발 프록시 해결 기록
+- 검증 결과:
+  - `npm test` — 15개 통과
+  - `npm run build` — TypeScript 및 Vite production build 통과
+  - `npm run lint` — oxlint 통과
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_subway_routes.py backend/tests/test_subway_service.py` — 14개 통과
+  - 최신 Backend 실제 호출(서울시청→강남역): `200`, 총 2,340초, 1,650원, 도보 351m·660초, `을지로입구역 → 강남역 지하철 경로`와 접근성 경고 반환 확인
+  - 개발 서버 HTML·React 모듈 응답 정상 확인. 자동 브라우저 도구는 현재 환경에 설치되지 않아 스크린샷 기반 시각 검증은 수행하지 못했으며, jsdom 렌더 테스트로 필수 표시 항목을 검증했다.
+- 확정 기준:
+  - 화면의 도보거리·도보시간은 Backend가 반환한 ODsay 도보 `subPath` 합계이며 지하철 환승 내부 도보 전체를 의미하지 않는다.
+  - 접근성 경고는 Backend 소유 데이터로 보고 프론트에서 역 접근성을 재판정하지 않는다.
+  - 로컬 개발은 Vite proxy를 사용한다. 분리 배포 시에는 Backend CORS allowlist 또는 같은 origin reverse proxy 설계가 추가로 필요하다.
+- 다음 Phase가 이어받을 것:
+  - 저상버스·장애인콜택시 결과 UI는 각각의 전용 Frontend Phase에서 연결한다.
+  - Backend Phase 7 추천 정렬 계약이 확정된 뒤 세 이동수단 비교·추천 순서를 UI에 연결한다.
+  - 지도 경로선과 실제 환승 내부 무장애 보행정보는 검증된 Backend 데이터가 마련된 뒤 별도 Phase에서 다룬다.
