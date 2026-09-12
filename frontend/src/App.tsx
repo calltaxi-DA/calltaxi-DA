@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { DragEvent, FormEvent } from 'react'
 
 type LocationRole = 'origin' | 'destination'
 
@@ -161,6 +161,7 @@ function App() {
     transportOptions.map((option) => option.value),
   )
   const [priorityOrder, setPriorityOrder] = useState(defaultPriorityOrder)
+  const [draggedPriority, setDraggedPriority] = useState<string | null>(null)
   const [submittedSummary, setSubmittedSummary] = useState<string | null>(null)
 
   const selectedTransportLabels = useMemo(
@@ -231,18 +232,36 @@ function App() {
     )
   }
 
-  const handlePriorityChange = (rankIndex: number, nextPriority: string) => {
+  const movePriority = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) {
+      return
+    }
+
     setPriorityOrder((current) => {
       const updated = [...current]
-      const previousIndex = updated.indexOf(nextPriority)
-      const currentPriority = updated[rankIndex]
-
-      updated[rankIndex] = nextPriority
-      if (previousIndex >= 0 && previousIndex !== rankIndex) {
-        updated[previousIndex] = currentPriority
-      }
+      const [movedPriority] = updated.splice(fromIndex, 1)
+      updated.splice(toIndex, 0, movedPriority)
       return updated
     })
+  }
+
+  const handlePriorityDragStart = (event: DragEvent<HTMLLIElement>, priority: string) => {
+    setDraggedPriority(priority)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', priority)
+  }
+
+  const handlePriorityDrop = (event: DragEvent<HTMLLIElement>, targetPriority: string) => {
+    event.preventDefault()
+    const sourcePriority = event.dataTransfer.getData('text/plain') || draggedPriority
+    if (!sourcePriority) {
+      return
+    }
+    const fromIndex = priorityOrder.indexOf(sourcePriority)
+    const toIndex = priorityOrder.indexOf(targetPriority)
+
+    movePriority(fromIndex, toIndex)
+    setDraggedPriority(null)
   }
 
   const searchPlaces = (role: LocationRole) => {
@@ -452,24 +471,50 @@ function App() {
 
             <fieldset>
               <legend>우선순위 선택</legend>
-              <p className="field-hint">시간·비용·도보 기준을 1순위부터 3순위까지 정해주세요.</p>
-              <div className="priority-grid">
+              <p className="field-hint">카드를 드래그해서 시간·비용·도보 기준의 우선순위를 정해주세요.</p>
+              <ol className="priority-list" aria-label="우선순위 드래그 정렬">
                 {priorityOrder.map((selectedPriority, index) => (
-                  <label key={`${index + 1}-priority`}>
-                    <span>{index + 1}순위</span>
-                    <select
-                      value={selectedPriority}
-                      onChange={(event) => handlePriorityChange(index, event.target.value)}
+                  <li
+                    className={draggedPriority === selectedPriority ? 'priority-card dragging' : 'priority-card'}
+                    draggable
+                    key={selectedPriority}
+                    onDragStart={(event) => handlePriorityDragStart(event, selectedPriority)}
+                    onDragEnd={() => setDraggedPriority(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => handlePriorityDrop(event, selectedPriority)}
+                  >
+                    <span className="priority-rank">{index + 1}순위</span>
+                    <span className="priority-label">
+                      {priorityOptions.find((option) => option.value === selectedPriority)?.label ?? selectedPriority}
+                    </span>
+                    <span className="drag-handle" aria-hidden="true">
+                      ⋮⋮
+                    </span>
+                    <button
+                      type="button"
+                      className="priority-move-button"
+                      disabled={index === 0}
+                      onClick={() => movePriority(index, index - 1)}
+                      aria-label={`${
+                        priorityOptions.find((option) => option.value === selectedPriority)?.label ?? selectedPriority
+                      } 우선순위 올리기`}
                     >
-                      {priorityOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="priority-move-button"
+                      disabled={index === priorityOrder.length - 1}
+                      onClick={() => movePriority(index, index + 1)}
+                      aria-label={`${
+                        priorityOptions.find((option) => option.value === selectedPriority)?.label ?? selectedPriority
+                      } 우선순위 내리기`}
+                    >
+                      ↓
+                    </button>
+                  </li>
                 ))}
-              </div>
+              </ol>
             </fieldset>
           </details>
 

@@ -298,13 +298,6 @@ fieldset {
   margin-top: 10px;
 }
 
-.priority-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 10px;
-}
-
 .check-card {
   display: flex;
   align-items: center;
@@ -321,6 +314,66 @@ fieldset {
   width: 17px;
   height: 17px;
   accent-color: #3157c7;
+}
+
+.priority-list {
+  display: grid;
+  gap: 9px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.priority-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #c9d4e4;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(37, 54, 94, 0.08);
+  cursor: grab;
+}
+
+.priority-card.dragging {
+  border-color: #3157c7;
+  background: #eef4ff;
+  opacity: 0.72;
+}
+
+.priority-rank {
+  min-width: 52px;
+  color: #3157c7;
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.priority-label {
+  font-weight: 900;
+}
+
+.drag-handle {
+  color: #8a96ab;
+  font-weight: 900;
+  letter-spacing: -4px;
+}
+
+.priority-move-button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #d5dfed;
+  border-radius: 10px;
+  background: #f6f8ff;
+  color: #3157c7;
+  font-weight: 900;
+}
+
+.priority-move-button:disabled {
+  color: #aeb9ce;
+  background: #eef2f7;
 }
 
 .search-panel > button {
@@ -384,7 +437,11 @@ button:disabled {
     margin: -34px auto 20px;
   }
 
-  .priority-grid {
-    grid-template-columns: 1fr;
+  .priority-card {
+    grid-template-columns: auto 1fr auto auto;
+  }
+
+  .drag-handle {
+    display: none;
   }
 }

@@ -86,9 +86,13 @@ describe('App', () => {
     expect(screen.getByLabelText('장애인 콜택시')).toBeChecked()
     expect(screen.getByLabelText('지하철')).toBeChecked()
     expect(screen.getByLabelText('저상버스')).toBeChecked()
-    expect(screen.getByLabelText('1순위')).toHaveValue('time')
-    expect(screen.getByLabelText('2순위')).toHaveValue('cost')
-    expect(screen.getByLabelText('3순위')).toHaveValue('walk')
+    expect(screen.getByRole('list', { name: '우선순위 드래그 정렬' })).toBeInTheDocument()
+    expect(screen.getByText('1순위')).toBeInTheDocument()
+    expect(screen.getByText('시간 최소')).toBeInTheDocument()
+    expect(screen.getByText('2순위')).toBeInTheDocument()
+    expect(screen.getByText('비용 최소')).toBeInTheDocument()
+    expect(screen.getByText('3순위')).toBeInTheDocument()
+    expect(screen.getByText('도보 최소')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '경로검색' })).toBeDisabled()
   })
 
@@ -106,7 +110,8 @@ describe('App', () => {
 
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
     fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '서울역' } })
-    fireEvent.change(screen.getByLabelText('1순위'), { target: { value: 'walk' } })
+    fireEvent.click(screen.getByRole('button', { name: '도보 최소 우선순위 올리기' }))
+    fireEvent.click(screen.getByRole('button', { name: '도보 최소 우선순위 올리기' }))
 
     const searchButton = screen.getByRole('button', { name: '경로검색' })
     expect(searchButton).toBeDisabled()
@@ -123,7 +128,7 @@ describe('App', () => {
 
     expect(
       screen.getByText(
-        /서울시청\(37.566826, 126.978657\)에서 서울역\(37.554678, 126.970671\)까지 장애인 콜택시, 지하철, 저상버스 기준으로 1순위 도보 최소, 2순위 비용 최소, 3순위 시간 최소 경로를 검색합니다/,
+        /서울시청\(37.566826, 126.978657\)에서 서울역\(37.554678, 126.970671\)까지 장애인 콜택시, 지하철, 저상버스 기준으로 1순위 도보 최소, 2순위 시간 최소, 3순위 비용 최소 경로를 검색합니다/,
       ),
     ).toBeInTheDocument()
   })
@@ -316,19 +321,43 @@ describe('App', () => {
     ).toBeInTheDocument()
   })
 
-  it('swaps priority ranks instead of allowing duplicate priority values', () => {
+  it('reorders priority cards by drag and drop without duplicate values', () => {
     render(<App />)
 
-    const firstPriority = screen.getByLabelText('1순위') as HTMLSelectElement
-    const secondPriority = screen.getByLabelText('2순위') as HTMLSelectElement
-    const thirdPriority = screen.getByLabelText('3순위') as HTMLSelectElement
+    const priorityList = screen.getByRole('list', { name: '우선순위 드래그 정렬' })
+    const priorityCards = screen.getAllByRole('listitem')
+    const dataTransfer = {
+      data: '',
+      effectAllowed: '',
+      setData: vi.fn((_type: string, value: string) => {
+        dataTransfer.data = value
+      }),
+      getData: vi.fn(() => dataTransfer.data),
+    }
 
-    fireEvent.change(firstPriority, { target: { value: 'walk' } })
+    fireEvent.dragStart(priorityCards[2], { dataTransfer })
+    fireEvent.drop(priorityCards[0], { dataTransfer })
 
-    expect(firstPriority).toHaveValue('walk')
-    expect(secondPriority).toHaveValue('cost')
-    expect(thirdPriority).toHaveValue('time')
-    expect(new Set([firstPriority.value, secondPriority.value, thirdPriority.value]).size).toBe(3)
+    const reorderedLabels = Array.from(priorityList.querySelectorAll('.priority-label')).map(
+      (element) => element.textContent,
+    )
+
+    expect(reorderedLabels).toEqual(['도보 최소', '시간 최소', '비용 최소'])
+    expect(new Set(reorderedLabels).size).toBe(3)
+  })
+
+  it('reorders priority cards with move buttons for keyboard-friendly control', () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: '도보 최소 우선순위 올리기' }))
+    fireEvent.click(screen.getByRole('button', { name: '도보 최소 우선순위 올리기' }))
+
+    const priorityList = screen.getByRole('list', { name: '우선순위 드래그 정렬' })
+    const reorderedLabels = Array.from(priorityList.querySelectorAll('.priority-label')).map(
+      (element) => element.textContent,
+    )
+
+    expect(reorderedLabels).toEqual(['도보 최소', '시간 최소', '비용 최소'])
   })
 
   it('allows users to select transport types', () => {
