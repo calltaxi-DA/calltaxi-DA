@@ -11,6 +11,7 @@ from app.api.contracts import Location
 
 ODSAY_BUS_ROUTE_URL = "https://api.odsay.com/v1/api/searchPubTransPathT"
 DEFAULT_LOW_FLOOR_BUS_ROUTE_MASTER_PATH = Path("analysis/bus/low_floor_bus_route_master.csv")
+DEFAULT_ODSAY_BUS_ROUTE_MAPPING_PATH = Path("analysis/bus/odsay_seoul_bus_route_mapping.csv")
 WALKING_TRAFFIC_TYPE = 3
 BUS_TRAFFIC_TYPE = 2
 BUS_PATH_TYPE = 2
@@ -30,6 +31,8 @@ class LowFloorBusRouteUnavailableError(RuntimeError):
 
 @dataclass(frozen=True)
 class LowFloorBusRouteEntry:
+    odsay_bus_id: int
+    odsay_bus_type: int
     route_number: str
     route_number_normalized: str
     accessibility_status: str
@@ -55,26 +58,38 @@ class LowFloorBusRouteMetrics:
 
 
 class LowFloorBusRouteProvider(Protocol):
-    def get_route(self, route_number: str) -> LowFloorBusRouteEntry | None:
+    def get_route(self, bus_id: int, route_number: str, bus_type: int) -> LowFloorBusRouteEntry | None:
         ...
 
 
 class CsvLowFloorBusRouteProvider:
-    """`analysis/`의 검토 완료 route master를 노선번호로 조회한다."""
+    """검토 완료된 ODsay busID 매핑을 통해서만 서울 route master를 조회한다."""
 
-    def __init__(self, csv_path: Path = DEFAULT_LOW_FLOOR_BUS_ROUTE_MASTER_PATH) -> None:
+    def __init__(
+        self,
+        csv_path: Path = DEFAULT_LOW_FLOOR_BUS_ROUTE_MASTER_PATH,
+        mapping_path: Path = DEFAULT_ODSAY_BUS_ROUTE_MAPPING_PATH,
+    ) -> None:
         self.csv_path = csv_path
-        self._lookup = self._load_lookup(csv_path)
+        route_lookup = self._load_route_lookup(csv_path)
+        self._lookup = self._load_mapping_lookup(mapping_path, route_lookup)
 
-    def get_route(self, route_number: str) -> LowFloorBusRouteEntry | None:
-        return self._lookup.get(normalize_route_number(route_number))
+    def get_route(self, bus_id: int, route_number: str, bus_type: int) -> LowFloorBusRouteEntry | None:
+        entry = self._lookup.get(bus_id)
+        if entry is None:
+            return None
+        if entry.route_number_normalized != normalize_route_number(route_number):
+            return None
+        if entry.odsay_bus_type != bus_type:
+            return None
+        return entry
 
     @staticmethod
-    def _load_lookup(csv_path: Path) -> dict[str, LowFloorBusRouteEntry]:
+    def _load_route_lookup(csv_path: Path) -> dict[str, tuple[str, str]]:
         if not csv_path.exists():
             raise OdsayBusRouteError("low-floor bus route master is missing", reason="missing_route_master")
 
-        lookup: dict[str, LowFloorBusRouteEntry] = {}
+        lookup: dict[str, tuple[str, str]] = {}
         with csv_path.open(encoding="utf-8-sig", newline="") as file:
             reader = csv.DictReader(file)
             required_columns = {"route_number", "route_number_normalized", "accessibility_status"}
@@ -90,7 +105,36 @@ class CsvLowFloorBusRouteProvider:
                     raise OdsayBusRouteError("low-floor bus route master has invalid row", reason="invalid_route_master")
                 if normalized in lookup:
                     raise OdsayBusRouteError("low-floor bus route number must be unique", reason="duplicate_route_number")
-                lookup[normalized] = LowFloorBusRouteEntry(
+                lookup[normalized] = (route_number, status)
+        return lookup
+
+    @staticmethod
+    def _load_mapping_lookup(
+        mapping_path: Path,
+        route_lookup: dict[str, tuple[str, str]],
+    ) -> dict[int, LowFloorBusRouteEntry]:
+        if not mapping_path.exists():
+            raise OdsayBusRouteError("ODsay bus route mapping is missing", reason="missing_route_mapping")
+        lookup: dict[int, LowFloorBusRouteEntry] = {}
+        with mapping_path.open(encoding="utf-8-sig", newline="") as file:
+            reader = csv.DictReader(file)
+            required_columns = {"odsay_bus_id", "odsay_bus_no", "odsay_bus_type", "route_number_normalized"}
+            if required_columns.difference(reader.fieldnames or []):
+                raise OdsayBusRouteError("ODsay bus route mapping has invalid columns", reason="invalid_route_mapping")
+            for row in reader:
+                bus_id = _coerce_non_negative_int(row.get("odsay_bus_id"), "odsay_bus_id")
+                bus_type = _coerce_non_negative_int(row.get("odsay_bus_type"), "odsay_bus_type")
+                bus_no = normalize_route_number(str(row.get("odsay_bus_no") or ""))
+                normalized = normalize_route_number(str(row.get("route_number_normalized") or ""))
+                route = route_lookup.get(normalized)
+                if not bus_no or bus_no != normalized or route is None:
+                    raise OdsayBusRouteError("ODsay bus route mapping has invalid row", reason="invalid_route_mapping")
+                if bus_id in lookup:
+                    raise OdsayBusRouteError("ODsay busID must be unique", reason="duplicate_odsay_bus_id")
+                route_number, status = route
+                lookup[bus_id] = LowFloorBusRouteEntry(
+                    odsay_bus_id=bus_id,
+                    odsay_bus_type=bus_type,
                     route_number=route_number,
                     route_number_normalized=normalized,
                     accessibility_status=status,
@@ -209,7 +253,11 @@ def _select_accessible_lanes(
         for lane in lanes:
             if not isinstance(lane, dict) or not isinstance(lane.get("busNo"), str):
                 continue
-            entry = route_provider.get_route(lane["busNo"])
+            bus_id = _strict_non_negative_int(lane.get("busID"))
+            bus_type = _strict_non_negative_int(lane.get("type"))
+            if bus_id is None or bus_type is None:
+                continue
+            entry = route_provider.get_route(bus_id, lane["busNo"], bus_type)
             if entry is not None and entry.accessibility_status == "available":
                 matched_lane = SelectedBusLane(
                     route_number=entry.route_number,
@@ -257,9 +305,9 @@ def _build_metrics(
 def _sum_section_values(sub_paths: list[Any], traffic_type: int, field_name: str) -> int:
     return sum(
         (
-            _coerce_optional_non_negative_distance(section.get(field_name), 0, field_name)
+            _coerce_required_non_negative_distance(section.get(field_name), field_name)
             if field_name == "distance"
-            else _coerce_optional_non_negative_int(section.get(field_name), 0, field_name)
+            else _coerce_required_non_negative_int(section.get(field_name), field_name)
         )
         for section in sub_paths
         if isinstance(section, dict) and section.get("trafficType") == traffic_type
@@ -320,6 +368,28 @@ def _coerce_optional_non_negative_distance(value: Any, default: int, field_name:
     if number < 0 or number != number or number == float("inf"):
         raise OdsayBusRouteError(f"{field_name} must be finite and non-negative", reason=f"invalid_{field_name}")
     return round(number)
+
+
+def _coerce_required_non_negative_distance(value: Any, field_name: str) -> int:
+    if value is None:
+        raise OdsayBusRouteError(f"{field_name} is required", reason=f"missing_{field_name}")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise OdsayBusRouteError(f"{field_name} must be a number", reason=f"invalid_{field_name}")
+    return _coerce_optional_non_negative_distance(value, 0, field_name)
+
+
+def _coerce_required_non_negative_int(value: Any, field_name: str) -> int:
+    if value is None:
+        raise OdsayBusRouteError(f"{field_name} is required", reason=f"missing_{field_name}")
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise OdsayBusRouteError(f"{field_name} must be an integer", reason=f"invalid_{field_name}")
+    return _coerce_non_negative_int(value, field_name)
+
+
+def _strict_non_negative_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
 
 
 def _optional_text(value: Any) -> str | None:

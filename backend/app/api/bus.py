@@ -1,6 +1,7 @@
 """ODsay 버스 경로와 노선 단위 저상버스 접근성 API."""
 
 import logging
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -17,6 +18,13 @@ router = APIRouter(prefix="/routes", tags=["routes"])
 logger = logging.getLogger("app.bus")
 
 
+@lru_cache(maxsize=1)
+def get_low_floor_bus_route_provider() -> CsvLowFloorBusRouteProvider:
+    """프로세스 동안 불변인 검토 완료 CSV 매핑을 한 번만 로드한다."""
+
+    return CsvLowFloorBusRouteProvider()
+
+
 def get_odsay_low_floor_bus_route_client() -> OdsayLowFloorBusRouteClient:
     settings = get_settings()
     if not settings.odsay_api_key:
@@ -25,7 +33,7 @@ def get_odsay_low_floor_bus_route_client() -> OdsayLowFloorBusRouteClient:
             detail="ODsay API key is not configured",
         )
     try:
-        route_provider = CsvLowFloorBusRouteProvider()
+        route_provider = get_low_floor_bus_route_provider()
     except OdsayBusRouteError as exc:
         logger.warning("low_floor_bus_route_master_unavailable reason=%s", exc.reason)
         raise HTTPException(

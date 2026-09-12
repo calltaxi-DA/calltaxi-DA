@@ -15,17 +15,24 @@ from app.services.bus import (
 
 class DictRouteProvider:
     def __init__(self, statuses: dict[str, str]) -> None:
+        lane_identity = {"999": (1, 11), "7016": (2, 12), "N31": (3, 11)}
         self.entries = {
-            normalize_route_number(route_number): LowFloorBusRouteEntry(
+            bus_id: LowFloorBusRouteEntry(
+                odsay_bus_id=bus_id,
+                odsay_bus_type=bus_type,
                 route_number=route_number,
                 route_number_normalized=normalize_route_number(route_number),
                 accessibility_status=status,
             )
             for route_number, status in statuses.items()
+            for bus_id, bus_type in [lane_identity[normalize_route_number(route_number)]]
         }
 
-    def get_route(self, route_number: str) -> LowFloorBusRouteEntry | None:
-        return self.entries.get(normalize_route_number(route_number))
+    def get_route(self, bus_id: int, route_number: str, bus_type: int) -> LowFloorBusRouteEntry | None:
+        entry = self.entries.get(bus_id)
+        if entry is None or entry.route_number_normalized != normalize_route_number(route_number):
+            return None
+        return entry if entry.odsay_bus_type == bus_type else None
 
 
 def _odsay_bus_payload() -> dict:
@@ -83,8 +90,11 @@ def test_parse_bus_route_uses_later_path_when_first_path_has_no_accessible_lane(
     payload = _odsay_bus_payload()
     inaccessible_path = payload["result"]["path"][0]
     accessible_path = {**inaccessible_path, "subPath": [dict(section) for section in inaccessible_path["subPath"]]}
-    accessible_path["subPath"][1] = {**accessible_path["subPath"][1], "lane": [{"busNo": "7016"}]}
-    inaccessible_path["subPath"][1]["lane"] = [{"busNo": "999"}]
+    accessible_path["subPath"][1] = {
+        **accessible_path["subPath"][1],
+        "lane": [{"busNo": "7016", "busID": 2, "type": 12}],
+    }
+    inaccessible_path["subPath"][1]["lane"] = [{"busNo": "999", "busID": 1, "type": 11}]
     payload["result"]["path"] = [inaccessible_path, accessible_path]
     provider = DictRouteProvider({"7016": "available", "N31": "available"})
 
@@ -96,7 +106,7 @@ def test_parse_bus_route_uses_later_path_when_first_path_has_no_accessible_lane(
 def test_parse_bus_route_rounds_decimal_distance_fields_to_contract_meters() -> None:
     payload = _odsay_bus_payload()
     payload["result"]["path"][0]["info"]["totalDistance"] = "11400.4"
-    payload["result"]["path"][0]["subPath"][0]["distance"] = "310.6"
+    payload["result"]["path"][0]["subPath"][0]["distance"] = 310.6
 
     route = parse_odsay_low_floor_bus_route(
         payload,
@@ -112,6 +122,57 @@ def test_parse_bus_route_rejects_path_with_unknown_or_unavailable_segment() -> N
 
     with pytest.raises(LowFloorBusRouteUnavailableError):
         parse_odsay_low_floor_bus_route(_odsay_bus_payload(), provider)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("distance", None),
+        ("sectionTime", None),
+        ("distance", -1),
+        ("sectionTime", -1),
+        ("distance", "invalid"),
+        ("sectionTime", "invalid"),
+        ("distance", "300"),
+        ("sectionTime", "5"),
+        ("distance", float("nan")),
+        ("distance", float("inf")),
+        ("sectionTime", float("nan")),
+        ("sectionTime", float("inf")),
+    ],
+)
+@pytest.mark.parametrize("walking_section_index", [0, 2, 4])
+def test_parse_bus_route_rejects_invalid_field_in_any_walking_section(
+    walking_section_index: int,
+    field_name: str,
+    invalid_value: object,
+) -> None:
+    payload = _odsay_bus_payload()
+    section = payload["result"]["path"][0]["subPath"][walking_section_index]
+    if invalid_value is None:
+        section.pop(field_name)
+    else:
+        section[field_name] = invalid_value
+
+    with pytest.raises(OdsayBusRouteError):
+        parse_odsay_low_floor_bus_route(payload, DictRouteProvider({"7016": "available", "N31": "available"}))
+
+
+@pytest.mark.parametrize(
+    "lane",
+    [
+        {"busNo": "7016", "busID": 9999, "type": 12},
+        {"busNo": "7016", "busID": 2, "type": 1},
+        {"busNo": "7016", "busID": 2},
+        {"busNo": "7016", "type": 12},
+    ],
+)
+def test_parse_bus_route_rejects_unreviewed_or_mismatched_lane_identity(lane: dict) -> None:
+    payload = _odsay_bus_payload()
+    payload["result"]["path"][0]["subPath"][1]["lane"] = [lane]
+
+    with pytest.raises(LowFloorBusRouteUnavailableError):
+        parse_odsay_low_floor_bus_route(payload, DictRouteProvider({"7016": "available", "N31": "available"}))
 
 
 def test_parse_bus_route_does_not_accept_bus_and_subway_mixed_path() -> None:
@@ -175,11 +236,19 @@ def test_csv_route_provider_loads_reviewed_analysis_export(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    provider = CsvLowFloorBusRouteProvider(csv_path)
+    mapping_path = tmp_path / "mapping.csv"
+    mapping_path.write_text(
+        "odsay_bus_id,odsay_bus_no,odsay_bus_type,route_number_normalized\n"
+        "17,0017,12,0017\n"
+        "31,N31,11,N31\n",
+        encoding="utf-8",
+    )
+    provider = CsvLowFloorBusRouteProvider(csv_path, mapping_path)
 
-    assert provider.get_route(" 0017 ") == LowFloorBusRouteEntry("0017", "0017", "available")
-    assert provider.get_route("n31") == LowFloorBusRouteEntry("N31", "N31", "unknown")
-    assert provider.get_route("17") is None
+    assert provider.get_route(17, " 0017 ", 12) == LowFloorBusRouteEntry(17, 12, "0017", "0017", "available")
+    assert provider.get_route(31, "n31", 11) == LowFloorBusRouteEntry(31, 11, "N31", "N31", "unknown")
+    assert provider.get_route(17, "17", 12) is None
+    assert provider.get_route(17, "0017", 1) is None
 
 
 def test_csv_route_provider_rejects_duplicate_normalized_route_number(tmp_path) -> None:
@@ -192,6 +261,6 @@ def test_csv_route_provider_rejects_duplicate_normalized_route_number(tmp_path) 
     )
 
     with pytest.raises(OdsayBusRouteError) as exc_info:
-        CsvLowFloorBusRouteProvider(csv_path)
+        CsvLowFloorBusRouteProvider(csv_path, tmp_path / "unused.csv")
 
     assert exc_info.value.reason == "duplicate_route_number"

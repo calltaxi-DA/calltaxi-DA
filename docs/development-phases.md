@@ -269,17 +269,12 @@
   - 실시간 저상버스 도착정보가 필요하면 별도 API/데이터 소스를 확보한다.
   - 저상버스 혼잡도는 실시간 값이 아니므로 추천 로직에 직접 반영하기 전에 별도 검증 기준을 둔다.
 
-## Analysis Phase 5-2 — ODsay 버스 route mapping 실제 검증 (다음 Phase)
+## Analysis Phase 5-2 — ODsay 버스 route mapping 실제 검증 (2026-09-12)
 
-- 상태: 미완료 / 후속 Phase로 분리
-- 목표: 실제 ODsay 버스 경로 응답의 `busID`, 노선번호, 버스 유형 필드를 확인하고, `analysis/bus/low_floor_bus_route_master.csv`와 연결 가능한지 검증한다.
-- 필요한 일:
-  - ODsay 버스 경로 실제 응답 샘플 10~20개 이상 확보
-  - 응답에서 버스 구간의 `busID`, 노선번호, 버스 유형 필드명과 표기 방식 확인
-  - `route_number_normalized`, `route_type_code`, `seoul_route_id`와의 매핑 성공률 산출
-  - 미매핑 노선, 다중 매칭 노선, `route_type_code` 결측 노선 처리 기준 기록
-  - 검토 완료된 ODsay busID ↔ route master mapping table이 필요하면 `analysis/`에 별도 export
-- 주의: 이 Phase가 완료되기 전까지 `analysis/bus/low_floor_bus_route_master.csv`는 실제 ODsay 경로 연결 검증 완료 산출물이 아니라 후보 route master로 본다.
+- 상태: 완료
+- 한 일: 서울 내부 실제 버스 경로 요청 11건에서 고유 `busID/busNo/type` lane 조합 65개를 확인하고 서울 route master와 대조했다. 검토 완료된 51개(78.46%)만 명시적 매핑으로 export했으며, 경기·광역 유형 및 route master 미등록 14개(21.54%)는 제외했다.
+- 산출물: `analysis/bus/odsay_seoul_bus_route_mapping.csv`
+- 확정 기준: backend는 mapping export의 `busID`를 우선 조회하고 `busNo`와 `type`도 모두 일치할 때만 서울 노선으로 인정한다. 노선번호 단독 fallback은 사용하지 않는다.
 
 ## Analysis Phase 6-1 — 버스 추가 데이터 후보 탐색 및 서비스 적용 범위 정리 (2026-09-12)
 
@@ -330,15 +325,17 @@
 ## Backend Phase 6 — 저상버스 경로 및 데이터 연동 (2026-09-12)
 
 - 브랜치: `backend/phase6-low-floor-bus-routes` (base: `dev`)
-- 한 일: `POST /routes/bus`를 추가해 ODsay 버스 전용 경로를 조회하고, 각 버스 구간의 `lane[].busNo`를 `analysis/bus/low_floor_bus_route_master.csv`의 `route_number_normalized`와 매칭한다. 모든 버스 구간에서 `available` 노선을 하나 이상 선택할 수 있는 첫 경로만 저상버스 경로로 반환한다. `unavailable`, `unknown`, 미매핑 노선만 있는 구간은 이용 가능한 저상버스 경로로 간주하지 않는다. ODsay의 모든 도보 `subPath`를 합산해 출발지→정류장, 버스 환승, 정류장→목적지의 총 도보거리와 총 도보시간을 공통 `RouteResult` 계약으로 반환한다.
+- 한 일: `POST /routes/bus`를 추가해 ODsay 버스 전용 경로를 조회하고, 검토 완료된 `busID/busNo/type` 조합을 통해서만 서울 저상버스 route master와 연결한다. 모든 버스 구간에서 `available` 노선을 하나 이상 선택할 수 있는 첫 경로만 반환한다. ODsay의 모든 도보 `subPath`에서 `distance`와 `sectionTime`을 필수 검증한 뒤 출발·환승·도착 도보 합계를 반환하며, 누락·음수·NaN·무한대·비수치 값은 0으로 보정하지 않고 외부 응답 오류로 처리한다.
 - 산출물:
   - `backend/app/services/bus.py` — ODsay 버스 경로 client·parser, route master provider, 저상버스 경로 선택과 도보 합산
+  - `analysis/bus/odsay_seoul_bus_route_mapping.csv` — 검토 완료된 ODsay `busID/busNo/type` 51개 매핑
   - `backend/app/api/bus.py` — `POST /routes/bus`, 외부 API 오류·경로 없음 처리
   - `backend/tests/test_bus_service.py`, `backend/tests/test_bus_routes.py` — 파서·매칭·도보 합산·HTTP 응답 테스트
   - `backend/app/core/logging.py`, `backend/tests/test_logging.py` — HTTP client URL의 query API 키 로그 노출 방지
   - `docs/troubleshooting.md` — ODsay Web/Server Key 불일치와 query API 키 로그 노출의 재현·원인·해결 기록
 - 검증 결과:
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 77개 통과
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 118개 통과
+  - 실제 ODsay lane 65개 중 51개 매핑(78.46%), 경기·광역 또는 route master 미등록 14개 fail-closed 확인
   - 실제 route master 로딩: `100`, `101`은 `available`, `1155`는 `unknown`으로 조회됨
   - OpenAPI schema에서 `POST /routes/bus` 등록 확인
   - 실제 ODsay 단일 버스 경로: 서울시청→강남역 `402`, 서울역→강남역 `402`, 홍대입구→잠실역 `N73`, 서울대입구→광화문 `501` 확인
@@ -350,6 +347,6 @@
   - 총 도보거리·총 도보시간은 ODsay가 반환한 모든 도보 `subPath`의 합계이며 실제 보행로 실측값으로 단정하지 않는다. ODsay가 제공하지 않은 실제 보행경로나 임의 보정값은 추가하지 않는다.
   - 실시간 위치·도착·차량별 저상 여부·실시간 혼잡도는 Analysis Phase 6-2 판정에 따라 이번 API에 포함하지 않는다.
 - 다음 Phase가 이어받을 것:
-  - Analysis Phase 5-2에서 ODsay `busID`와 서울 route master의 전체 매핑 성공률·미매핑·다중 매칭을 검증한다.
+  - 새 ODsay 노선은 실제 응답 검토 후 명시적 mapping export에 추가하며, 미등록 lane은 계속 fail-closed 한다.
   - 고정 공인 IP 또는 배포 환경의 고정 egress IP를 ODsay Server 플랫폼에 등록한다.
   - Backend Phase 7에서 콜택시·지하철·저상버스 결과의 Rule-based 추천 정렬을 구현한다.
