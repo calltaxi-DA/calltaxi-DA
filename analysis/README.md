@@ -24,4 +24,6 @@
 
 버스 공식 API 실제 검증 기준과 현재 blocker는 [`bus/bus_api_validation_criteria.md`](bus/bus_api_validation_criteria.md)에 정리했다. 현재 저장소에는 서울 버스 API 전용 키가 명확히 준비되어 있지 않고, 일부 후보 endpoint가 평문 HTTP를 사용하므로 기존 `MOBILITY_API_KEY`를 임의 전송하지 않았다. 따라서 Phase 6-2는 아직 완료가 아니라 키 준비와 실제 응답 확보가 필요한 상태다.
 
+장애인 콜택시·지하철·저상버스의 공통 비교 지표와 활용 구분은 [`transport_comparison_criteria.md`](transport_comparison_criteria.md)에 정리했다. 총 이동시간·예상 비용·총 도보거리·총 도보시간·접근성 상태를 핵심 지표로 확정하고, Backend Phase 7 추천 입력과 표시·주의 정보, 오프라인 분석·검증 결과, 현재 사용 금지 항목을 분리했다.
+
 요금/시간/도보 우선순위 추천 로직은 이 폴더·`ai/`가 아니라 `backend/`가 담당한다(Backend Phase 7 예정).
