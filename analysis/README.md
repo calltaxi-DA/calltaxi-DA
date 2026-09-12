@@ -22,4 +22,6 @@
 
 저상버스 추천과 혼잡도 분석에 추가로 활용할 수 있는 버스 데이터 후보는 [`bus/bus_additional_data_discovery.md`](bus/bus_additional_data_discovery.md)에 정리했다. 이 문서는 Analysis Phase 6-1 산출물로, 시간대별 승하차 인원, 버스 혼잡도, 재차인원, 배차간격, 실시간 위치·도착정보, 차량별 저상버스 여부의 현재 확보 상태와 공식 API 후보를 구분한 문서다. 현재 서비스에 바로 사용할 수 있는 범위는 노선 단위 저상버스 접근성 및 2025년 집계 기반 혼잡 위험 보조지표까지이며, 실시간 저상버스 도착·차량별 혼잡도·실시간 배차간격은 Phase 6-2에서 실제 API 호출과 필드 의미 검증 이후 확장한다.
 
+버스 공식 API 실제 검증 기준과 현재 blocker는 [`bus/bus_api_validation_criteria.md`](bus/bus_api_validation_criteria.md)에 정리했다. 현재 저장소에는 서울 버스 API 전용 키가 명확히 준비되어 있지 않고, 일부 후보 endpoint가 평문 HTTP를 사용하므로 기존 `MOBILITY_API_KEY`를 임의 전송하지 않았다. 따라서 Phase 6-2는 아직 완료가 아니라 키 준비와 실제 응답 확보가 필요한 상태다.
+
 요금/시간/도보 우선순위 추천 로직은 이 폴더·`ai/`가 아니라 `backend/`가 담당한다(Backend Phase 7 예정).
