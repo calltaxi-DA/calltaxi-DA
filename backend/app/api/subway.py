@@ -57,10 +57,9 @@ def calculate_subway_route(
         ) from exc
 
     warnings = build_accessibility_warnings(route.station_keys, accessibility_provider)
-    if route.estimated_transfer_walking_time_seconds > 0:
-        warnings.append(
-            "walking_time_seconds에는 ODsay 제공 도보시간에 더해 지하철 환승 1회당 최소 5분 기준의 내부 환승 도보시간 보수 추정이 포함됩니다."
-        )
+    warnings.append(
+        "walking_time_seconds와 walking_distance_meters는 ODsay가 제공한 도보 subPath 기준입니다. 지하철 환승 내부 도보시간·거리는 별도 검증 전까지 총 도보값으로 단정하지 않습니다."
+    )
 
     return RouteResult(
         transport_type=TransportType.SUBWAY,

@@ -255,17 +255,22 @@ ODsay 지하철 경로 결과와 접근성 lookup을 연결할 때는 다음 순
 
 `운행엘리베이터보유여부`는 원본 접근성 CSV의 기준일/운행상태를 집계한 값이다. 실시간 고장·점검 상태를 보장하지 않으므로 서비스 문구는 “접근성 데이터 기준 운행 가능한 엘리베이터 보유”처럼 표현한다.
 
-### 총 도보시간 산정 기준
+### 도보거리·도보시간 산정 기준
 
-ODsay 응답의 도보 subPath는 출발지→역, 역→목적지 도보구간을 포함하지만 지하철↔지하철 환승 내부 도보시간을 0분 또는 과소 제공할 수 있다. 따라서 Backend Phase 5의 `walking_time_seconds`는 다음 기준으로 산정한다.
+ODsay 응답의 도보 subPath는 출발지→역, 역→목적지 도보구간을 포함하지만 지하철↔지하철 환승 내부 도보시간·도보거리를 0 또는 과소 제공할 수 있다. 현재 저장소에는 환승역별 무장애 내부 동선 거리·시간의 공식/실측 lookup이 없다.
 
 ```text
-walking_time_seconds
-= ODsay trafficType=3 sectionTime 합
-+ max(0, 환승 1회당 5분 - ODsay가 해당 환승 사이에 제공한 도보시간)
+walking_time_seconds = ODsay trafficType=3 sectionTime 합
+walking_distance_meters = ODsay trafficType=3 distance 합
 ```
 
-즉 환승 내부 도보시간은 1회당 최소 5분을 보장하는 보수 추정값으로 보완한다. 실제 환승역별 무장애 동선 이동시간 데이터를 확보하기 전까지 이 값을 MVP 기준으로 사용하고, 후속 Phase에서 역별 lookup이 생기면 해당 lookup으로 대체한다.
+근거 없는 임의 추정값을 `walking_time_seconds`나 `walking_distance_meters`에 섞지 않는다. 따라서 이 두 값은 현재 “ODsay가 제공한 도보 subPath 기준”이며, 실제 환승 내부 동선까지 포함한 총 도보시간·총 도보거리로 단정하지 않는다.
+
+후속 Phase에서 실제 총 도보값을 제공하려면 다음 중 하나가 필요하다.
+
+- ODsay 실제 응답 샘플에서 환승 내부 도보시간·도보거리가 항상 제공되는지 검증
+- 환승역별 내부 무장애 동선 거리·시간 공식 데이터 확보
+- 공식/실측 근거가 있는 환승역별 lookup을 `analysis/`에 export한 뒤 backend에서 보완
 
 ## Backend Phase 5 export
 
