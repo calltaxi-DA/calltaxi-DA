@@ -18,4 +18,6 @@
 
 지하철 경로와 접근성 데이터를 연결하기 위한 기준은 [`subway/accessibility_mapping_criteria.md`](subway/accessibility_mapping_criteria.md)에 정리했다. 이 문서는 기존 지하철 전처리 결과, 월별 이용량 데이터와 station accessibility master 분리 기준, 역명·호선 canonical key, 엘리베이터·휠체어리프트·안전발판 등 접근성 시설 연결 기준, ODsay 지하철역 정보와 연결할 매핑 전략을 정리한 문서다. Backend Phase 5-1에서 사용할 검토 완료 접근성 lookup은 [`subway/station_accessibility_master.csv`](subway/station_accessibility_master.csv)에 export했다. 아직 ODsay stationID 매핑 테이블은 없으므로 backend는 현재 `노선명 + 역명정규화` canonical key로 연결한다. 환승 내부 동선까지 포함한 실제 총 도보거리·총 도보시간은 Backend Phase 5-2에서 별도 데이터 또는 실제 ODsay 응답 검증 후 확정한다.
 
+저상버스 경로와 접근성 데이터를 연결하기 위한 기준은 [`bus/low_floor_bus_mapping_criteria.md`](bus/low_floor_bus_mapping_criteria.md)에 정리했다. 이 문서는 현재 확보한 저상버스 노선 metadata, 2025년 버스 승하차/혼잡 대체지표, 노선번호 정규화 기준, ODsay 버스 경로와 연결할 route mapping 전략을 정리한 문서다. 후속 버스 API 연동 Phase에서 사용할 검토 완료 route master는 [`bus/low_floor_bus_route_master.csv`](bus/low_floor_bus_route_master.csv)에 export했다. 아직 ODsay busID 실제 응답 검증은 없으므로 backend는 1차로 `route_number_normalized` 기준 연결을 사용하고, ODsay busID 매핑은 후속 Phase에서 검증한다.
+
 요금/시간/도보 우선순위 추천 로직은 이 폴더·`ai/`가 아니라 `backend/`가 담당한다(Backend Phase 7 예정).
