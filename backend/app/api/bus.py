@@ -5,7 +5,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.contracts import RouteRequest, RouteResult, RouteStatus, TransportType
+from app.api.contracts import AccessibilityStatus, RouteRequest, RouteResult, RouteStatus, TransportType
 from app.core.config import get_settings
 from app.services.bus import (
     CsvLowFloorBusRouteProvider,
@@ -56,6 +56,7 @@ def calculate_low_floor_bus_route(
         return RouteResult(
             transport_type=TransportType.LOW_FLOOR_BUS,
             status=RouteStatus.UNAVAILABLE,
+            accessibility_status=AccessibilityStatus.VERIFIED_UNAVAILABLE,
             unavailable_reason="운행 가능한 저상버스 경로를 확인할 수 없습니다.",
             warnings=["노선 단위 저상버스 정보 기준이며 특정 차량의 실시간 저상버스 여부는 포함하지 않습니다."],
         )
@@ -74,6 +75,7 @@ def calculate_low_floor_bus_route(
         total_cost_won=route.fare_won,
         walking_distance_meters=route.walking_distance_meters,
         walking_time_seconds=route.walking_time_seconds,
+        accessibility_status=AccessibilityStatus.VERIFIED_AVAILABLE,
         summary=route.summary,
         warnings=[
             "저상버스 접근성은 노선 단위 보유 정보이며 특정 시간·정류장의 저상버스 도착을 보장하지 않습니다.",

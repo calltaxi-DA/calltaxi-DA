@@ -404,3 +404,38 @@
   - 통합 대기시간 Prediction 모델을 검증·export하고 `ai/` Adapter에 연결해 콜택시 총 이동시간을 완성한다.
   - Backend Phase 7에서 사용자 우선순위, 동률, 누락값, 접근성 적격성 규칙을 포함한 Rule-based 추천 정렬 계약과 테스트를 구현한다. `calltaxi available + walking unknown`, 세 이동수단 접근성 상태 혼합, 선택 지표 미확인 경로 제외를 반드시 검증한다.
   - 지하철 환승 내부 무장애 동선, 콜택시 승하차 접근 도보, 차량 단위 저상버스 실시간 정보는 검증된 데이터가 확보된 뒤 별도 Phase에서 확장한다.
+
+## Backend Phase 7 — 이동수단 통합 및 추천 (2026-09-12)
+
+- 브랜치: `backend/phase7-transport-recommendation` (base: `dev`)
+- 한 일: 장애인 콜택시·지하철·저상버스의 공통 `RouteResult` 세 개와 사용자의 시간·비용·도보 우선순위를 받아 최대 3개를 사전식으로 정렬하는 `POST /routes/recommendations`를 추가했다. Analysis Phase 7에서 확인된 콜택시 도보 미확정 문제를 해소하기 위해 경로 상태와 별도로 numeric field별 `available`/`not_available` 및 접근성 `verified_available`/`verified_unavailable`/`not_verified`를 표현하도록 공통 계약을 확장했다. 추천 계산은 `backend/app/services/`에 두고 라우터에는 계산 로직을 넣지 않았다.
+- 산출물:
+  - `backend/app/api/contracts.py` — 지표 가용성, 접근성, 추천 우선순위 및 추천 요청·응답 계약
+  - `backend/app/services/recommendation.py` — Rule-based 우선순위 정렬, 제외 및 안정적 동률 처리
+  - `backend/app/api/recommendation.py`, `backend/app/main.py` — `POST /routes/recommendations` 등록
+  - `backend/app/services/subway.py`, `backend/app/api/subway.py`, `backend/app/api/bus.py` — 지하철·저상버스 접근성 공통 상태 반환
+  - `backend/tests/test_recommendation_service.py`, `backend/tests/test_recommendation_routes.py` — 시간·비용·도보 정렬과 HTTP 계약 검증
+  - `backend/tests/test_route_contracts.py`, `backend/tests/test_subway_service.py`, `backend/tests/test_subway_routes.py`, `backend/tests/test_bus_routes.py` — 지표 가용성 및 접근성 회귀 검증
+  - `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md` — 계약 변경과 정렬 정책 결정
+- 확정 기준:
+  - 1순위 지표가 사용 가능한 경로만 후보로 삼고, 2·3순위 지표 누락은 앞선 지표가 동률일 때 후순위로 처리한다.
+  - `unavailable` 경로, 1순위 지표 `not_available`, 접근성 `verified_unavailable`은 후보에서 제외하며 이유를 응답에 보존한다.
+  - 접근성 `not_verified`는 정상으로 바꾸지 않고 warning과 상태를 유지한 채 후보에 포함한다.
+  - 도보 우선은 거리, 시간 순서로 비교한다. 모든 우선순위가 같은 완전 동률은 이동수단 고정 순서로만 해소한다.
+  - 콜택시 도보값을 0으로 만들지 않는다. 따라서 현재 도보 1순위에서는 콜택시를 제외하고 최대 2개를 반환한다.
+- 검증 결과:
+  - 시간 우선: 콜택시 → 지하철 → 저상버스 TOP 3 반환 확인
+  - 비용 우선: 저상버스 → 지하철 → 콜택시 TOP 3 반환 확인
+  - 도보 우선: 저상버스 → 지하철 반환 및 콜택시 제외 사유 확인
+  - 세 이동수단 모두 도보 지표가 제공된 계약 샘플에서는 콜택시 → 저상버스 → 지하철 TOP 3 반환 확인
+  - 중복 우선순위와 세 이동수단 누락 요청이 `422`를 반환하는지 확인
+  - 콜택시 `available + walking null/not_available + accessibility not_verified` 계약 검증
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 135개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - `cd frontend && npm test -- --run` — 19개 통과
+  - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
+  - OpenAPI schema에서 `POST /routes/recommendations`의 200 응답 계약 등록 확인
+- 다음 Phase가 이어받을 것:
+  - 대기시간 Prediction 모델 연결 후 콜택시 `total_time_seconds`를 실제 통합 결과로 생성한다.
+  - 외부 경로 호출과 대기시간 예측을 한 요청에서 수행하는 orchestration은 모델이 준비된 후 추가한다.
+  - Frontend는 추가된 지표·접근성 상태와 추천·제외 결과를 별도 Phase에서 연결한다.
+  - 검증된 콜택시 승하차 접근 도보 데이터가 확보되면 도보 1순위 TOP 3 가능 여부를 재검토한다.

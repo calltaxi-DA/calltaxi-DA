@@ -3,13 +3,14 @@ import json
 import httpx
 import pytest
 
-from app.api.contracts import Location
+from app.api.contracts import AccessibilityStatus, Location
 from app.services.subway import (
     CsvSubwayAccessibilityProvider,
     OdsayRouteError,
     OdsaySubwayRouteClient,
     StationAccessibility,
     SubwayStationKey,
+    assess_accessibility_status,
     build_accessibility_warnings,
     parse_odsay_subway_route,
 )
@@ -222,6 +223,39 @@ def test_build_accessibility_warnings_checks_origin_transfer_and_destination_sta
     assert provider.checked_keys == list(station_keys)
     assert any("2호선 시청" in warning for warning in warnings)
     assert any("실시간 엘리베이터" in warning for warning in warnings)
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        (
+            {
+                SubwayStationKey("1호선", "서울"): StationAccessibility(has_operating_elevator=True),
+                SubwayStationKey("1호선", "시청"): StationAccessibility(has_operating_elevator=True),
+            },
+            AccessibilityStatus.VERIFIED_AVAILABLE,
+        ),
+        (
+            {
+                SubwayStationKey("1호선", "서울"): StationAccessibility(has_operating_elevator=True),
+                SubwayStationKey("1호선", "시청"): StationAccessibility(has_operating_elevator=False),
+            },
+            AccessibilityStatus.VERIFIED_UNAVAILABLE,
+        ),
+        (
+            {SubwayStationKey("1호선", "서울"): StationAccessibility(has_operating_elevator=True)},
+            AccessibilityStatus.NOT_VERIFIED,
+        ),
+    ],
+)
+def test_assess_accessibility_status_distinguishes_verified_and_missing_stations(
+    values: dict[SubwayStationKey, StationAccessibility], expected: AccessibilityStatus
+) -> None:
+    station_keys = (SubwayStationKey("1호선", "서울"), SubwayStationKey("1호선", "시청"))
+
+    status = assess_accessibility_status(station_keys, DictAccessibilityProvider(values))
+
+    assert status == expected
 
 
 def test_csv_subway_accessibility_provider_loads_analysis_station_master(tmp_path) -> None:

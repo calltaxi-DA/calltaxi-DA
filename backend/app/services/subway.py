@@ -12,7 +12,7 @@ from typing import Any, Protocol
 
 import httpx
 
-from app.api.contracts import Location
+from app.api.contracts import AccessibilityStatus, Location
 
 ODSAY_SUBWAY_ROUTE_URL = "https://api.odsay.com/v1/api/searchPubTransPathT"
 DEFAULT_SUBWAY_ACCESSIBILITY_MASTER_PATH = Path("analysis/subway/station_accessibility_master.csv")
@@ -250,6 +250,29 @@ def build_accessibility_warnings(
         warnings.append("접근성 데이터 기준 출발역·환승역·도착역 모두 운행 가능한 엘리베이터를 보유합니다.")
     warnings.append("실시간 엘리베이터 고장·점검 상태는 포함되지 않습니다.")
     return warnings
+
+
+def assess_accessibility_status(
+    station_keys: tuple[SubwayStationKey, ...],
+    accessibility_provider: SubwayAccessibilityProvider,
+) -> AccessibilityStatus:
+    """모든 이용역의 핵심 엘리베이터 lookup으로 공통 접근성 상태를 판정한다."""
+
+    if not station_keys:
+        return AccessibilityStatus.NOT_VERIFIED
+
+    has_missing = False
+    for station_key in station_keys:
+        accessibility = accessibility_provider.get_station_accessibility(station_key)
+        if accessibility is None:
+            has_missing = True
+            continue
+        if not accessibility.has_operating_elevator:
+            return AccessibilityStatus.VERIFIED_UNAVAILABLE
+
+    if has_missing:
+        return AccessibilityStatus.NOT_VERIFIED
+    return AccessibilityStatus.VERIFIED_AVAILABLE
 
 
 def _select_first_subway_path(payload: dict[str, Any]) -> dict[str, Any]:
