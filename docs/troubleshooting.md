@@ -23,6 +23,6 @@
   - TMAP 실패 시 명시적 `502` 반환: 외부 API 실패를 숨기지 않아 현재 Phase에 적합하다고 판단했다.
 - **해결 방법**: 코드에서는 `httpx.HTTPError`, HTTP 오류 상태, JSON decode 실패, 응답 스키마 오류를 `TmapRouteError`로 감싸고 API 라우터에서 `502 {"detail": "Failed to calculate calltaxi vehicle route"}`로 변환하도록 했다. 테스트는 실제 키 대신 fake client와 `httpx.MockTransport`로 `totalDistance`, `totalTime`, 예상요금 계산, outbound 요청 구조를 검증한다.
 - **검증 결과**:
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 44개 통과
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 46개 통과
   - 실제 TMAP smoke test — `403 Forbidden` 재현
 - **남은 한계**: TMAP 개발자 콘솔에서 해당 App Key가 자동차 경로안내 API 상품을 사용할 수 있는지, 도메인/IP/서비스 제한이 있는지 확인한 뒤 같은 smoke test를 다시 실행해야 한다.
