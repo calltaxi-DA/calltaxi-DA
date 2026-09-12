@@ -8,6 +8,23 @@
 
 ## 기록된 이슈
 
+### 2026-09-12 — Frontend에서 localhost Backend 직접 호출 시 CORS 차단
+
+- **문제 상황**: Frontend Phase 5에서 지하철 경로 API를 실제 연결하자 `frontend/.env.example`은 `VITE_API_BASE_URL=http://localhost:8000`을 안내하지만 FastAPI 앱에는 CORS middleware가 없어, Vite 개발 서버와 Backend가 서로 다른 origin이 되는 문제가 재현됐다.
+- **영향**: 브라우저의 `localhost:5173`에서 `localhost:8000`으로 직접 요청하면 CORS 정책으로 차단되어 정상 Backend 응답도 사용자가 확인할 수 없다.
+- **재현 방법**:
+  1. 기존 예시대로 `VITE_API_BASE_URL=http://localhost:8000`을 설정한다.
+  2. Vite와 FastAPI를 각각 실행한다.
+  3. 브라우저에서 `POST /routes/subway`를 요청해 서로 다른 origin 요청과 CORS 차단을 확인한다.
+- **원인**: 프론트 API client가 Backend 절대 URL을 사용했지만 동일 출처 개발 프록시나 Backend CORS allowlist가 없었다.
+- **검토한 대안**:
+  - FastAPI CORS middleware 추가: 배포 origin과 보안 정책을 Backend 범위에서 확정해야 하므로 이번 Frontend Phase에서는 제외했다.
+  - 브라우저 CORS 보안 비활성화: 안전하지 않고 실제 배포 문제를 숨기므로 제외했다.
+  - Vite 개발 프록시: Backend 계약 변경 없이 로컬 요청을 동일 출처로 유지할 수 있어 채택했다.
+- **해결 방법**: 로컬에서는 `VITE_API_BASE_URL`을 비워 `/routes/subway` 상대 경로를 사용하고, Vite가 `/routes`를 `http://127.0.0.1:8000`으로 전달하도록 설정했다. 분리 배포 시에만 API base URL과 Backend CORS allowlist를 함께 설정한다.
+- **검증 결과**: 실제 최신 Backend의 cross-origin preflight는 `405`로 CORS header 없이 거부되고, 같은 Backend에 대한 직접 `POST /routes/subway`는 `200`으로 정상 응답함을 확인했다. Vite 프록시는 `/routes/subway` 요청을 Backend까지 전달했다. 프론트 테스트에서 상대 경로와 요청 body를 검증했고 Vite build·lint가 통과했다. Backend 지하철 route/service 테스트 14개도 통과했다. 검증 중 `8000` 포트의 기존 프로세스가 이전 코드를 실행해 `404`를 반환했으며 최신 Backend 재시작이 필요함도 확인했다.
+- **남은 한계**: 분리 배포 환경에는 Vite 개발 프록시가 적용되지 않는다. 배포 구조가 확정되면 reverse proxy로 같은 origin을 제공하거나 Backend CORS allowlist를 별도 설계해야 한다.
+
 ### 2026-09-12 — ODsay query API 키가 HTTP client INFO 로그에 노출
 
 - **문제 상황**: Backend Phase 6의 `/routes/bus` 실제 smoke test에서 `httpx`가 ODsay 요청 URL 전체를 INFO 레벨로 기록했고, query parameter인 `apiKey` 값도 함께 출력됐다.

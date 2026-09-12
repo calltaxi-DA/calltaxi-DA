@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
+import { fetchSubwayRoute } from './api/subway'
+import type { RouteLocation, SubwayRouteResult } from './api/subway'
+import SubwayRouteCard from './components/SubwayRouteCard'
+
 type LocationRole = 'origin' | 'destination'
 
 type PlaceSelection = {
@@ -162,6 +166,10 @@ function App() {
   )
   const [priorityOrder, setPriorityOrder] = useState(defaultPriorityOrder)
   const [submittedSummary, setSubmittedSummary] = useState<string | null>(null)
+  const [subwayRoute, setSubwayRoute] = useState<SubwayRouteResult | null>(null)
+  const [subwayRouteStatus, setSubwayRouteStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const subwayRequestRef = useRef(0)
+  const subwayAbortControllerRef = useRef<AbortController | null>(null)
 
   const selectedTransportLabels = useMemo(
     () =>
@@ -207,8 +215,19 @@ function App() {
     }
   }, [kakaoMapAppKey])
 
+  useEffect(() => () => subwayAbortControllerRef.current?.abort(), [])
+
+  const invalidateSubwayRoute = () => {
+    subwayRequestRef.current += 1
+    subwayAbortControllerRef.current?.abort()
+    subwayAbortControllerRef.current = null
+    setSubwayRoute(null)
+    setSubwayRouteStatus('idle')
+  }
+
   const updatePlaceQuery = (role: LocationRole, nextValue: string) => {
     placeSearchRequestRef.current[role] += 1
+    invalidateSubwayRoute()
     markersRef.current[role]?.setMap(null)
     markersRef.current[role] = null
 
@@ -224,6 +243,9 @@ function App() {
   }
 
   const handleTransportToggle = (transportType: string) => {
+    if (transportType === 'subway') {
+      invalidateSubwayRoute()
+    }
     setSelectedTransportTypes((current) =>
       current.includes(transportType)
         ? current.filter((item) => item !== transportType)
@@ -326,6 +348,7 @@ function App() {
 
   const selectPlace = (role: LocationRole, place: PlaceSelection) => {
     placeSearchRequestRef.current[role] += 1
+    invalidateSubwayRoute()
 
     if (role === 'origin') {
       setOrigin(place.name)
@@ -342,13 +365,12 @@ function App() {
     moveMapToPlace(role, place)
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!canSearch) {
       return
     }
 
-    // TODO: 경로검색 Backend API가 구현되면 입력 조건과 선택 좌표를 요청 모델로 변환해 API 호출로 대체한다.
     const priorityLabels = priorityOrder.map(
       (priority) => priorityOptions.find((option) => option.value === priority)?.label ?? priority,
     )
@@ -366,6 +388,45 @@ function App() {
         .map((label, index) => `${index + 1}순위 ${label}`)
         .join(', ')} 경로를 검색합니다.`,
     )
+
+    const requestId = subwayRequestRef.current + 1
+    subwayRequestRef.current = requestId
+    if (!selectedTransportTypes.includes('subway') || !selectedPlaces.origin || !selectedPlaces.destination) {
+      setSubwayRoute(null)
+      setSubwayRouteStatus('idle')
+      return
+    }
+
+    setSubwayRoute(null)
+    setSubwayRouteStatus('loading')
+    subwayAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    subwayAbortControllerRef.current = abortController
+
+    const toRouteLocation = (place: PlaceSelection): RouteLocation => ({
+      name: place.name,
+      latitude: place.lat,
+      longitude: place.lng,
+      address: place.address,
+    })
+
+    try {
+      const route = await fetchSubwayRoute({
+        origin: toRouteLocation(selectedPlaces.origin),
+        destination: toRouteLocation(selectedPlaces.destination),
+      }, abortController.signal)
+      if (subwayRequestRef.current === requestId) {
+        subwayAbortControllerRef.current = null
+        setSubwayRoute(route)
+        setSubwayRouteStatus('idle')
+      }
+    } catch {
+      if (subwayRequestRef.current === requestId) {
+        subwayAbortControllerRef.current = null
+        setSubwayRoute(null)
+        setSubwayRouteStatus('error')
+      }
+    }
   }
 
   return (
@@ -486,6 +547,21 @@ function App() {
             <p>출발지·목적지를 선택하면 검색 조건이 표시됩니다.</p>
           )}
         </section>
+
+        <div className="route-result-region" aria-live="polite" aria-busy={subwayRouteStatus === 'loading'}>
+          {subwayRouteStatus === 'loading' ? (
+            <section className="subway-result-card loading-state">
+              <p>지하철 경로와 접근성 정보를 확인하고 있습니다.</p>
+            </section>
+          ) : null}
+          {subwayRouteStatus === 'error' ? (
+            <section className="subway-result-card error-state" role="alert">
+              <h2>지하철 경로를 불러오지 못했어요</h2>
+              <p>백엔드 실행 상태와 ODsay 설정을 확인한 뒤 다시 검색해주세요.</p>
+            </section>
+          ) : null}
+          {subwayRoute ? <SubwayRouteCard route={subwayRoute} /> : null}
+        </div>
       </aside>
     </main>
   )
