@@ -8,7 +8,7 @@
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TransportType(StrEnum):
@@ -180,9 +180,13 @@ class RouteRequest(BaseModel):
     destination: Location
 
 
-class RecommendationRequest(RouteComparisonResponse):
-    """세 이동수단 결과와 사용자 우선순위를 받는 추천 요청."""
+class RecommendationRequest(BaseModel):
+    """Backend가 경로를 계산할 출발지·목적지와 사용자 우선순위."""
 
+    model_config = ConfigDict(extra="forbid")
+
+    origin: Location
+    destination: Location
     priorities: list[RecommendationPriority] = Field(min_length=3, max_length=3)
 
     @model_validator(mode="after")

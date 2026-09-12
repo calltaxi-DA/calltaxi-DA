@@ -1,16 +1,26 @@
 """이동수단 경로를 사용자 우선순위로 정렬하는 Rule-based 서비스."""
 
 from functools import cmp_to_key
+from typing import Protocol
 
 from app.api.contracts import (
     AccessibilityStatus,
     ExcludedRoute,
+    Location,
     MetricAvailability,
     RankedRoute,
     RecommendationPriority,
     RouteResult,
     RouteStatus,
+    TransportType,
 )
+
+
+class RecommendationRouteProvider(Protocol):
+    """Backend 소유 데이터로 세 이동수단 경로를 생성하는 provider."""
+
+    def get_routes(self, origin: Location, destination: Location) -> list[RouteResult]:
+        ...
 
 
 def rank_routes(
@@ -18,6 +28,7 @@ def rank_routes(
 ) -> tuple[list[RankedRoute], list[ExcludedRoute]]:
     """1순위 지표를 사용할 수 있는 경로를 최대 3개까지 사전식 정렬한다."""
 
+    _validate_inputs(routes, priorities)
     primary_priority = priorities[0]
     candidates: list[RouteResult] = []
     excluded: list[ExcludedRoute] = []
@@ -32,6 +43,13 @@ def rank_routes(
     ordered = sorted(candidates, key=cmp_to_key(lambda left, right: _compare(left, right, priorities)))
     recommendations = [RankedRoute(rank=index, route=route) for index, route in enumerate(ordered[:3], start=1)]
     return recommendations, excluded
+
+
+def _validate_inputs(routes: list[RouteResult], priorities: list[RecommendationPriority]) -> None:
+    if len(routes) != len(TransportType) or {route.transport_type for route in routes} != set(TransportType):
+        raise ValueError("routes must contain each TransportType exactly once")
+    if len(priorities) != len(RecommendationPriority) or set(priorities) != set(RecommendationPriority):
+        raise ValueError("priorities must contain each RecommendationPriority exactly once")
 
 
 def _exclusion_reason(route: RouteResult, primary_priority: RecommendationPriority) -> str | None:

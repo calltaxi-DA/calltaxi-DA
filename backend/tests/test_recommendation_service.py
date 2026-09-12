@@ -1,3 +1,5 @@
+import pytest
+
 from app.api.contracts import (
     AccessibilityStatus,
     MetricAvailability,
@@ -134,3 +136,13 @@ def test_stable_transport_order_breaks_complete_tie() -> None:
         TransportType.SUBWAY,
         TransportType.LOW_FLOOR_BUS,
     ]
+
+
+def test_rank_routes_rejects_empty_priorities() -> None:
+    with pytest.raises(ValueError, match="priorities"):
+        rank_routes(_three_routes(), [])
+
+
+def test_rank_routes_rejects_missing_transport_type() -> None:
+    with pytest.raises(ValueError, match="routes"):
+        rank_routes(_three_routes()[:2], list(RecommendationPriority))

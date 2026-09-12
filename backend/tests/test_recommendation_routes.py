@@ -1,15 +1,14 @@
 from fastapi.testclient import TestClient
 
-from app.api.contracts import RecommendationResponse
+from app.api.contracts import Location, RecommendationResponse, RouteResult
+from app.api.recommendation import get_recommendation_route_provider
 from app.main import create_app
 
 client = TestClient(create_app())
 
 
-def _payload(priorities: list[str]) -> dict[str, object]:
-    origin = {"name": "서울시청", "latitude": 37.5666, "longitude": 126.9784}
-    destination = {"name": "강남역", "latitude": 37.4979, "longitude": 127.0276}
-    routes = [
+def _routes() -> list[dict[str, object]]:
+    return [
         {
             "transport_type": "calltaxi",
             "status": "available",
@@ -46,11 +45,38 @@ def _payload(priorities: list[str]) -> dict[str, object]:
             "accessibility_status": "verified_available",
         },
     ]
-    return {"origin": origin, "destination": destination, "routes": routes, "priorities": priorities}
+
+
+class FakeRecommendationRouteProvider:
+    def __init__(self, routes: list[dict[str, object]] | None = None) -> None:
+        self.routes = [RouteResult.model_validate(route) for route in (routes or _routes())]
+        self.calls: list[tuple[Location, Location]] = []
+
+    def get_routes(self, origin: Location, destination: Location) -> list[RouteResult]:
+        self.calls.append((origin, destination))
+        return self.routes
+
+
+def _payload(priorities: list[str]) -> dict[str, object]:
+    origin = {"name": "서울시청", "latitude": 37.5666, "longitude": 126.9784}
+    destination = {"name": "강남역", "latitude": 37.4979, "longitude": 127.0276}
+    return {"origin": origin, "destination": destination, "priorities": priorities}
+
+
+def _client_with_provider(
+    provider: FakeRecommendationRouteProvider | None = None,
+) -> tuple[TestClient, FakeRecommendationRouteProvider]:
+    app = create_app()
+    fake_provider = provider or FakeRecommendationRouteProvider()
+    app.dependency_overrides[get_recommendation_route_provider] = lambda: fake_provider
+    return TestClient(app), fake_provider
 
 
 def test_recommendations_returns_top_three_for_time_priority() -> None:
-    response = client.post("/routes/recommendations", json=_payload(["time", "cost", "walk"]))
+    override_client, provider = _client_with_provider()
+    request_payload = _payload(["time", "cost", "walk"])
+
+    response = override_client.post("/routes/recommendations", json=request_payload)
 
     assert response.status_code == 200
     parsed = RecommendationResponse.model_validate(response.json())
@@ -61,10 +87,13 @@ def test_recommendations_returns_top_three_for_time_priority() -> None:
         "low_floor_bus",
     ]
     assert parsed.excluded_routes == []
+    assert len(provider.calls) == 1
+    assert provider.calls[0][0].latitude == 37.5666
 
 
 def test_recommendations_returns_top_three_for_cost_priority() -> None:
-    response = client.post("/routes/recommendations", json=_payload(["cost", "time", "walk"]))
+    override_client, _ = _client_with_provider()
+    response = override_client.post("/routes/recommendations", json=_payload(["cost", "time", "walk"]))
 
     assert response.status_code == 200
     assert [item["route"]["transport_type"] for item in response.json()["recommendations"]] == [
@@ -75,7 +104,8 @@ def test_recommendations_returns_top_three_for_cost_priority() -> None:
 
 
 def test_recommendations_excludes_unknown_primary_walking_metric() -> None:
-    response = client.post("/routes/recommendations", json=_payload(["walk", "time", "cost"]))
+    override_client, _ = _client_with_provider()
+    response = override_client.post("/routes/recommendations", json=_payload(["walk", "time", "cost"]))
 
     assert response.status_code == 200
     payload = response.json()
@@ -88,8 +118,8 @@ def test_recommendations_excludes_unknown_primary_walking_metric() -> None:
 
 
 def test_recommendations_returns_top_three_for_walk_priority_when_all_metrics_are_available() -> None:
-    payload = _payload(["walk", "time", "cost"])
-    calltaxi = payload["routes"][0]  # type: ignore[index]
+    routes = _routes()
+    calltaxi = routes[0]
     calltaxi["walking_distance_meters"] = 100
     calltaxi["walking_time_seconds"] = 120
     calltaxi["metric_availability"] = {
@@ -97,7 +127,8 @@ def test_recommendations_returns_top_three_for_walk_priority_when_all_metrics_ar
         "walking_time_seconds": "available",
     }
 
-    response = client.post("/routes/recommendations", json=payload)
+    override_client, _ = _client_with_provider(FakeRecommendationRouteProvider(routes))
+    response = override_client.post("/routes/recommendations", json=_payload(["walk", "time", "cost"]))
 
     assert response.status_code == 200
     assert [item["route"]["transport_type"] for item in response.json()["recommendations"]] == [
@@ -109,15 +140,24 @@ def test_recommendations_returns_top_three_for_walk_priority_when_all_metrics_ar
 
 
 def test_recommendations_rejects_duplicate_priorities() -> None:
-    response = client.post("/routes/recommendations", json=_payload(["time", "time", "walk"]))
+    override_client, _ = _client_with_provider()
+    response = override_client.post("/routes/recommendations", json=_payload(["time", "time", "walk"]))
 
     assert response.status_code == 422
 
 
-def test_recommendations_rejects_missing_transport_type() -> None:
+def test_recommendations_rejects_client_supplied_routes() -> None:
+    override_client, _ = _client_with_provider()
     payload = _payload(["time", "cost", "walk"])
-    payload["routes"] = payload["routes"][:2]  # type: ignore[index]
+    payload["routes"] = _routes()
 
-    response = client.post("/routes/recommendations", json=payload)
+    response = override_client.post("/routes/recommendations", json=payload)
 
     assert response.status_code == 422
+
+
+def test_recommendations_fail_closed_until_backend_provider_is_connected() -> None:
+    response = client.post("/routes/recommendations", json=_payload(["time", "cost", "walk"]))
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Integrated route provider is not available"}
