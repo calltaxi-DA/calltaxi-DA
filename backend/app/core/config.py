@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
     enable_sample_routes: bool = False
+    tmap_app_key: str | None = None
 
 
 @lru_cache

@@ -89,3 +89,26 @@
   - 실제 경로검색 backend API 연결과 RouteResult 표시 UI는 아직 구현하지 않는다.
   - Kakao REST API, TMAP/대중교통 경로 API, 추천 정렬은 이후 Backend/API 연동 Phase에서 구현한다.
   - 지도에서 직접 클릭해 출발지·목적지를 지정하는 기능은 이번 Phase 범위에 포함하지 않았다.
+
+## Backend Phase 2 — 장애인 콜택시 경로 및 요금 (2026-09-12)
+
+- 브랜치: `backend/phase2-calltaxi-tmap-route` (base: `dev`)
+- 한 일: TMAP 자동차 경로안내 API를 이용해 출발지·목적지 좌표 기반 장애인 콜택시 차량 이동거리와 차량 이동시간을 계산하는 백엔드 경로를 추가했다. `/routes/calltaxi`는 `RouteRequest`의 출발지·목적지 좌표를 받아 `RouteResult` 형식으로 장애인 콜택시 결과를 반환한다. 예상요금은 서울 장애인콜택시 공식 거리요금 기준(5km까지 1,500원, 5km 초과 10km까지 km당 280원, 10km 초과 km당 70원, 100원 미만 절사)으로 산출한다. TMAP 키가 없으면 `503`, TMAP 호출/응답 실패는 `502`로 명시한다.
+- 산출물:
+  - `backend/app/api/contracts.py` — 출발지·목적지 단일 경로 계산 요청 `RouteRequest` 추가
+  - `backend/app/api/calltaxi.py` — `POST /routes/calltaxi` 라우터 추가
+  - `backend/app/services/calltaxi.py` — TMAP 자동차 경로안내 클라이언트, `totalDistance`·`totalTime` 파싱, 서울 장애인콜택시 예상요금 계산
+  - `backend/app/main.py` — 장애인 콜택시 라우터 등록
+  - `backend/app/core/config.py`, `backend/.env.example` — `APP_TMAP_APP_KEY` 설정 추가
+  - `backend/tests/test_calltaxi_routes.py` — 라우터 응답, 좌표 검증, 키 누락, TMAP 실패 처리 테스트
+  - `backend/tests/test_calltaxi_service.py` — 요금 계산과 TMAP 응답 파싱 테스트
+  - `docs/troubleshooting.md` — 실제 TMAP smoke test `403 Forbidden` 이슈 기록
+- 검증 결과:
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 38개 통과
+  - 로컬 `APP_TMAP_APP_KEY` 존재 확인 — 키 값은 출력하지 않고 존재 여부만 확인
+  - 실제 TMAP 자동차 경로안내 smoke test — `403 Forbidden`으로 실패. 코드 요청/응답 처리 검증은 완료됐지만, 실제 키의 자동차 경로안내 API 상품 권한 또는 제한 설정 확인이 필요하다.
+- 다음 Phase가 이어받을 것:
+  - TMAP 개발자 콘솔에서 App Key가 자동차 경로안내 API를 사용할 수 있는지 확인하고 실제 smoke test를 재실행한다.
+  - 프론트엔드 경로검색 버튼과 `/routes/calltaxi` 연결은 이번 Phase 범위가 아니므로 이후 Frontend/API 연동 Phase에서 진행한다.
+  - 장애인 콜택시 대기시간 예측 모델 연결과 총 이동시간에 대기시간을 합산하는 작업은 AI Adapter/대기시간 Phase에서 진행한다.
+  - 지하철·저상버스 경로 API와 추천 정렬은 별도 Backend Phase에서 구현한다.

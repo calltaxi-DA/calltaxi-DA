@@ -99,3 +99,10 @@ class RouteComparisonResponse(BaseModel):
         if set(actual) != expected or len(actual) != len(set(actual)):
             raise ValueError("routes must contain each TransportType exactly once")
         return self
+
+
+class RouteRequest(BaseModel):
+    """출발지·목적지 기반 단일 경로 계산 요청."""
+
+    origin: Location
+    destination: Location
