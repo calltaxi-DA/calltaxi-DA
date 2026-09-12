@@ -20,6 +20,6 @@
 
 저상버스 경로와 접근성 데이터를 연결하기 위한 기준은 [`bus/low_floor_bus_mapping_criteria.md`](bus/low_floor_bus_mapping_criteria.md)에 정리했다. 이 문서는 현재 확보한 저상버스 노선 metadata, 2025년 버스 승하차/혼잡 대체지표, 노선번호 정규화 기준, ODsay 버스 경로와 연결할 후보 route mapping 전략을 정리한 문서다. 후속 버스 API 연동 Phase에서 사용할 검토 완료 route master는 [`bus/low_floor_bus_route_master.csv`](bus/low_floor_bus_route_master.csv)에 export했다. 아직 ODsay busID/노선번호 실제 응답 검증은 없으므로 이번 산출물은 Analysis Phase 5-1의 route master와 후보 key 정리로 한정한다. 실제 ODsay 버스 경로와의 매핑 성공률 검증은 Phase 5-2에서 진행한다.
 
-저상버스 추천과 혼잡도 분석에 추가로 활용할 수 있는 버스 데이터의 확보 가능성은 [`bus/bus_additional_data_discovery.md`](bus/bus_additional_data_discovery.md)에 정리했다. 이 문서는 시간대별 승하차 인원, 버스 혼잡도, 재차인원, 배차간격, 실시간 위치·도착정보, 차량별 저상버스 여부의 현재 확보 상태와 공식 API 후보를 구분한 문서다. 현재 서비스에 바로 사용할 수 있는 범위는 노선 단위 저상버스 접근성 및 2025년 집계 기반 혼잡 위험 보조지표까지이며, 실시간 저상버스 도착·차량별 혼잡도·실시간 배차간격은 공식 API 검증 이후 확장한다.
+저상버스 추천과 혼잡도 분석에 추가로 활용할 수 있는 버스 데이터 후보는 [`bus/bus_additional_data_discovery.md`](bus/bus_additional_data_discovery.md)에 정리했다. 이 문서는 Analysis Phase 6-1 산출물로, 시간대별 승하차 인원, 버스 혼잡도, 재차인원, 배차간격, 실시간 위치·도착정보, 차량별 저상버스 여부의 현재 확보 상태와 공식 API 후보를 구분한 문서다. 현재 서비스에 바로 사용할 수 있는 범위는 노선 단위 저상버스 접근성 및 2025년 집계 기반 혼잡 위험 보조지표까지이며, 실시간 저상버스 도착·차량별 혼잡도·실시간 배차간격은 Phase 6-2에서 실제 API 호출과 필드 의미 검증 이후 확장한다.
 
 요금/시간/도보 우선순위 추천 로직은 이 폴더·`ai/`가 아니라 `backend/`가 담당한다(Backend Phase 7 예정).
