@@ -1,10 +1,11 @@
 from fastapi.testclient import TestClient
+import httpx
 
 from app.api.calltaxi import get_tmap_route_client
-from app.api.contracts import RouteResult, RouteStatus, TransportType
+from app.api.contracts import CalltaxiRouteResponse, TransportType
 from app.core.config import get_settings
 from app.main import create_app
-from app.services.calltaxi import TmapRouteError
+from app.services.calltaxi import TmapRouteClient, TmapRouteError
 
 
 class FakeTmapRouteClient:
@@ -18,7 +19,7 @@ class FakeTmapRouteClient:
 
 class FailingTmapRouteClient:
     def get_vehicle_route(self, origin, destination) -> tuple[int, int]:
-        raise TmapRouteError("failed")
+        raise TmapRouteError("failed", reason="test_failure")
 
 
 def _route_request_payload() -> dict:
@@ -46,14 +47,13 @@ def test_calltaxi_route_returns_vehicle_distance_time_and_fare() -> None:
     response = client.post("/routes/calltaxi", json=_route_request_payload())
 
     assert response.status_code == 200
-    route = RouteResult.model_validate(response.json())
+    route = CalltaxiRouteResponse.model_validate(response.json())
     assert route.transport_type == TransportType.CALLTAXI
-    assert route.status == RouteStatus.AVAILABLE
-    assert route.total_distance_meters == 12_500
-    assert route.total_time_seconds == 1_800
-    assert route.total_cost_won == 3_000
-    assert route.walking_distance_meters == 0
-    assert route.walking_time_seconds == 0
+    assert route.vehicle_distance_meters == 12_500
+    assert route.vehicle_time_seconds == 1_800
+    assert route.estimated_fare_won == 3_000
+    assert "통행료·주차료" in route.warnings[0]
+    assert "total_time_seconds" not in response.json()
 
 
 def test_calltaxi_route_requires_valid_coordinates() -> None:
@@ -83,6 +83,23 @@ def test_calltaxi_route_returns_503_without_tmap_key(monkeypatch) -> None:
 def test_calltaxi_route_returns_502_when_tmap_fails() -> None:
     app = create_app()
     app.dependency_overrides[get_tmap_route_client] = lambda: FailingTmapRouteClient()
+    client = TestClient(app)
+
+    response = client.post("/routes/calltaxi", json=_route_request_payload())
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Failed to calculate calltaxi vehicle route"}
+
+
+def test_calltaxi_route_returns_502_when_tmap_returns_invalid_json() -> None:
+    app = create_app()
+    invalid_json_client = httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, text="<html>error</html>"))
+    )
+    app.dependency_overrides[get_tmap_route_client] = lambda: TmapRouteClient(
+        app_key="test-app-key",
+        http_client=invalid_json_client,
+    )
     client = TestClient(app)
 
     response = client.post("/routes/calltaxi", json=_route_request_payload())

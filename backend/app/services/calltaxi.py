@@ -28,6 +28,10 @@ CALLTAXI_AFTER_SECOND_RATE_WON_PER_KM = 70
 class TmapRouteError(RuntimeError):
     """TMAP 자동차 경로를 계산할 수 없을 때 발생한다."""
 
+    def __init__(self, message: str, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
 
 class TmapRouteClient:
     """TMAP 자동차 경로안내 API 클라이언트."""
@@ -71,14 +75,22 @@ class TmapRouteClient:
             else:
                 response = self.http_client.post(self.route_url, params=params, headers=headers, json=payload)
         except httpx.HTTPError as exc:
-            raise TmapRouteError("TMAP route API request failed") from exc
+            raise TmapRouteError("TMAP route API request failed", reason=exc.__class__.__name__) from exc
 
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise TmapRouteError("TMAP route API returned an error status") from exc
+            raise TmapRouteError(
+                "TMAP route API returned an error status",
+                reason=f"status_code={exc.response.status_code}",
+            ) from exc
 
-        return parse_tmap_route_metrics(response.json())
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise TmapRouteError("TMAP route API returned invalid JSON", reason="invalid_json") from exc
+
+        return parse_tmap_route_metrics(payload)
 
 
 def parse_tmap_route_metrics(payload: dict[str, Any]) -> tuple[int, int]:
@@ -89,12 +101,15 @@ def parse_tmap_route_metrics(payload: dict[str, Any]) -> tuple[int, int]:
         distance = properties["totalDistance"]
         time = properties["totalTime"]
     except (KeyError, IndexError, TypeError) as exc:
-        raise TmapRouteError("TMAP route API response does not include route metrics") from exc
+        raise TmapRouteError(
+            "TMAP route API response does not include route metrics",
+            reason="missing_metrics",
+        ) from exc
 
     if not isinstance(distance, int) or not isinstance(time, int):
-        raise TmapRouteError("TMAP route metrics must be integers")
+        raise TmapRouteError("TMAP route metrics must be integers", reason="invalid_metric_type")
     if distance < 0 or time < 0:
-        raise TmapRouteError("TMAP route metrics must not be negative")
+        raise TmapRouteError("TMAP route metrics must not be negative", reason="negative_metrics")
     return distance, time
 
 
