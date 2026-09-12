@@ -8,6 +8,47 @@
 
 ## 기록된 이슈
 
+### 2026-09-12 — ODsay 지하철 경로 smoke test ApiKeyAuthFailed
+
+- **문제 상황**: Backend Phase 5-2 시작 시 로컬 `.env`의 ODsay 키를 사용해 `https://api.odsay.com/v1/api/searchPubTransPathT` 지하철 경로 API를 실제 호출했지만, 모든 샘플 경로에서 HTTP 상태는 `200`이고 본문은 ODsay application error로 반환됐다.
+
+  ```text
+  [ApiKeyAuthFailed] ApiKey authentication failed.
+  ```
+
+- **영향**: 현재 키 상태에서는 환승 0회·1회·2회 실제 ODsay 응답 샘플을 확보할 수 없다. 따라서 Backend Phase 5-2의 핵심 검증 대상인 ODsay 응답의 `stationID`, 역명, 노선명, 도보 subPath, 환승 내부 도보거리·도보시간 포함 여부를 확인할 수 없다.
+- **재현 방법**:
+  1. 루트 `.env`에 `APP_ODSAY_API_KEY` 또는 호환 변수 `ODSAY_API_KEY`를 설정한다.
+  2. 서울시청→강남역, 서울역→강남역, 홍대입구→고속터미널 같은 샘플 좌표로 `searchPubTransPathT`를 호출한다.
+  3. 요청 파라미터에는 `SearchType=0`, `SearchPathType=1`, `SX`, `SY`, `EX`, `EY`, `apiKey`를 포함한다.
+  4. 응답 본문에 `error`가 포함되고 `[ApiKeyAuthFailed] ApiKey authentication failed.`가 반환된다.
+- **확인된 사실**:
+  - 첫 시도에서 로컬 Python SSL 인증서 오류가 발생했지만, 프로젝트 venv의 `httpx`로 재시도해 SSL 문제는 해소됐다.
+  - 요청 자체는 ODsay 서버에 도달했고 HTTP `200` 응답을 받았다.
+  - 응답 본문은 정상 `result.path`가 아니라 application-level `ApiKeyAuthFailed` 오류였다.
+  - 따라서 현재 확인된 범위에서는 JSON 파싱 문제나 네트워크 연결 실패가 아니라 ODsay 인증 단계에서 실패한 것이다.
+- **확정 원인**: 아직 확인되지 않았다.
+- **미확정 원인 후보**:
+  - 현재 키가 backend/server 호출용 키가 아닐 가능성
+  - ODsay 대중교통/지하철 경로 API 권한이 활성화되지 않았을 가능성
+  - Server Key에 필요한 IP 등록이 누락됐을 가능성
+  - ODsay 콘솔의 키 제한 설정과 현재 호출 환경이 맞지 않을 가능성
+- **검토한 대안**:
+  - 인증 실패 상태에서 mock 응답으로 Phase 5-2를 완료 처리: 실제 환승 내부 도보거리·도보시간 검증 목적에 맞지 않아 제외했다.
+  - 임의 환승시간/거리 보정값 사용: 이동약자 대상 서비스에서 근거 없는 과소/과대 추정 위험이 있어 제외했다.
+  - ODsay 실제 키가 정상화될 때까지 5-2를 보류: 실제 응답 기반 검증이라는 Phase 목적에 가장 맞는 방식으로 판단했다.
+- **상태**: 미해결
+- **다음 확인 절차**:
+  1. ODsay 콘솔에서 현재 키가 backend/server 호출용 키인지 확인한다.
+  2. 대중교통/지하철 경로 API 권한 또는 상품이 활성화되어 있는지 확인한다.
+  3. IP 제한이 있다면 현재 호출 환경의 IP가 등록되어 있는지 확인한다.
+  4. 동일한 샘플 요청을 다시 실행해 정상 `result.path`가 반환되는지 확인한다.
+  5. 정상 응답이 확인되면 이 문서의 `확정 원인`과 해결 내용을 갱신한다.
+- **검증 결과**:
+  - `backend/.venv/bin/python` + `httpx` 기준 실제 ODsay 호출은 수행됨
+  - 세 샘플 모두 HTTP `200` + ODsay `error` 본문 반환
+- **남은 한계**: 올바른 ODsay 키/권한/IP 등록이 준비되기 전까지 Backend Phase 5-2의 실제 응답 샘플 확보와 총 도보거리·총 도보시간 검증은 진행할 수 없다.
+
 ### 2026-09-12 — TMAP 자동차 경로안내 smoke test 403 Forbidden
 
 - **문제 상황**: Backend Phase 2에서 로컬 `APP_TMAP_APP_KEY` 또는 호환 변수 `TMAP_APP_KEY`를 사용해 `https://apis.openapi.sk.com/tmap/routes?version=1` 자동차 경로안내 API를 실제 호출했을 때 `403 Forbidden`이 반환됐다.
