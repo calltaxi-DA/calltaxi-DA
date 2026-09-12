@@ -378,6 +378,28 @@
   - Backend Phase 7 추천 정렬 계약이 확정된 뒤 세 이동수단 비교·추천 순서를 UI에 연결한다.
   - 지도 경로선과 실제 환승 내부 무장애 보행정보는 검증된 Backend 데이터가 마련된 뒤 별도 Phase에서 다룬다.
 
+## Frontend Phase 6 — 저상버스 경로 결과 UI (2026-09-13)
+
+- 브랜치: `frontend/phase6-low-floor-bus-route-ui` (base: `dev`)
+- 한 일: 선택한 출발지·목적지를 기존 `POST /routes/bus` 계약으로 보내고, 저상버스 결과의 총 예상시간·예상비용·도보거리·도보시간·버스 경로 요약·노선 단위 접근성 경고를 한 카드에 표시했다. 지하철과 저상버스 요청의 로딩·오류·취소·최신 응답 상태를 독립적으로 관리하며, 저상버스를 선택하지 않았거나 입력 조건이 바뀌면 이전 요청과 결과를 무효화한다. 경로 없음은 수치 0으로 보정하지 않고 Backend의 `unavailable` 사유만 표시한다.
+- 산출물:
+  - `frontend/src/api/bus.ts` — 저상버스 경로 요청·응답 타입과 API client
+  - `frontend/src/components/LowFloorBusRouteCard.tsx` — 시간·비용·도보 부담·경로·저상버스 접근성 결과 카드
+  - `frontend/src/App.tsx`, `frontend/src/index.css` — 기존 장소선택 흐름과 독립 요청 상태·결과 영역 스타일 연결
+  - `frontend/src/__tests__/App.test.tsx` — 요청 body, loading, 성공·오류·unavailable 상태와 필수 결과 표시 검증
+- 검증 결과:
+  - `npm test -- --run` — 22개 통과
+  - `npm run build` — TypeScript 및 Vite production build 통과
+  - `npm run lint` — oxlint 통과
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_bus_routes.py backend/tests/test_bus_service.py` — 54개 통과(기존 Starlette deprecation warning 1건)
+- 확정 기준:
+  - 도보거리·도보시간과 저상버스 접근성 안내는 Backend 값을 그대로 표시하며 프론트에서 추정하거나 접근 가능 여부를 재판정하지 않는다.
+  - 저상버스 정보는 노선 단위 정보이며 실제 도착 차량의 저상 여부를 보장하지 않는다는 Backend warning을 사용자에게 함께 표시한다.
+  - 실제 도착정보·차량별 저상 여부·혼잡도와 지도 경로선은 이번 Phase 범위에 포함하지 않는다.
+- 다음 Phase가 이어받을 것:
+  - 장애인 콜택시 결과 UI와 세 이동수단 추천 결과 UI는 각각 계약과 데이터가 준비된 전용 Frontend Phase에서 연결한다.
+  - 실제 차량 단위 저상 여부는 검증 가능한 Backend 데이터가 확보된 뒤 다룬다.
+
 ## Analysis Phase 7 — 이동수단 비교 분석 (2026-09-12)
 
 - 브랜치: `analysis/phase7-transport-comparison` (base: `dev`)

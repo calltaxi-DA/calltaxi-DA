@@ -2,7 +2,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../App'
+import type { LowFloorBusRouteResult } from '../api/bus'
 import type { SubwayRouteResult } from '../api/subway'
+import LowFloorBusRouteCard from '../components/LowFloorBusRouteCard'
 import SubwayRouteCard from '../components/SubwayRouteCard'
 
 type MockPlace = {
@@ -37,6 +39,24 @@ function createSubwayRoute(summary: string): SubwayRouteResult {
     unavailable_reason: null,
     summary,
     warnings: ['접근성 lookup에 없는 역이 있어 상세 확인이 필요합니다.'],
+  }
+}
+
+function createBusRoute(summary: string): LowFloorBusRouteResult {
+  return {
+    transport_type: 'low_floor_bus',
+    status: 'available',
+    total_time_seconds: 3180,
+    total_distance_meters: 9200,
+    total_cost_won: 1500,
+    walking_distance_meters: 640,
+    walking_time_seconds: 600,
+    unavailable_reason: null,
+    summary,
+    warnings: [
+      '저상버스 접근성은 노선 단위 정보이며 실제 도착 차량의 저상 여부를 보장하지 않습니다.',
+      '도보 수치는 ODsay 경로의 모든 도보 구간 합계입니다.',
+    ],
   }
 }
 
@@ -179,6 +199,7 @@ describe('App', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
     render(<App />)
+    fireEvent.click(screen.getByLabelText('저상버스'))
 
     await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
@@ -229,6 +250,7 @@ describe('App', () => {
     )
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 502 }))
     render(<App />)
+    fireEvent.click(screen.getByLabelText('저상버스'))
 
     await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
@@ -251,6 +273,7 @@ describe('App', () => {
     const fetchMock = vi.fn().mockReturnValue(pending.promise)
     vi.stubGlobal('fetch', fetchMock)
     render(<App />)
+    fireEvent.click(screen.getByLabelText('저상버스'))
 
     await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
@@ -288,6 +311,7 @@ describe('App', () => {
     }))
     vi.stubGlobal('fetch', vi.fn().mockReturnValue(pending.promise))
     render(<App />)
+    fireEvent.click(screen.getByLabelText('저상버스'))
 
     await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
@@ -318,6 +342,7 @@ describe('App', () => {
     }))
     vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(firstRequest.promise).mockReturnValueOnce(secondRequest.promise))
     render(<App />)
+    fireEvent.click(screen.getByLabelText('저상버스'))
 
     await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
@@ -344,6 +369,95 @@ describe('App', () => {
     })
     expect(screen.getByRole('heading', { name: '최신 강남역 경로' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '늦게 도착한 서울역 경로' })).not.toBeInTheDocument()
+  })
+
+  it('shows low-floor bus time, cost, walking burden, route, and accessibility information', async () => {
+    const originPlace = createPlace('origin-place', '서울시청', '126.9786567', '37.566826')
+    const destinationPlace = createPlace('destination-place', '서울역', '126.970671', '37.554678')
+    setupKakaoMock(vi.fn((keyword, callback) => {
+      callback([keyword === '서울역' ? destinationPlace : originPlace], 'OK')
+    }))
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => createBusRoute('701번 저상버스 경로'),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<App />)
+    fireEvent.click(screen.getByLabelText('지하철'))
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.click(screen.getByRole('button', { name: /서울시청/ }))
+    fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '서울역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[1])
+    fireEvent.click(screen.getByRole('button', { name: /서울역/ }))
+    fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+
+    expect(screen.getByText('저상버스 경로와 접근성 정보를 확인하고 있습니다.')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '701번 저상버스 경로' })).toBeInTheDocument()
+    expect(screen.getByText('53분')).toBeInTheDocument()
+    expect(screen.getByText('1,500원')).toBeInTheDocument()
+    expect(screen.getByText('640m')).toBeInTheDocument()
+    expect(screen.getByText('10분')).toBeInTheDocument()
+    expect(screen.getByText(/실제 도착 차량의 저상 여부를 보장하지 않습니다/)).toBeInTheDocument()
+    expect(screen.getByText(/모든 도보 구간 합계입니다/)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/routes\/bus$/),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          origin: {
+            name: '서울시청', latitude: 37.566826, longitude: 126.9786567, address: '서울시청 도로명주소',
+          },
+          destination: {
+            name: '서울역', latitude: 37.554678, longitude: 126.970671, address: '서울역 도로명주소',
+          },
+        }),
+      }),
+    )
+  })
+
+  it('shows a recoverable error when the low-floor bus API request fails', async () => {
+    const originPlace = createPlace('origin-place', '서울시청', '126.9786567', '37.566826')
+    const destinationPlace = createPlace('destination-place', '서울역', '126.970671', '37.554678')
+    setupKakaoMock(vi.fn((keyword, callback) => {
+      callback([keyword === '서울역' ? destinationPlace : originPlace], 'OK')
+    }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 502 }))
+    render(<App />)
+    fireEvent.click(screen.getByLabelText('지하철'))
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.click(screen.getByRole('button', { name: /서울시청/ }))
+    fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '서울역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[1])
+    fireEvent.click(screen.getByRole('button', { name: /서울역/ }))
+    fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('저상버스 경로를 불러오지 못했어요')
+    expect(screen.getByText(/백엔드 실행 상태와 ODsay 설정/)).toBeInTheDocument()
+  })
+
+  it('renders an unavailable low-floor bus route without numeric placeholders', () => {
+    render(<LowFloorBusRouteCard route={{
+      transport_type: 'low_floor_bus',
+      status: 'unavailable',
+      total_time_seconds: null,
+      total_distance_meters: null,
+      total_cost_won: null,
+      walking_distance_meters: null,
+      walking_time_seconds: null,
+      unavailable_reason: '이용 가능한 저상버스 경로가 없습니다.',
+      summary: null,
+      warnings: [],
+    }} />)
+
+    expect(screen.getByText('이용 가능한 저상버스 경로가 없습니다.')).toBeInTheDocument()
+    expect(screen.queryByText('0분')).not.toBeInTheDocument()
+    expect(screen.queryByText('0원')).not.toBeInTheDocument()
   })
 
   it('renders the unavailable contract without numeric placeholders', () => {
