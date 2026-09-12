@@ -354,16 +354,16 @@
 ## Frontend Phase 5 — 지하철 경로 결과 UI (2026-09-12)
 
 - 브랜치: `frontend/phase5-subway-route-ui` (base: `dev`)
-- 한 일: 경로검색 시 선택한 출발지·목적지 좌표를 기존 `POST /routes/subway` 계약으로 보내고, 지하철 결과의 총 예상시간·예상비용·도보거리·도보시간·경로 요약·엘리베이터 접근성 경고를 한 카드에서 확인할 수 있도록 구현했다. 요청 중·실패·경로 없음 상태를 구분하며, 지하철을 선택하지 않은 경우에는 지하철 API를 호출하지 않는다. ODsay 도보 `subPath` 기준이라는 Backend warning을 그대로 표시하고 환승 내부 보행값을 프론트에서 추정하지 않는다.
+- 한 일: 경로검색 시 선택한 출발지·목적지 좌표를 기존 `POST /routes/subway` 계약으로 보내고, 지하철 결과의 총 예상시간·예상비용·도보거리·도보시간·경로 요약·엘리베이터 접근성 경고를 한 카드에서 확인할 수 있도록 구현했다. 요청 중·실패·경로 없음 상태를 구분하며, 지하철을 선택하지 않은 경우에는 지하철 API를 호출하지 않는다. 이동수단 해제, 입력 변경, 새 장소 선택 시 진행 중 요청을 `AbortController`로 취소하고 request ID도 무효화해 이전 조건의 응답이 표시되지 않도록 했다. ODsay 도보 `subPath` 기준이라는 Backend warning을 그대로 표시하고 환승 내부 보행값을 프론트에서 추정하지 않는다.
 - 산출물:
   - `frontend/src/api/subway.ts` — `RouteRequest`·`RouteResult`에 대응하는 타입과 지하철 API client
   - `frontend/src/components/SubwayRouteCard.tsx` — 시간·비용·도보 부담·접근성 결과 카드
   - `frontend/src/App.tsx`, `frontend/src/index.css` — 기존 장소선택 흐름과 API 호출·결과 영역·반응형 스타일 연결
-  - `frontend/src/__tests__/App.test.tsx` — 실제 요청 body, loading, 성공 지표·접근성 안내, 오류 상태 렌더 검증
+  - `frontend/src/__tests__/App.test.tsx` — 실제 요청 body, loading, 성공·오류·unavailable 상태, 이동수단/장소 변경 및 역순 응답 경쟁 조건 검증
   - `frontend/vite.config.ts`, `frontend/.env.example` — 로컬 동일 출처 `/routes` 개발 프록시
   - `docs/troubleshooting.md` — 서로 다른 localhost origin의 CORS 차단과 개발 프록시 해결 기록
 - 검증 결과:
-  - `npm test` — 15개 통과
+  - `npm test` — 19개 통과
   - `npm run build` — TypeScript 및 Vite production build 통과
   - `npm run lint` — oxlint 통과
   - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_subway_routes.py backend/tests/test_subway_service.py` — 14개 통과

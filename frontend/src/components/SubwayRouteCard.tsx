@@ -52,7 +52,7 @@ function SubwayRouteCard({ route }: SubwayRouteCardProps) {
       <div className="result-heading">
         <span className="transport-badge" aria-hidden="true">지하철</span>
         <div>
-          <p className="result-kicker">접근성 정보를 확인한 경로</p>
+          <p className="result-kicker">접근성 안내가 포함된 경로</p>
           <h2 id="subway-result-title">{route.summary ?? '지하철 경로'}</h2>
         </div>
       </div>

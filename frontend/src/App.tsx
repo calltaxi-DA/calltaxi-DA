@@ -169,6 +169,7 @@ function App() {
   const [subwayRoute, setSubwayRoute] = useState<SubwayRouteResult | null>(null)
   const [subwayRouteStatus, setSubwayRouteStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const subwayRequestRef = useRef(0)
+  const subwayAbortControllerRef = useRef<AbortController | null>(null)
 
   const selectedTransportLabels = useMemo(
     () =>
@@ -214,9 +215,19 @@ function App() {
     }
   }, [kakaoMapAppKey])
 
+  useEffect(() => () => subwayAbortControllerRef.current?.abort(), [])
+
+  const invalidateSubwayRoute = () => {
+    subwayRequestRef.current += 1
+    subwayAbortControllerRef.current?.abort()
+    subwayAbortControllerRef.current = null
+    setSubwayRoute(null)
+    setSubwayRouteStatus('idle')
+  }
+
   const updatePlaceQuery = (role: LocationRole, nextValue: string) => {
     placeSearchRequestRef.current[role] += 1
-    subwayRequestRef.current += 1
+    invalidateSubwayRoute()
     markersRef.current[role]?.setMap(null)
     markersRef.current[role] = null
 
@@ -229,11 +240,12 @@ function App() {
     setSelectedPlaces((current) => ({ ...current, [role]: null }))
     setSearchResults((current) => ({ ...current, [role]: [] }))
     setPlaceSearchMessage((current) => ({ ...current, [role]: '' }))
-    setSubwayRoute(null)
-    setSubwayRouteStatus('idle')
   }
 
   const handleTransportToggle = (transportType: string) => {
+    if (transportType === 'subway') {
+      invalidateSubwayRoute()
+    }
     setSelectedTransportTypes((current) =>
       current.includes(transportType)
         ? current.filter((item) => item !== transportType)
@@ -336,6 +348,7 @@ function App() {
 
   const selectPlace = (role: LocationRole, place: PlaceSelection) => {
     placeSearchRequestRef.current[role] += 1
+    invalidateSubwayRoute()
 
     if (role === 'origin') {
       setOrigin(place.name)
@@ -386,6 +399,9 @@ function App() {
 
     setSubwayRoute(null)
     setSubwayRouteStatus('loading')
+    subwayAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    subwayAbortControllerRef.current = abortController
 
     const toRouteLocation = (place: PlaceSelection): RouteLocation => ({
       name: place.name,
@@ -398,13 +414,15 @@ function App() {
       const route = await fetchSubwayRoute({
         origin: toRouteLocation(selectedPlaces.origin),
         destination: toRouteLocation(selectedPlaces.destination),
-      })
+      }, abortController.signal)
       if (subwayRequestRef.current === requestId) {
+        subwayAbortControllerRef.current = null
         setSubwayRoute(route)
         setSubwayRouteStatus('idle')
       }
     } catch {
       if (subwayRequestRef.current === requestId) {
+        subwayAbortControllerRef.current = null
         setSubwayRoute(null)
         setSubwayRouteStatus('error')
       }
