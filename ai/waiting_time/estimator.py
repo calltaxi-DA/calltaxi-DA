@@ -15,7 +15,7 @@ TODO: `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`과
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TypeAlias
+from typing import Any, TypeAlias
 from zoneinfo import ZoneInfo
 
 ModelFeatureValue: TypeAlias = str | int | float
@@ -28,6 +28,7 @@ SUPPORTED_PURPOSES = ("기타", "귀가", "치료", "재활", "통학/출근", "
 SUPPORTED_MOVEMENT_TYPES = ("구 내 이동", "구 간 이동", "서울→서울 외", "서울 외→서울")
 UNAVAILABLE_HOURS = tuple(range(2, 7))
 TRAINING_TARGET_MAX_MINUTES = 130
+OUT_OF_TRAINING_TARGET_RANGE_WARNING = "out_of_training_target_range"
 MODEL_FEATURE_COLUMNS = (
     "hour",
     "이용목적",
@@ -55,6 +56,25 @@ class WaitingTimeEstimate:
     hour_of_day: int
     model_name: str | None = None
     warnings: tuple[str, ...] = ()
+
+    @property
+    def waitingTime(self) -> float:
+        """Backend 서비스 계약에서 쓰는 `waitingTime` alias.
+
+        내부 계산은 Python 스타일의 `expected_minutes`를 유지하되, Backend 응답에
+        연결될 값이 분(minutes) 단위의 `waitingTime`이라는 점을 명확히 한다.
+        """
+
+        return self.expected_minutes
+
+    def to_backend_output(self) -> dict[str, object]:
+        """Backend가 응답/경로 계산에 사용할 수 있는 출력 dict를 반환한다."""
+
+        return {
+            "waitingTime": self.waitingTime,
+            "unit": WAITING_TIME_UNIT,
+            "warnings": self.warnings,
+        }
 
 
 @dataclass(frozen=True)
@@ -160,6 +180,36 @@ def estimate_waiting_minutes(hour_of_day: int) -> WaitingTimeEstimate:
     )
 
 
+def map_prediction_output_to_waiting_time(
+    raw_prediction: object,
+    *,
+    hour_of_day: int,
+    model_name: str | None = None,
+) -> WaitingTimeEstimate:
+    """모델 raw output을 Backend가 사용할 대기시간 출력으로 변환한다.
+
+    scikit-learn 계열 모델의 `predict()`는 보통 `[12.3]`, `array([12.3])`,
+    또는 `array([[12.3]])`처럼 1건 예측값을 컨테이너로 반환한다. 이 함수는
+    1건 예측값만 분(minutes) 단위 숫자로 확정하고, invalid output은 unavailable
+    처리할 수 있도록 `ValueError`로 거부한다.
+    """
+
+    if not 0 <= hour_of_day <= 23:
+        raise ValueError("hour_of_day는 0~23 사이여야 합니다")
+
+    expected_minutes = _coerce_prediction_minutes(raw_prediction)
+    warnings: tuple[str, ...] = ()
+    if expected_minutes > TRAINING_TARGET_MAX_MINUTES:
+        warnings = (OUT_OF_TRAINING_TARGET_RANGE_WARNING,)
+
+    return WaitingTimeEstimate(
+        expected_minutes=expected_minutes,
+        hour_of_day=hour_of_day,
+        model_name=model_name,
+        warnings=warnings,
+    )
+
+
 def estimate_waiting_minutes_for_input(
     prediction_input: WaitingTimePredictionInput,
 ) -> WaitingTimeEstimate:
@@ -173,3 +223,33 @@ def estimate_waiting_minutes_for_input(
     raise NotImplementedError(
         "장애인 콜택시 통합 대기시간 Prediction 모델 artifact 호출은 아직 연결되지 않았습니다."
     )
+
+
+def _coerce_prediction_minutes(raw_prediction: object) -> float:
+    value = _unwrap_single_prediction(raw_prediction)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("모델 예측값은 분 단위 숫자여야 합니다")
+
+    prediction_minutes = float(value)
+    if not math.isfinite(prediction_minutes):
+        raise ValueError("모델 예측값은 finite 숫자여야 합니다")
+    if prediction_minutes < 0:
+        raise ValueError("모델 예측값은 0 이상이어야 합니다")
+    return prediction_minutes
+
+
+def _unwrap_single_prediction(raw_prediction: object) -> Any:
+    if hasattr(raw_prediction, "tolist"):
+        raw_prediction = raw_prediction.tolist()  # type: ignore[attr-defined]
+    elif hasattr(raw_prediction, "item"):
+        try:
+            raw_prediction = raw_prediction.item()  # type: ignore[attr-defined]
+        except ValueError:
+            pass
+
+    if isinstance(raw_prediction, (list, tuple)):
+        if len(raw_prediction) != 1:
+            raise ValueError("모델 예측값은 1건이어야 합니다")
+        return _unwrap_single_prediction(raw_prediction[0])
+
+    return raw_prediction
