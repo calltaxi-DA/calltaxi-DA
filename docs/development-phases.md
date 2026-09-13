@@ -1061,14 +1061,15 @@
   - Prediction 결과와 TMAP 차량 이동시간은 콜택시 `RouteResult`의 `predicted_waiting_time_seconds`, `vehicle_time_seconds`, `total_time_seconds`로 함께 검증된다.
   - 모델 artifact, 분석 export, 추천 정렬 정책, API schema, Frontend UI는 변경하지 않았다.
 - 검증 결과:
-- `PYTHONPATH=backend:. python3 -m pytest backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py -q` — 30개 통과
-- `PYTHONPATH=backend:. python3 -m pytest backend/tests ai/tests` — 260개 통과
-- `PYTHONPATH=backend:. python3 -m pytest src/tests backend/tests ai/tests` — 281개 통과
+  - `PYTHONPATH=backend:. python3 -m pytest backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py -q` — 30개 통과
+  - `PYTHONPATH=backend:. .venv-ci312/bin/python -m pytest backend/tests ai/tests` — 260개 통과, CI와 같은 Python 3.12 환경에서 확인
+  - `PYTHONPATH=backend:. .venv-ci312/bin/python -m pytest src/tests backend/tests ai/tests` — 281개 통과, CI와 같은 Python 3.12 환경에서 확인
   - `python3 -m src.data_quality --check-report docs/validation/phase9-audit-2026-09-13.json` — errors 없음
   - `git diff --check` — 통과
 - 자체 리뷰:
   - 이번 Phase는 기존 `RouteResult` 구성요소 계약을 바꾸지 않고, AI Adapter 출력 계약을 Backend 계산 경로에서 실제로 소비하도록 좁게 정리했다.
   - unit mismatch를 invalid prediction으로 처리해 분/초 단위 혼선을 숫자 fallback으로 복구하지 않는다.
+  - production-provider 테스트가 실제 현재 시각에 의존해 새벽 serving window 밖에서 실패하던 문제를 발견해 테스트 시각을 deterministic하게 고정했고, 재발 가능성이 있어 `docs/troubleshooting/phase7-ci-serving-window-flake.md`에 기록했다.
   - 실제 1.48GB joblib artifact smoke test는 이번 범위가 아니며, 운영 검증 Phase에서 수행한다.
 - 다음에 이어받을 것:
   - 실제 artifact와 운영 lookup이 준비된 환경에서 Backend provider end-to-end smoke test를 수행한다.
