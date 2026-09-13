@@ -1040,3 +1040,40 @@
 - 다음에 이어받을 것:
   - Frontend 표시 Phase에서 콜택시 카드에 대기시간/차량시간/총시간 breakdown을 보여줄지 결정한다.
   - 운영 모니터링 Phase에서 대기시간 component, 차량시간, 모델 warning을 구조화 로그/관측 지표로 남긴다.
+
+## Frontend Phase 3 — Backend 경로검색 API 연결 보강 (2026-09-14)
+
+- 브랜치: `frontend/phase3-backend-route-search-api` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
+- 작업 전 확인:
+  - 반드시 읽은 파일: `AGENTS.md`, `docs/architecture.md`, `docs/decisions/0003-frontend-map-sdk-exception.md`, `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md`, `docs/development-phases.md`, `backend/app/api/contracts.py`, `frontend/src/App.tsx`, `frontend/src/api/recommendation.ts`, `frontend/src/__tests__/App.test.tsx`
+  - 이번 Phase에서 수정한 파일: `frontend/src/App.tsx`, `frontend/src/api/recommendation.ts`, `frontend/src/__tests__/App.test.tsx`, `docs/development-phases.md`
+  - 참고만 하고 수정하지 않은 파일: `backend/app/api/contracts.py`, `backend/app/services/route_orchestration.py`, `ai/waiting_time/estimator.py`, `analysis/`, `data/`, `notebooks*/`
+  - 이번 Phase 범위에 포함하지 않은 작업: Backend 추천 정렬 변경, AI Prediction 재학습·artifact 수정, Kakao/ODsay/TMAP provider 변경, 추천 결과 카드의 콜택시 시간 breakdown UI 추가, 교통비 캘린더 변경
+- 핵심 목표: 사용자가 선택한 출발지·목적지 좌표, 이동수단 선택값, 추천 우선순위를 Frontend에서 Backend 추천 API로 보내고 `RouteResult` 기반 추천 결과를 수신하는 흐름을 최신 Backend 계약에 맞춰 보강했다.
+- 한 일:
+  - `RecommendationRequest` 타입에 Backend가 받는 `calltaxi_purpose`를 추가했다.
+  - 장애인 콜택시가 선택된 경우 이용목적을 선택해야 경로검색을 보낼 수 있도록 입력 조건을 추가했다.
+  - 콜택시 선택 시 `calltaxi_purpose`를 `POST /routes/recommendations` 요청 body에 포함하고, 콜택시를 해제한 경우에는 해당 값을 전송하지 않도록 했다.
+  - 입력 장소, 이동수단, 우선순위, 콜택시 이용목적이 변경되면 기존 추천 결과와 진행 중 요청을 무효화하는 기존 stale-response 방어 흐름을 유지했다.
+  - 프론트 테스트에 콜택시 이용목적 필수 조건과 request body mapping 검증을 추가했다.
+- 산출물:
+  - `frontend/src/App.tsx`
+  - `frontend/src/api/recommendation.ts`
+  - `frontend/src/__tests__/App.test.tsx`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - Frontend는 출발지·목적지 좌표, 선택 이동수단, 우선순위, 콜택시 이용목적을 Backend 추천 API에 전달한다.
+  - 선택하지 않은 이동수단은 Backend 요청 대상에서 제외되며, 콜택시를 선택하지 않으면 `calltaxi_purpose`도 전송하지 않는다.
+  - 경로 계산, 추천 정렬, 요금·시간·도보 판단은 Frontend에서 재계산하지 않고 Backend 응답을 그대로 표시한다.
+  - `data/`, `notebooks*/`, `analysis/`, `ai/`, Backend provider 로직은 변경하지 않았다.
+- 검증 결과:
+  - `frontend/`에서 `npm test -- --run` — 2개 파일, 22개 테스트 통과.
+  - `frontend/`에서 `npm run build` — TypeScript build 및 Vite production build 통과.
+  - 최초 `npm test -- --run`은 별도 worktree에 `node_modules`가 없어 `vitest: command not found`로 실패했다. `npm ci`로 `package-lock.json` 기준 의존성을 설치한 뒤 동일 명령이 통과했다.
+- 자체 리뷰:
+  - 새 입력값은 Backend 계약에 이미 존재하는 `calltaxi_purpose`를 전달하기 위한 UI/요청 mapping이며, 임의 목적 기본값을 넣지 않는다.
+  - 이용목적이 없는 콜택시 요청을 막아 Backend가 필수 feature 누락으로 콜택시를 `unavailable` 처리하는 상황을 줄였다.
+  - 기존 abort/request id 기반 stale-response 방어를 변경하지 않고, 콜택시 이용목적 변경도 동일하게 추천 결과를 무효화한다.
+- 다음에 이어받을 것:
+  - 콜택시 결과 카드에서 `predicted_waiting_time_seconds`, `vehicle_time_seconds`, `total_time_seconds`를 사용자에게 어떻게 나눠 보여줄지 결정한다.
+  - 실제 배포 환경에서는 `VITE_API_BASE_URL`과 Backend `APP_CORS_ALLOW_ORIGINS`를 같은 origin 정책에 맞춰 설정한다.
