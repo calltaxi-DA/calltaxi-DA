@@ -960,3 +960,35 @@
 - 다음에 이어받을 것:
   - 실제 joblib artifact와 운영 lookup이 준비된 환경에서 Backend provider smoke test를 반복한다.
   - 운영 모니터링 Phase에서 `prediction_unavailable_reason`, 모델 버전, inference latency를 관측 가능하게 남긴다.
+
+## AI Phase 6 — Backend 통합 시간 기준 보강 (2026-09-14)
+
+- 브랜치: `ai/phase6-waiting-time-backend-integration` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: Backend가 통합 장애인 콜택시 대기시간 Prediction 결과를 사용할 때, Adapter 입력과 Backend lookup이 같은 Asia/Seoul 시간 기준으로 연결되는지 확인하고 보강했다.
+- 한 일:
+  - `ConfiguredWaitingTimeInputBuilder`가 요청 시각을 Asia/Seoul 기준으로 정규화한 뒤 D-1 차량운행 lookup 날짜와 시간별 서울 날씨 lookup key를 만들도록 했다.
+  - `JsonWeatherObservationProvider`도 입력 시각을 Asia/Seoul 기준 정시로 정규화해 날씨 observation을 찾도록 보강했다.
+  - timezone-naive `requested_at`은 feature mapping 단계에서 `WaitingTimeFeatureMappingError`로 거부해 조용히 로컬 timezone으로 해석되지 않게 했다.
+  - UTC로 들어온 요청 시각이 Seoul 09시 weather lookup과 전일 차량운행 lookup으로 정상 mapping되는 테스트를 추가했다.
+  - Git LFS filter 권한 문제로 `git status`가 실패하는 재현 가능한 worktree 문제를 `docs/troubleshooting/phase6-worktree-lfs-status.md`에 기록했다.
+- 산출물:
+  - `backend/app/services/waiting_time_features.py`
+  - `backend/tests/test_waiting_time_features.py`
+  - `docs/troubleshooting/phase6-worktree-lfs-status.md`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - Backend는 Prediction feature source의 날짜/시간 lookup을 Asia/Seoul 서비스 시간으로 수행한다.
+  - AI Adapter는 기존 계약대로 `WaitingTimePredictionInput.to_model_features()`에서 Asia/Seoul 기준 `hour`, `month`, `dayofweek`를 생성한다.
+  - 모델 artifact, metadata, analysis export, API schema, 추천 정렬 정책, Frontend UI는 변경하지 않았다.
+  - 대기시간 Prediction 실패 시 fallback 숫자를 만들지 않는 Phase 5 정책을 유지한다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. python3 -m pytest backend/tests/test_waiting_time_features.py backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py ai/tests/test_estimator.py -q` — 103개 통과
+  - `PYTHONPATH=backend:. python3 -m pytest backend/tests ai/tests` — 254개 통과
+- 자체 리뷰:
+  - 이번 변경은 lookup key 생성의 timezone 기준을 보강하는 좁은 수정이며, 새 데이터 source나 fallback 정책을 추가하지 않았다.
+  - `requested_at`을 Seoul로 정규화해 Adapter 입력에도 넘기므로 Backend lookup과 AI feature `hour/month/dayofweek`가 같은 기준을 사용한다.
+  - 실제 운영 smoke test는 TMAP key, operation/weather lookup, Git LFS artifact, ML 의존성이 모두 준비된 환경에서 별도로 반복해야 한다.
+- 다음에 이어받을 것:
+  - 운영 lookup 갱신 절차와 stale/missing 관측값 모니터링을 확정한다.
+  - `prediction_unavailable_reason`, 모델 version, inference latency를 로그/metric으로 분리한다.
+  - 실제 `git lfs pull` 완료 환경에서 Backend provider end-to-end smoke test를 수행한다.
