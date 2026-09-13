@@ -1153,3 +1153,43 @@
 - 다음에 이어받을 것:
   - 실제 운영 Backend와 연결한 smoke test에서 콜택시 available 응답이 내려오는 환경을 구성해 카드 표시를 확인한다.
   - 필요하면 결과 카드의 시각적 강조 순서(총 예상시간 vs 대기시간)를 사용자 테스트 후 조정한다.
+
+## AI Phase 8 — 실행환경 및 모델 파일 관리 (2026-09-14)
+
+- 브랜치: `ai/phase8-model-runtime-management` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
+- 작업 전 확인:
+  - 반드시 읽은 파일: `AGENTS.md`, `docs/architecture.md`, `docs/decisions/0006-wait-time-prediction-contract.md`, `analysis/README.md`, `analysis/service_data_manifest.json`, `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json`, `analysis/waiting_time/rf_v2_prev_day_weather_serving_feature_mapping.md`, `ai/waiting_time/estimator.py`, `ai/waiting_time/validation.py`, `backend/requirements.txt`, `.env.example`, `docs/development-phases.md`
+  - 이번 Phase에서 수정한 파일: `.env.example`, `backend/requirements.txt`, `ai/waiting_time/estimator.py`, `ai/waiting_time/validation.py`, `ai/waiting_time/runtime.py`, `ai/tests/test_runtime.py`, `analysis/README.md`, `analysis/waiting_time/model_runtime.md`, `docs/troubleshooting/phase8-wait-time-runtime-environment.md`, `docs/development-phases.md`
+  - 참고만 하고 수정하지 않은 파일: `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`, `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json`, `analysis/waiting_time/prediction_validation_phase4.json`, `data/`, `notebooks*/`, `frontend/`, Backend route/provider 로직
+  - 이번 Phase 범위에 포함하지 않은 작업: 모델 재학습, joblib artifact 교체, feature set 변경, Backend 추천 정렬 변경, Frontend 표시 변경, 운영 lookup 데이터 생성
+- 핵심 목표: 새로운 개발환경에서도 통합 장애인 콜택시 대기시간 Prediction 모델을 같은 조건으로 실행할 수 있도록 Python 버전, ML 의존성, 모델 artifact 경로, metadata, Git LFS 상태를 점검하는 기준과 명령을 추가했다.
+- 한 일:
+  - `APP_WAITING_TIME_MODEL_PATH`, `APP_WAITING_TIME_MODEL_METADATA_PATH` 환경변수를 추가해 기본 artifact/metadata 경로를 유지하면서도 로컬 환경별 override가 가능하게 했다.
+  - `ai.waiting_time.runtime` 모듈을 추가해 Python 3.12.x, `joblib==1.4.2`, `pandas==2.2.3`, `scikit-learn==1.9.0`, `numpy==2.5.2`, `scipy==1.18.1`, `threadpoolctl==3.6.0`, 모델 artifact 존재 여부, artifact size, Git LFS pointer 여부, metadata model name/created_at/reported MAE/target unit/feature 순서를 한 번에 검증하도록 했다.
+  - `backend/requirements.txt`에 실제 joblib 모델 실행에 관여하는 핵심 transitive dependency(`numpy`, `scipy`, `threadpoolctl`)도 명시적으로 고정했다.
+  - 기존 sample prediction validation도 새 metadata path 상수를 공유하도록 정리해 env override와 validation 기본 경로가 어긋나지 않게 했다.
+  - `analysis/waiting_time/model_runtime.md`에 새 개발환경 준비 절차, LFS pull, runtime check, 실제 artifact smoke validation 명령, 실패 해석을 문서화했다.
+  - runtime 문서는 서비스가 직접 소비하는 export가 아니므로 `analysis/service_data_manifest.json`의 service export 목록은 변경하지 않았다.
+  - 실행환경 검증 중 발견한 `backend/.venv` pip 부재, 루트 `.venv` dependency version drift, sandbox PyPI DNS 제한 이슈를 `docs/troubleshooting/phase8-wait-time-runtime-environment.md`에 기록했다.
+- 확정 동작:
+  - 기본 모델 artifact 경로는 `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`이고, metadata 경로는 `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json`이다.
+  - 상대경로 환경변수는 저장소 루트 기준으로 해석하며, 절대경로도 허용한다.
+  - runtime check가 실패하면 모델을 임의 fallback 값으로 실행하지 않고, Python/dependency/artifact size/artifact LFS 상태/metadata version 중 실패 지점을 명확히 보여준다.
+  - 실제 Prediction 단위는 기존 계약대로 `minutes`이며, Backend seconds 변환 정책은 변경하지 않았다.
+- 검증 결과:
+  - 최초 `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m ai.waiting_time.runtime` — 실패. `backend/.venv`에는 `joblib`, `pandas`, `scikit-learn`이 설치되지 않았고 `pip`도 없어 requirements 설치를 수행할 수 없었다.
+  - 최초 `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/.venv/bin/python -m ai.waiting_time.runtime` — 실패. Python 3.12과 실제 모델 artifact는 준비되어 있었지만 `joblib==1.6.0`, `pandas==3.0.5`로 requirements와 버전이 달랐다.
+  - 최초 `/Users/blaumonde/calltaxi-DA/.venv/bin/python -m pip install -r backend/requirements.txt` — sandbox 네트워크 제한으로 PyPI DNS 조회 실패. 권한 승인 후 동일 명령 성공.
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/.venv/bin/python -m ai.waiting_time.runtime` — 통과. Python 3.12.14, `joblib==1.4.2`, `pandas==2.2.3`, `scikit-learn==1.9.0`, `numpy==2.5.2`, `scipy==1.18.1`, `threadpoolctl==3.6.0`, 실제 joblib artifact size `1480271962`, metadata model name/created_at/reported MAE/feature 순서 확인.
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/.venv/bin/python -m ai.waiting_time.validation --output analysis/waiting_time/prediction_validation_phase4.json` — 통과. 임차택시 바로콜 `41.21341000519471`분, 특장차 바로콜 `40.50492956696943`분, conservative max `41.21341000519471`분/`2473`초. 실행 시 `validated_at`만 갱신되어 커밋 대상에서는 원복했다.
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/.venv/bin/python -m pytest ai/tests/test_runtime.py ai/tests/test_estimator.py ai/tests/test_prediction_validation.py -q` — 54개 통과.
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/.venv/bin/python -m pytest backend/tests ai/tests -q` — 270개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건.
+  - `git diff --check` — 통과.
+- 자체 리뷰:
+  - 모델 artifact, metadata, feature set, 추천 정렬, Backend API, Frontend UI는 변경하지 않았다.
+  - runtime check는 실제 joblib 로딩 전 단계의 환경 검증이고, 실제 모델 추론값 검증은 기존 `ai.waiting_time.validation` 명령으로 분리했다.
+  - 의존성 버전 drift를 warning으로 통과시키지 않고 실패로 처리해 “동일 조건 실행”이라는 Phase 8 목표에 맞췄다.
+- 다음에 이어받을 것:
+  - 운영/시연 환경에서는 runtime check를 배포 전 smoke test에 포함한다.
+  - `backend/.venv`가 pip 없이 생성되는 환경에서는 venv 재생성 또는 `ensurepip` 가능 여부를 환경 세팅 가이드에 반영한다.
+  - 실제 운영 lookup fresheness와 Prediction warning 관측 지표는 운영 모니터링 Phase에서 정리한다.
