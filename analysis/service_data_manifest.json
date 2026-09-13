@@ -1,13 +1,73 @@
 {
   "schema_version": "1.1",
   "service_exports": [
-    {"domain":"subway","path":"analysis/subway/station_accessibility_master.csv","format":"csv","consumer":"backend subway accessibility provider","status":"available","source_period":"2025-12"},
-    {"domain":"low_floor_bus","path":"analysis/bus/low_floor_bus_route_master.csv","format":"csv","consumer":"backend low-floor bus provider","status":"available","source_period":"2025"},
-    {"domain":"low_floor_bus","path":"analysis/bus/odsay_seoul_bus_route_mapping.csv","format":"csv","consumer":"backend ODsay bus route provider","status":"available"}
+    {
+      "domain": "subway",
+      "path": "analysis/subway/station_accessibility_master.csv",
+      "format": "csv",
+      "consumer": "backend subway accessibility provider",
+      "status": "available",
+      "source_period": "2025-12"
+    },
+    {
+      "domain": "low_floor_bus",
+      "path": "analysis/bus/low_floor_bus_route_master.csv",
+      "format": "csv",
+      "consumer": "backend low-floor bus provider",
+      "status": "available",
+      "source_period": "2025"
+    },
+    {
+      "domain": "low_floor_bus",
+      "path": "analysis/bus/odsay_seoul_bus_route_mapping.csv",
+      "format": "csv",
+      "consumer": "backend ODsay bus route provider",
+      "status": "available"
+    },
+    {
+      "domain": "waiting_time",
+      "path": "analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib",
+      "format": "joblib",
+      "consumer": "ai waiting-time adapter",
+      "status": "available",
+      "storage": "git_lfs"
+    },
+    {
+      "domain": "waiting_time",
+      "path": "analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json",
+      "format": "json",
+      "consumer": "ai waiting-time adapter",
+      "status": "available"
+    },
+    {
+      "domain": "waiting_time",
+      "path": "analysis/waiting_time/rf_v2_prev_day_weather_serving_feature_mapping.md",
+      "format": "markdown",
+      "consumer": "ai waiting-time adapter",
+      "status": "available"
+    }
   ],
   "reviewed_analysis_exports": [
-    {"domain":"hospital","path":"analysis/hospital/hospital_analytics.json","format":"json","status":"reviewed_not_served","source_period":"2025"},
-    {"domain":"hospital","path":"analysis/hospital/figures/medical_same_vs_different_district.png","format":"png","status":"reviewed_not_served","source_period":"2025"},
-    {"domain":"hospital","path":"analysis/hospital/figures/medical_within_5km_coverage.png","format":"png","status":"reviewed_not_served","source_period":"2025"}
+    {
+      "domain": "hospital",
+      "path": "analysis/hospital/hospital_analytics.json",
+      "format": "json",
+      "status": "reviewed_not_served",
+      "source_period": "2025"
+    },
+    {
+      "domain": "hospital",
+      "path": "analysis/hospital/figures/medical_same_vs_different_district.png",
+      "format": "png",
+      "status": "reviewed_not_served",
+      "source_period": "2025"
+    },
+    {
+      "domain": "hospital",
+      "path": "analysis/hospital/figures/medical_within_5km_coverage.png",
+      "format": "png",
+      "status": "reviewed_not_served",
+      "source_period": "2025"
+    }
   ]
 }

@@ -1,0 +1,160 @@
+{
+  "model_name": "RandomForest Feature Set v2 + vehicle_operation_count_prev_day + weather",
+  "target_col": "target_min",
+  "target_unit": "minutes",
+  "features": [
+    "hour",
+    "이용목적",
+    "승차거리",
+    "출발동",
+    "목적동",
+    "출발구",
+    "목적구",
+    "month",
+    "세부이동유형",
+    "dayofweek",
+    "model_group",
+    "vehicle_operation_count_prev_day",
+    "temperature_c",
+    "precipitation_mm",
+    "wind_speed_ms",
+    "snow_depth_cm",
+    "is_bad_weather"
+  ],
+  "categorical_cols": [
+    "이용목적",
+    "출발동",
+    "목적동",
+    "출발구",
+    "목적구",
+    "세부이동유형",
+    "model_group"
+  ],
+  "numeric_cols": [
+    "hour",
+    "승차거리",
+    "month",
+    "dayofweek",
+    "vehicle_operation_count_prev_day",
+    "temperature_c",
+    "precipitation_mm",
+    "wind_speed_ms",
+    "snow_depth_cm",
+    "is_bad_weather"
+  ],
+  "train_rows": 1293478,
+  "excluded_rule": "target_min > 130 or hour between 02 and 06 excluded from general model",
+  "reported_test_metrics_source": "train/valid/test experiment before final full-data refit",
+  "reported_test_MAE": 11.105367785137439,
+  "reported_test_Median_AE": 8.077358625496542,
+  "reported_test_RMSE": 15.332262378232757,
+  "reported_test_R2": 0.6010887068297474,
+  "reported_test_risk_F1": 0.5077216137152187,
+  "prediction_domain": {
+    "supported_hours": [
+      "00:00-01:59",
+      "07:00-23:59"
+    ],
+    "unavailable_hours": [
+      "02:00-06:59"
+    ],
+    "training_target_max_minutes": 130,
+    "training_target_max_policy": "warning_only",
+    "invalid_prediction_policy": [
+      "non_numeric -> unavailable",
+      "nan -> unavailable",
+      "inf -> unavailable",
+      "negative -> unavailable"
+    ],
+    "prediction_over_130_policy": "return_prediction_with_out_of_training_target_range_warning"
+  },
+  "serving_requirements": {
+    "model_group": {
+      "categories": [
+        "임차택시_바로콜",
+        "특장차_바로콜"
+      ],
+      "policy": "predict_both_and_use_max",
+      "warning_required": true
+    },
+    "purpose": {
+      "source": "user_selection",
+      "allowed_categories": [
+        "기타",
+        "귀가",
+        "치료",
+        "재활",
+        "통학/출근",
+        "종교"
+      ],
+      "default_value": null,
+      "unsupported_value_policy": "prediction_unavailable"
+    },
+    "location": {
+      "source": "kakao_address_metadata_or_reverse_geocoding",
+      "required_fields": [
+        "출발구",
+        "출발동",
+        "목적구",
+        "목적동"
+      ],
+      "normalization_owner": "backend",
+      "normalization_failure_policy": "prediction_unavailable"
+    },
+    "movement_type": {
+      "supported_categories": [
+        "구 간 이동",
+        "구 내 이동",
+        "서울 외→서울",
+        "서울→서울 외"
+      ],
+      "outside_seoul_to_outside_seoul_policy": "prediction_unavailable"
+    },
+    "time_features": {
+      "timezone": "Asia/Seoul",
+      "hour_source": "request_or_search_timestamp",
+      "month_source": "request_or_search_timestamp",
+      "dayofweek_source": "request_or_search_timestamp",
+      "dayofweek_rule": "pandas Timestamp.dayofweek convention: Monday=0 through Sunday=6"
+    },
+    "ride_distance": {
+      "feature": "승차거리",
+      "source": "tmap_vehicle_route_distance",
+      "unit": "meters",
+      "conversion": "none",
+      "training_rule": "model input uses original 승차거리 column; historical 승차거리_km was derived as 승차거리 / 1000 and is not a model feature",
+      "missing_policy": "prediction_unavailable"
+    },
+    "vehicle_operation_count_prev_day": {
+      "source": "daily_refreshed_calltaxi_operation_count_lookup",
+      "definition": "request_date D uses operation count from D-1",
+      "missing_policy": "prediction_unavailable",
+      "stale_fallback": false
+    },
+    "weather": {
+      "source": "official_hourly_seoul_weather_observation",
+      "scope": "current_or_immediate_requests_only",
+      "future_forecast_supported": false,
+      "missing_policy": "prediction_unavailable",
+      "fallback": null,
+      "model_features": [
+        "temperature_c",
+        "precipitation_mm",
+        "wind_speed_ms",
+        "snow_depth_cm",
+        "is_bad_weather"
+      ],
+      "auxiliary_inputs": [
+        "new_snow_3h_cm"
+      ],
+      "is_bad_weather_rule": {
+        "rain": "precipitation_mm > 0",
+        "snow": "snow_depth_cm > 0 or new_snow_3h_cm > 0",
+        "cold_wave_like": "temperature_c <= -5",
+        "strong_wind": "wind_speed_ms >= 5",
+        "combined": "rain or snow or cold_wave_like or strong_wind"
+      }
+    }
+  },
+  "created_at": "2026-09-13T20:07:44"
+}
