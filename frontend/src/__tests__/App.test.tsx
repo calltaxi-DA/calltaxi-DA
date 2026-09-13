@@ -47,6 +47,10 @@ async function selectRoutePlaces() {
   fireEvent.click(screen.getAllByRole('button', { name: '검색' })[1]); fireEvent.click(screen.getByRole('button', { name: /강남역/ }))
 }
 
+function selectCalltaxiPurpose(purpose = '치료') {
+  fireEvent.change(screen.getByLabelText('장애인 콜택시 이용목적'), { target: { value: purpose } })
+}
+
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done }); return { promise, resolve } }
 
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.unstubAllGlobals(); delete window.kakao })
@@ -67,18 +71,29 @@ describe('Frontend Phase 7 recommendation UI', () => {
     expect(screen.getByRole('button', { name: '경로검색' })).toBeEnabled()
   })
 
+  it('requires calltaxi purpose when calltaxi is selected', async () => {
+    setupKakaoMock(); render(<App />); await selectRoutePlaces()
+    expect(screen.getByRole('button', { name: '경로검색' })).toBeDisabled()
+    expect(screen.getByText('장애인 콜택시를 포함해 검색하려면 이동 조건 설정에서 이용목적을 선택해주세요.')).toBeInTheDocument()
+    selectCalltaxiPurpose()
+    expect(screen.getByRole('button', { name: '경로검색' })).toBeEnabled()
+    expect(screen.queryByText('장애인 콜택시를 포함해 검색하려면 이동 조건 설정에서 이용목적을 선택해주세요.')).not.toBeInTheDocument()
+  })
+
   it('sends only selected transport types to the backend', async () => {
     setupKakaoMock(); const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ...recommendationResult(), transport_types: ['subway', 'low_floor_bus'] }) }); vi.stubGlobal('fetch', fetchMock); render(<App />); await selectRoutePlaces()
     fireEvent.click(screen.getByLabelText('장애인 콜택시')); fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
     expect(screen.getByText('선택한 이동수단의 경로와 추천 순위를 계산하고 있습니다.')).toBeInTheDocument()
     expect(screen.queryByText(/세 이동수단의 경로/)).not.toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).transport_types).toEqual(['subway', 'low_floor_bus'])
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.transport_types).toEqual(['subway', 'low_floor_bus'])
+    expect(body.calltaxi_purpose).toBeUndefined()
   })
 
   it('requests backend-owned recommendations and compares ranked metrics and accessibility', async () => {
     setupKakaoMock(); const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => recommendationResult() }); vi.stubGlobal('fetch', fetchMock); render(<App />)
-    await selectRoutePlaces(); fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+    await selectRoutePlaces(); selectCalltaxiPurpose(); fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
     expect(screen.getByText('선택한 이동수단의 경로와 추천 순위를 계산하고 있습니다.')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: '추천 경로 최대 TOP 3' })).toBeInTheDocument()
     expect(screen.getByText('1위')).toBeInTheDocument(); expect(screen.getByText('2위')).toBeInTheDocument()
@@ -87,11 +102,12 @@ describe('Frontend Phase 7 recommendation UI', () => {
     expect(screen.getByText(/대기시간 예측 모델이 연결되지 않았습니다/)).toBeInTheDocument()
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.priorities).toEqual(['time', 'cost', 'walk']); expect(body.transport_types).toEqual(['calltaxi', 'subway', 'low_floor_bus'])
+    expect(body.calltaxi_purpose).toBe('치료')
   })
 
   it('sends the swapped priority order without ranking routes in the frontend', async () => {
     setupKakaoMock(); const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ...recommendationResult(), priorities: ['walk', 'cost', 'time'] }) }); vi.stubGlobal('fetch', fetchMock); render(<App />)
-    await selectRoutePlaces()
+    await selectRoutePlaces(); selectCalltaxiPurpose()
     const walkItem = screen.getByText('3순위 최소 도보').closest('li'); const timeItem = screen.getByText('1순위 시간 우선').closest('li')
     fireEvent.dragStart(walkItem!); fireEvent.dragOver(timeItem!); fireEvent.drop(timeItem!)
     expect(screen.getByText('1순위 최소 도보')).toBeInTheDocument(); expect(screen.getByText('2순위 시간 우선')).toBeInTheDocument(); expect(screen.getByText('3순위 금액 우선')).toBeInTheDocument()
@@ -102,20 +118,20 @@ describe('Frontend Phase 7 recommendation UI', () => {
   it('shows a recoverable error when the recommendation API fails', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     setupKakaoMock(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 502 })); render(<App />)
-    await selectRoutePlaces(); fireEvent.click(screen.getByRole('button', { name: '경로검색' })); expect(await screen.findByRole('alert')).toHaveTextContent('추천 경로를 불러오지 못했어요')
+    await selectRoutePlaces(); selectCalltaxiPurpose(); fireEvent.click(screen.getByRole('button', { name: '경로검색' })); expect(await screen.findByRole('alert')).toHaveTextContent('추천 경로를 불러오지 못했어요')
     expect(consoleError).toHaveBeenCalledWith('Recommendation request failed', expect.objectContaining({ requestUrl: 'http://127.0.0.1:8000/routes/recommendations', status: 502 }))
   })
 
   it('ignores an older response after the destination changes', async () => {
     setupKakaoMock(); const pending = deferred<{ ok: boolean; json: () => Promise<RecommendationResponse> }>(); const fetchMock = vi.fn().mockReturnValue(pending.promise); vi.stubGlobal('fetch', fetchMock); render(<App />); await selectRoutePlaces()
-    fireEvent.click(screen.getByRole('button', { name: '경로검색' })); const signal = fetchMock.mock.calls[0][1].signal as AbortSignal
+    selectCalltaxiPurpose(); fireEvent.click(screen.getByRole('button', { name: '경로검색' })); const signal = fetchMock.mock.calls[0][1].signal as AbortSignal
     fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '서울역' } }); expect(signal.aborted).toBe(true)
     await act(async () => { pending.resolve({ ok: true, json: async () => recommendationResult() }); await pending.promise }); expect(screen.queryByRole('heading', { name: '추천 경로 최대 TOP 3' })).not.toBeInTheDocument()
   })
 
   it('aborts and ignores an in-flight response when transport selection changes', async () => {
     setupKakaoMock(); const pending = deferred<{ ok: boolean; json: () => Promise<RecommendationResponse> }>(); const fetchMock = vi.fn().mockReturnValue(pending.promise); vi.stubGlobal('fetch', fetchMock); render(<App />); await selectRoutePlaces()
-    fireEvent.click(screen.getByRole('button', { name: '경로검색' })); const signal = fetchMock.mock.calls[0][1].signal as AbortSignal
+    selectCalltaxiPurpose(); fireEvent.click(screen.getByRole('button', { name: '경로검색' })); const signal = fetchMock.mock.calls[0][1].signal as AbortSignal
     fireEvent.click(screen.getByLabelText('장애인 콜택시')); expect(signal.aborted).toBe(true)
     await act(async () => { pending.resolve({ ok: true, json: async () => recommendationResult() }); await pending.promise })
     expect(screen.queryByRole('heading', { name: '추천 경로 최대 TOP 3' })).not.toBeInTheDocument()
@@ -123,7 +139,7 @@ describe('Frontend Phase 7 recommendation UI', () => {
 
   it('aborts and ignores an in-flight response when priority order changes', async () => {
     setupKakaoMock(); const pending = deferred<{ ok: boolean; json: () => Promise<RecommendationResponse> }>(); const fetchMock = vi.fn().mockReturnValue(pending.promise); vi.stubGlobal('fetch', fetchMock); render(<App />); await selectRoutePlaces()
-    fireEvent.click(screen.getByRole('button', { name: '경로검색' })); const signal = fetchMock.mock.calls[0][1].signal as AbortSignal
+    selectCalltaxiPurpose(); fireEvent.click(screen.getByRole('button', { name: '경로검색' })); const signal = fetchMock.mock.calls[0][1].signal as AbortSignal
     fireEvent.click(screen.getByRole('button', { name: '3순위 위로 이동' })); expect(signal.aborted).toBe(true)
     await act(async () => { pending.resolve({ ok: true, json: async () => recommendationResult() }); await pending.promise })
     expect(screen.queryByRole('heading', { name: '추천 경로 최대 TOP 3' })).not.toBeInTheDocument()
@@ -174,7 +190,7 @@ describe('Frontend Phase 7 recommendation UI', () => {
   })
 
   it('renders search and recommendation results inside the same route panel', async () => {
-    setupKakaoMock(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => recommendationResult() })); render(<App />); await selectRoutePlaces(); fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+    setupKakaoMock(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => recommendationResult() })); render(<App />); await selectRoutePlaces(); selectCalltaxiPurpose(); fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
     const panel = screen.getByLabelText('경로 검색 패널')
     expect(panel).toContainElement(screen.getByLabelText('경로 검색 조건'))
     expect(panel).toContainElement(await screen.findByRole('heading', { name: '추천 경로 최대 TOP 3' }))

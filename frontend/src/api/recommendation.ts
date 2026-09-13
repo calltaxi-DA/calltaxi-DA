@@ -4,6 +4,7 @@ export type RecommendationPriority = 'time' | 'cost' | 'walk'
 export type TransportType = 'calltaxi' | 'subway' | 'low_floor_bus'
 export type MetricAvailability = 'available' | 'not_available'
 export type AccessibilityStatus = 'verified_available' | 'verified_unavailable' | 'not_verified'
+export type CalltaxiPurpose = '기타' | '귀가' | '치료' | '재활' | '통학/출근' | '종교'
 
 export type RouteResult = {
   transport_type: TransportType
@@ -43,6 +44,7 @@ type RecommendationRequest = {
   destination: RouteLocation
   transport_types: TransportType[]
   priorities: RecommendationPriority[]
+  calltaxi_purpose?: CalltaxiPurpose
 }
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '')

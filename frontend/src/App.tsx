@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { fetchRecommendations } from './api/recommendation'
-import type { RecommendationPriority, RecommendationResponse, TransportType } from './api/recommendation'
+import type { CalltaxiPurpose, RecommendationPriority, RecommendationResponse, TransportType } from './api/recommendation'
 import type { RouteLocation } from './api/subway'
 import RecommendationResults from './components/RecommendationResults'
 import TransportCostTracker from './components/TransportCostTracker'
@@ -74,6 +74,15 @@ const priorityOptions = [
   { value: 'cost', label: '금액 우선' },
   { value: 'walk', label: '최소 도보' },
 ]
+
+const calltaxiPurposeOptions = [
+  { value: '기타', label: '기타' },
+  { value: '귀가', label: '귀가' },
+  { value: '치료', label: '치료' },
+  { value: '재활', label: '재활' },
+  { value: '통학/출근', label: '통학/출근' },
+  { value: '종교', label: '종교' },
+] as const
 
 const defaultPriorityOrder = priorityOptions.map((option) => option.value)
 const defaultCenter = { lat: 37.566826, lng: 126.9786567 }
@@ -166,6 +175,7 @@ function App() {
   const [selectedTransportTypes, setSelectedTransportTypes] = useState<TransportType[]>(
     transportOptions.map((option) => option.value),
   )
+  const [calltaxiPurpose, setCalltaxiPurpose] = useState<CalltaxiPurpose | ''>('')
   const [priorityOrder, setPriorityOrder] = useState(defaultPriorityOrder)
   const [draggedPriorityIndex, setDraggedPriorityIndex] = useState<number | null>(null)
   const [submittedSummary, setSubmittedSummary] = useState<string | null>(null)
@@ -174,7 +184,11 @@ function App() {
   const recommendationRequestRef = useRef(0)
   const recommendationAbortControllerRef = useRef<AbortController | null>(null)
 
-  const canSearch = selectedPlaces.origin !== null && selectedPlaces.destination !== null && selectedTransportTypes.length > 0
+  const isCalltaxiSelected = selectedTransportTypes.includes('calltaxi')
+  const canSearch = selectedPlaces.origin !== null
+    && selectedPlaces.destination !== null
+    && selectedTransportTypes.length > 0
+    && (!isCalltaxiSelected || calltaxiPurpose !== '')
 
   useEffect(() => {
     let ignore = false
@@ -252,6 +266,11 @@ function App() {
       updated.splice(toIndex, 0, moved)
       return updated
     })
+  }
+
+  const updateCalltaxiPurpose = (nextPurpose: CalltaxiPurpose | '') => {
+    invalidateRecommendation()
+    setCalltaxiPurpose(nextPurpose)
   }
 
   const searchPlaces = (role: LocationRole) => {
@@ -369,12 +388,14 @@ function App() {
     recommendationAbortControllerRef.current = abortController
 
     try {
-      const result = await fetchRecommendations({
+      const requestPayload = {
         origin: toRouteLocation(originPlace),
         destination: toRouteLocation(destinationPlace),
         transport_types: selectedTransportTypes,
         priorities: priorityOrder as RecommendationPriority[],
-      }, abortController.signal)
+        ...(isCalltaxiSelected && calltaxiPurpose ? { calltaxi_purpose: calltaxiPurpose } : {}),
+      }
+      const result = await fetchRecommendations(requestPayload, abortController.signal)
       if (recommendationRequestRef.current === requestId) {
         recommendationAbortControllerRef.current = null
         setRecommendation(result)
@@ -404,11 +425,14 @@ function App() {
     const destinationLabel = selectedPlaces.destination
       ? `${selectedPlaces.destination.name}(${selectedPlaces.destination.lat.toFixed(6)}, ${selectedPlaces.destination.lng.toFixed(6)})`
       : destination.trim()
+    const calltaxiPurposeLabel = isCalltaxiSelected && calltaxiPurpose
+      ? `, 장애인 콜택시 이용목적 ${calltaxiPurpose}`
+      : ''
 
     setSubmittedSummary(
       `${originLabel}에서 ${destinationLabel}까지 ${transportOptions
         .filter((option) => selectedTransportTypes.includes(option.value))
-        .map((option) => option.label).join(', ')}를 ${priorityLabels
+        .map((option) => option.label).join(', ')}를${calltaxiPurposeLabel} ${priorityLabels
         .map((label, index) => `${index + 1}순위 ${label}`)
         .join(', ')} 경로를 검색합니다.`,
     )
@@ -502,6 +526,26 @@ function App() {
               </div>
             </fieldset>
 
+            {isCalltaxiSelected ? (
+              <fieldset>
+                <legend>장애인 콜택시 이용목적</legend>
+                <label>
+                  <span className="field-label">이용목적</span>
+                  <select
+                    aria-label="장애인 콜택시 이용목적"
+                    value={calltaxiPurpose}
+                    onChange={(event) => updateCalltaxiPurpose(event.target.value as CalltaxiPurpose | '')}
+                  >
+                    <option value="">이용목적 선택</option>
+                    {calltaxiPurposeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <p className="field-hint">장애인 콜택시 대기시간 예측에 필요한 Backend 입력값입니다.</p>
+              </fieldset>
+            ) : null}
+
             <fieldset>
               <legend>우선순위 선택</legend>
               <p className="field-hint">항목을 드래그하거나 버튼으로 이동해 순서를 정해주세요.</p>
@@ -533,6 +577,12 @@ function App() {
               </ol>
             </fieldset>
           </details>
+
+          {isCalltaxiSelected && calltaxiPurpose === '' ? (
+            <p className="field-hint" role="status">
+              장애인 콜택시를 포함해 검색하려면 이동 조건 설정에서 이용목적을 선택해주세요.
+            </p>
+          ) : null}
 
           <button type="submit" disabled={!canSearch}>
             경로검색
