@@ -653,3 +653,38 @@
 - 남은 범위:
   - 인증·사용자별 교통비 기록 분리, 기록 수정·삭제, 결제/카드사 연동은 후속 설계 대상이다.
   - 병원 분석정보 서비스 노출은 이번 Phase에서 제외했으며, 노출하려면 `analysis/service_data_manifest.json`과 Backend/Frontend API 범위를 별도 Phase에서 갱신해야 한다.
+
+## Analysis Phase 9 — 데이터 품질 및 최종 분석 검증 (2026-09-13)
+
+- 상태: 현재 확정된 정적 export 및 미연결 경계에 대한 최종 검증 완료. 전체 실시간 데이터·Prediction 성능·전체 외부 mapping 검증 완료를 의미하지 않는다.
+- 브랜치: `analysis/phase9-data-quality` (base: 최신 `origin/dev` `2c7b12b`). 원격 기본 `main`에는 서비스 코드가 없어 기존 Phase 통합 기준 `dev`를 사용했다. 기존 로컬 교통비·지도 미커밋 변경은 원래 worktree에 보존했다.
+- 한 일:
+  - `src/data_quality.py`에 읽기 전용 오프라인 검사 추가. export 행·키 중복, 컬럼별 결측, 숫자·접근성 상태, 매핑 참조·기준시점, 원본과 reviewed 결과의 일치를 검증한다. 오류는 종료 코드 1, 미검증 범위는 별도 warning/status로 출력한다.
+  - 지하철·버스 전체 export를 실제 Backend provider와 대조하고, 미등록 역 및 버스 ID·번호·유형 불일치가 자동 매핑되지 않는지 검증했다.
+  - 병원 집계 4개와 이미지 2개를 기존 CSV·노트북 저장 output에 대조하고 API/Frontend 미노출을 검증했다. 병원 서비스 연결은 추가하지 않았다.
+  - Git 미추적 원본은 `--source-root`로 읽기 전용 대조하고, 없는 환경에서는 `not_verified_source_missing`을 명시한다. CI는 커밋된 자료만 검사한다.
+- 산출물:
+  - `src/data_quality.py`, `src/tests/test_data_quality.py`
+  - `backend/tests/test_phase9_data_quality.py`
+  - `.github/workflows/data-quality.yml`
+  - [최종 검증 보고서](validation/phase9-data-quality.md), [수치·해시·결측·미매핑 목록](validation/phase9-audit-2026-09-13.json)
+  - [문제·대안·해결·잔여 한계](troubleshooting/phase9-data-quality.md)
+- 검증 결과:
+  - 지하철 158행, 버스 364행, ODsay mapping 51행: 키·전체 행 중복 0. 지하철/mapping 빈 값 0, 버스 결측은 unknown·보조지표 미확보 범위로 기록.
+  - 지하철 정제 1,896행의 최신월 158행과 export 일치. 버스 원본 364노선 일치(비율 소수 4자리 반올림 차이 168건 구분).
+  - 혼잡 원본 896,304행/320노선: count/max/p95/존재 플래그 일치. 실시간 혼잡으로 해석하지 않는다.
+  - 병원 구 25행·동 416행 합계 126,705, 상위지역 JSON 일치. 범위·거리·순유입은 서로 다른 모집단을 유지한 채 기존 output 일치.
+  - `python3 -m src.data_quality --source-root /Users/pakrchansik/Desktop/calltaxi-DA`: 오류 0, 종료 코드 0, 알려진 범위 제한 warning 5건.
+  - 원본 없는 `python3 -m src.data_quality`도 실행해 원본 3개의 미검증 상태를 확인.
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest src/tests backend/tests ai/tests -q`: 174개 통과. 기존 Starlette/anyio DeprecationWarning 1건.
+  - `npm test --prefix frontend`: 21개 통과. `npm run build --prefix frontend`, `npm run lint --prefix frontend`: 통과.
+  - 최초 스키마·반올림 비교 실패와 LFS 권한 오류도 보고서/트러블슈팅에 기록하고 수정 후 재검증했다.
+- 자체 리뷰:
+  - API/이벤트 계약, 데이터 소유권, 기술 스택, 서비스 코드, 원본/processed/analysis export, 기존 ADR·README 변경 없음.
+  - 검증 모듈은 오프라인 `src/`에만 위치하고 서비스 코드가 이를 import하지 않는다. CI에서 원본 부재를 검증 성공으로 숨기지 않는다.
+  - 미확정 시점과 일부 mapping만으로 최신성·전체 coverage를 주장하지 않는다. 기존 AI 미연결 동작을 유지한다.
+- 다음에 이어받을 것:
+  - 버스 metadata 기준일 364건 unknown, 저상 정보 2노선 unknown, 전체 master 중 ODsay 미매핑 313노선.
+  - 지하철 stationID 매핑·전체 역 coverage·실시간 시설 상태·환승 내부 동선은 추가 근거 필요.
+  - Prediction 산출물과 inference 계약·성능 검증은 별도 모델 연결 Phase에서 진행.
+  - 병원 결과는 reviewed-only 유지. 실시간 버스 API와 신규 의료시설 자료는 별도 승인된 데이터 연결 범위에서 검토.
