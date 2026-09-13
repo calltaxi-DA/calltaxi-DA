@@ -5,9 +5,12 @@ import pytest
 
 from ai.waiting_time.estimator import (
     MODEL_FEATURE_COLUMNS,
+    OUT_OF_TRAINING_TARGET_RANGE_WARNING,
+    WAITING_TIME_UNIT,
     WaitingTimePredictionInput,
     estimate_waiting_minutes,
     estimate_waiting_minutes_for_input,
+    map_prediction_output_to_waiting_time,
 )
 
 
@@ -122,3 +125,68 @@ def test_prediction_input_rejects_negative_weather_features(
 def test_prediction_input_based_estimator_raises_until_model_artifact_is_connected() -> None:
     with pytest.raises(NotImplementedError):
         estimate_waiting_minutes_for_input(_prediction_input())
+
+
+def test_prediction_output_maps_numeric_prediction_to_backend_waiting_time() -> None:
+    estimate = map_prediction_output_to_waiting_time(
+        11.25,
+        hour_of_day=14,
+        model_name="rf_wait_time_v2_prev_day_weather_final",
+    )
+
+    assert estimate.expected_minutes == 11.25
+    assert estimate.waitingTime == 11.25
+    assert estimate.hour_of_day == 14
+    assert estimate.model_name == "rf_wait_time_v2_prev_day_weather_final"
+    assert estimate.to_backend_output() == {
+        "waitingTime": 11.25,
+        "unit": WAITING_TIME_UNIT,
+        "warnings": (),
+    }
+
+
+@pytest.mark.parametrize("raw_prediction", [[11.25], (11.25,), [[11.25]]])
+def test_prediction_output_accepts_single_prediction_containers(raw_prediction: object) -> None:
+    estimate = map_prediction_output_to_waiting_time(raw_prediction, hour_of_day=9)
+
+    assert estimate.waitingTime == 11.25
+
+
+def test_prediction_output_accepts_array_like_single_prediction() -> None:
+    class ArrayLikePrediction:
+        def tolist(self) -> list[float]:
+            return [12.5]
+
+    estimate = map_prediction_output_to_waiting_time(ArrayLikePrediction(), hour_of_day=9)
+
+    assert estimate.to_backend_output()["waitingTime"] == 12.5
+
+
+def test_prediction_output_adds_warning_when_prediction_exceeds_training_domain() -> None:
+    estimate = map_prediction_output_to_waiting_time(131.5, hour_of_day=9)
+
+    assert estimate.waitingTime == 131.5
+    assert estimate.warnings == (OUT_OF_TRAINING_TARGET_RANGE_WARNING,)
+
+
+@pytest.mark.parametrize(
+    "raw_prediction",
+    [
+        True,
+        "11.25",
+        None,
+        [],
+        [1.0, 2.0],
+        float("nan"),
+        float("inf"),
+        -0.1,
+    ],
+)
+def test_prediction_output_rejects_invalid_model_output(raw_prediction: object) -> None:
+    with pytest.raises(ValueError):
+        map_prediction_output_to_waiting_time(raw_prediction, hour_of_day=9)
+
+
+def test_prediction_output_rejects_invalid_hour() -> None:
+    with pytest.raises(ValueError, match="hour_of_day"):
+        map_prediction_output_to_waiting_time(11.25, hour_of_day=24)

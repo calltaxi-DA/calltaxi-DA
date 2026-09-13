@@ -764,3 +764,34 @@
   - 주소 metadata가 부족할 때 사용할 reverse geocoding provider를 연결하고, Backend feature mapper에는 서울 25개 구 canonical name처럼 정규화 완료된 구/동만 전달되도록 검증한다.
   - 전일 차량운행과 시간별 날씨 provider를 운영 데이터 또는 `analysis/` export 기준으로 연결한다.
   - `BackendRecommendationRouteProvider`에서 TMAP 차량거리 계산 후 `build_special_vehicle_waiting_time_input()`을 호출하도록 순서를 확장한다.
+
+## AI Phase 2 — Prediction 출력 구조 연결 (2026-09-13)
+
+- 브랜치: `ai/phase2-prediction-output-mapping` (base: 최신 `origin/dev` `8861702`). 기존 로컬 문서 변경은 원래 worktree에 보존하고, Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: 통합 장애인 콜택시 대기시간 Prediction 모델의 raw output을 Backend에서 사용할 수 있는 `waitingTime` 형식으로 변환하는 출력 mapping을 AI Adapter 경계에 추가했다.
+- 한 일:
+  - `ai/waiting_time/estimator.py`에 `map_prediction_output_to_waiting_time()`을 추가해 모델 예측 raw output을 `WaitingTimeEstimate`로 변환한다.
+  - scikit-learn 계열 `predict()` 결과에서 흔한 scalar, 단일 list/tuple, array-like 단일 output을 1건 예측값으로 해석한다.
+  - 모델 출력 단위는 기존 계약대로 minutes로 고정하고, Backend 연결용 출력 dict에는 `waitingTime`과 `unit=minutes`를 명시한다.
+  - `NaN`, `inf`, non-numeric, bool, 음수, 빈 컨테이너, 다건 output은 예측 불가로 처리할 수 있도록 `ValueError`로 거부한다.
+  - 학습 target domain인 130분을 초과하는 예측값은 clamp하지 않고 그대로 반환하되 `out_of_training_target_range` warning을 추가한다.
+  - 기존 `expected_minutes` 기반 Backend placeholder 계약은 유지하면서, 서비스 응답 계약에 맞춘 `waitingTime` alias와 `to_backend_output()`을 추가했다.
+- 산출물:
+  - `ai/waiting_time/estimator.py`
+  - `ai/tests/test_estimator.py`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - 출력 mapping은 순수 Python AI Adapter 내부 로직이며 FastAPI/HTTP, Backend schema, 추천 정렬 로직을 import하지 않는다.
+  - 실제 joblib artifact 로딩과 추론 호출은 아직 구현하지 않는다. 모델 미연결 상태에서는 기존처럼 `NotImplementedError`를 유지한다.
+  - `data/raw`, `data/processed`, `notebooks*/` 경로는 참조하지 않는다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py backend/tests/test_route_orchestration.py -q` — 32개 통과
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 214개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `git diff --check` — 통과
+- 자체 리뷰:
+  - Backend orchestration, API request schema, Frontend UI, 전일 차량운행 provider, 날씨 provider, 실제 모델 lazy-load는 이번 Phase 범위에서 제외했다.
+  - `analysis/waiting_time/*.joblib` 및 metadata/export 산출물은 수정하지 않았다.
+- 다음에 이어받을 것:
+  - 실제 artifact 연결 Phase에서 모델 `predict()` 결과를 `map_prediction_output_to_waiting_time()`에 통과시켜 출력 검증을 일원화한다.
+  - 임차택시·특장차 양쪽 `model_group` 예측을 수행하고 보수적 max 정책과 warning 병합 정책을 구현한다.
+  - Backend route orchestration에서 `expected_minutes` 또는 `waitingTime`을 seconds로 변환해 차량 이동시간과 합산한다.
