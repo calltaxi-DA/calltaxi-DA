@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
+import { fetchLowFloorBusRoute } from './api/bus'
+import type { LowFloorBusRouteResult } from './api/bus'
 import { fetchSubwayRoute } from './api/subway'
 import type { RouteLocation, SubwayRouteResult } from './api/subway'
+import LowFloorBusRouteCard from './components/LowFloorBusRouteCard'
 import SubwayRouteCard from './components/SubwayRouteCard'
 
 type LocationRole = 'origin' | 'destination'
@@ -170,6 +173,10 @@ function App() {
   const [subwayRouteStatus, setSubwayRouteStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const subwayRequestRef = useRef(0)
   const subwayAbortControllerRef = useRef<AbortController | null>(null)
+  const [busRoute, setBusRoute] = useState<LowFloorBusRouteResult | null>(null)
+  const [busRouteStatus, setBusRouteStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const busRequestRef = useRef(0)
+  const busAbortControllerRef = useRef<AbortController | null>(null)
 
   const selectedTransportLabels = useMemo(
     () =>
@@ -215,7 +222,10 @@ function App() {
     }
   }, [kakaoMapAppKey])
 
-  useEffect(() => () => subwayAbortControllerRef.current?.abort(), [])
+  useEffect(() => () => {
+    subwayAbortControllerRef.current?.abort()
+    busAbortControllerRef.current?.abort()
+  }, [])
 
   const invalidateSubwayRoute = () => {
     subwayRequestRef.current += 1
@@ -225,9 +235,22 @@ function App() {
     setSubwayRouteStatus('idle')
   }
 
+  const invalidateBusRoute = () => {
+    busRequestRef.current += 1
+    busAbortControllerRef.current?.abort()
+    busAbortControllerRef.current = null
+    setBusRoute(null)
+    setBusRouteStatus('idle')
+  }
+
+  const invalidateRouteResults = () => {
+    invalidateSubwayRoute()
+    invalidateBusRoute()
+  }
+
   const updatePlaceQuery = (role: LocationRole, nextValue: string) => {
     placeSearchRequestRef.current[role] += 1
-    invalidateSubwayRoute()
+    invalidateRouteResults()
     markersRef.current[role]?.setMap(null)
     markersRef.current[role] = null
 
@@ -245,6 +268,9 @@ function App() {
   const handleTransportToggle = (transportType: string) => {
     if (transportType === 'subway') {
       invalidateSubwayRoute()
+    }
+    if (transportType === 'low_floor_bus') {
+      invalidateBusRoute()
     }
     setSelectedTransportTypes((current) =>
       current.includes(transportType)
@@ -348,7 +374,7 @@ function App() {
 
   const selectPlace = (role: LocationRole, place: PlaceSelection) => {
     placeSearchRequestRef.current[role] += 1
-    invalidateSubwayRoute()
+    invalidateRouteResults()
 
     if (role === 'origin') {
       setOrigin(place.name)
@@ -365,7 +391,70 @@ function App() {
     moveMapToPlace(role, place)
   }
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const toRouteLocation = (place: PlaceSelection): RouteLocation => ({
+    name: place.name,
+    latitude: place.lat,
+    longitude: place.lng,
+    address: place.address,
+  })
+
+  const loadSubwayRoute = async (originPlace: PlaceSelection, destinationPlace: PlaceSelection) => {
+    const requestId = subwayRequestRef.current + 1
+    subwayRequestRef.current = requestId
+    setSubwayRoute(null)
+    setSubwayRouteStatus('loading')
+    subwayAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    subwayAbortControllerRef.current = abortController
+
+    try {
+      const route = await fetchSubwayRoute({
+        origin: toRouteLocation(originPlace),
+        destination: toRouteLocation(destinationPlace),
+      }, abortController.signal)
+      if (subwayRequestRef.current === requestId) {
+        subwayAbortControllerRef.current = null
+        setSubwayRoute(route)
+        setSubwayRouteStatus('idle')
+      }
+    } catch {
+      if (subwayRequestRef.current === requestId) {
+        subwayAbortControllerRef.current = null
+        setSubwayRoute(null)
+        setSubwayRouteStatus('error')
+      }
+    }
+  }
+
+  const loadBusRoute = async (originPlace: PlaceSelection, destinationPlace: PlaceSelection) => {
+    const requestId = busRequestRef.current + 1
+    busRequestRef.current = requestId
+    setBusRoute(null)
+    setBusRouteStatus('loading')
+    busAbortControllerRef.current?.abort()
+    const abortController = new AbortController()
+    busAbortControllerRef.current = abortController
+
+    try {
+      const route = await fetchLowFloorBusRoute({
+        origin: toRouteLocation(originPlace),
+        destination: toRouteLocation(destinationPlace),
+      }, abortController.signal)
+      if (busRequestRef.current === requestId) {
+        busAbortControllerRef.current = null
+        setBusRoute(route)
+        setBusRouteStatus('idle')
+      }
+    } catch {
+      if (busRequestRef.current === requestId) {
+        busAbortControllerRef.current = null
+        setBusRoute(null)
+        setBusRouteStatus('error')
+      }
+    }
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!canSearch) {
       return
@@ -389,44 +478,15 @@ function App() {
         .join(', ')} 경로를 검색합니다.`,
     )
 
-    const requestId = subwayRequestRef.current + 1
-    subwayRequestRef.current = requestId
-    if (!selectedTransportTypes.includes('subway') || !selectedPlaces.origin || !selectedPlaces.destination) {
-      setSubwayRoute(null)
-      setSubwayRouteStatus('idle')
-      return
-    }
+    const originPlace = selectedPlaces.origin
+    const destinationPlace = selectedPlaces.destination
+    if (!originPlace || !destinationPlace) return
 
-    setSubwayRoute(null)
-    setSubwayRouteStatus('loading')
-    subwayAbortControllerRef.current?.abort()
-    const abortController = new AbortController()
-    subwayAbortControllerRef.current = abortController
+    if (selectedTransportTypes.includes('subway')) void loadSubwayRoute(originPlace, destinationPlace)
+    else invalidateSubwayRoute()
 
-    const toRouteLocation = (place: PlaceSelection): RouteLocation => ({
-      name: place.name,
-      latitude: place.lat,
-      longitude: place.lng,
-      address: place.address,
-    })
-
-    try {
-      const route = await fetchSubwayRoute({
-        origin: toRouteLocation(selectedPlaces.origin),
-        destination: toRouteLocation(selectedPlaces.destination),
-      }, abortController.signal)
-      if (subwayRequestRef.current === requestId) {
-        subwayAbortControllerRef.current = null
-        setSubwayRoute(route)
-        setSubwayRouteStatus('idle')
-      }
-    } catch {
-      if (subwayRequestRef.current === requestId) {
-        subwayAbortControllerRef.current = null
-        setSubwayRoute(null)
-        setSubwayRouteStatus('error')
-      }
-    }
+    if (selectedTransportTypes.includes('low_floor_bus')) void loadBusRoute(originPlace, destinationPlace)
+    else invalidateBusRoute()
   }
 
   return (
@@ -548,19 +608,35 @@ function App() {
           )}
         </section>
 
-        <div className="route-result-region" aria-live="polite" aria-busy={subwayRouteStatus === 'loading'}>
+        <div
+          className="route-result-region"
+          aria-live="polite"
+          aria-busy={subwayRouteStatus === 'loading' || busRouteStatus === 'loading'}
+        >
           {subwayRouteStatus === 'loading' ? (
-            <section className="subway-result-card loading-state">
+            <section className="route-result-card subway-result-card loading-state">
               <p>지하철 경로와 접근성 정보를 확인하고 있습니다.</p>
             </section>
           ) : null}
           {subwayRouteStatus === 'error' ? (
-            <section className="subway-result-card error-state" role="alert">
+            <section className="route-result-card subway-result-card error-state" role="alert">
               <h2>지하철 경로를 불러오지 못했어요</h2>
               <p>백엔드 실행 상태와 ODsay 설정을 확인한 뒤 다시 검색해주세요.</p>
             </section>
           ) : null}
           {subwayRoute ? <SubwayRouteCard route={subwayRoute} /> : null}
+          {busRouteStatus === 'loading' ? (
+            <section className="route-result-card bus-result-card loading-state">
+              <p>저상버스 경로와 접근성 정보를 확인하고 있습니다.</p>
+            </section>
+          ) : null}
+          {busRouteStatus === 'error' ? (
+            <section className="route-result-card bus-result-card error-state" role="alert">
+              <h2>저상버스 경로를 불러오지 못했어요</h2>
+              <p>백엔드 실행 상태와 ODsay 설정을 확인한 뒤 다시 검색해주세요.</p>
+            </section>
+          ) : null}
+          {busRoute ? <LowFloorBusRouteCard route={busRoute} /> : null}
         </div>
       </aside>
     </main>
