@@ -10,8 +10,9 @@ import httpx
 from app.api.contracts import Location
 
 ODSAY_BUS_ROUTE_URL = "https://api.odsay.com/v1/api/searchPubTransPathT"
-DEFAULT_LOW_FLOOR_BUS_ROUTE_MASTER_PATH = Path("analysis/bus/low_floor_bus_route_master.csv")
-DEFAULT_ODSAY_BUS_ROUTE_MAPPING_PATH = Path("analysis/bus/odsay_seoul_bus_route_mapping.csv")
+ANALYSIS_DIR = Path(__file__).resolve().parents[3] / "analysis"
+DEFAULT_LOW_FLOOR_BUS_ROUTE_MASTER_PATH = ANALYSIS_DIR / "bus/low_floor_bus_route_master.csv"
+DEFAULT_ODSAY_BUS_ROUTE_MAPPING_PATH = ANALYSIS_DIR / "bus/odsay_seoul_bus_route_mapping.csv"
 WALKING_TRAFFIC_TYPE = 3
 BUS_TRAFFIC_TYPE = 2
 BUS_PATH_TYPE = 2

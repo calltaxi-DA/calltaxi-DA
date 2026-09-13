@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "source_period": {"start_date": "2025-01-01", "end_date": "2025-12-31", "basis": "접수일시", "timezone": "Asia/Seoul"},
+  "analyses": [
+    {
+      "analysis_id": "medical_destination_top_regions",
+      "title": "의료목적콜 도착이 많은 지역",
+      "population_definition": "목적지가 서울 25개구이고 의료목적으로 기록된 탑승완료 126,705건",
+      "aggregation_unit": "목적지 자치구·행정동",
+      "values": {"district_top5": [{"name":"노원구","count":11531},{"name":"강동구","count":9692},{"name":"서대문구","count":9587},{"name":"강서구","count":7295},{"name":"영등포구","count":7292}], "neighborhood_top5": [{"district":"서대문구","name":"신촌동","count":6420},{"district":"노원구","name":"상계6.7동","count":5136},{"district":"동작구","name":"신대방2동","count":3975},{"district":"강동구","name":"둔촌2동","count":3169},{"district":"종로구","name":"이화동","count":3156}]},
+      "limitations": ["개별 병원 방문량이 아니라 목적지 지역 집계입니다.", "기타로 기록된 실제 병원 방문은 포함되지 않을 수 있습니다."]
+    },
+    {
+      "analysis_id": "medical_trip_scope",
+      "title": "의료목적콜의 같은구·다른구 이동",
+      "population_definition": "출발지와 목적지가 모두 서울 25개구인 의료목적 탑승완료 126,561건(거리 100km 초과 5건 제외)",
+      "aggregation_unit": "같은구·다른구",
+      "values": {"same_district":{"count":52921,"percentage":41.8},"different_district":{"count":73640,"percentage":58.2}},
+      "limitations": ["의료기관 종별을 분리하지 않은 의료목적콜 전체 결과입니다."]
+    },
+    {
+      "analysis_id": "medical_trip_distance_coverage",
+      "title": "의료목적콜의 5km 이동 범위",
+      "population_definition": "출발지와 목적지가 모두 서울 25개구인 의료목적 탑승완료 126,561건(거리 100km 초과 5건 제외)",
+      "aggregation_unit": "같은구·다른구·전체",
+      "values": {"same_district_within_5km_percentage":91.4,"different_district_within_5km_percentage":30.4,"overall_within_5km_percentage":55.9},
+      "limitations": ["승차거리는 미터 단위로 추정한 기존 정제값입니다.", "실시간 이동 범위를 의미하지 않습니다."]
+    },
+    {
+      "analysis_id": "medical_net_flow_by_district",
+      "title": "의료목적콜 자치구 순유입·순유출",
+      "population_definition": "출발지와 목적지가 모두 서울 25개구인 의료목적 탑승완료 126,566건",
+      "aggregation_unit": "자치구",
+      "values": {"net_inflow_top5":[{"name":"서대문구","count":3944},{"name":"종로구","count":3062},{"name":"영등포구","count":3014},{"name":"강동구","count":2612},{"name":"동대문구","count":1413}],"net_outflow_top5":[{"name":"금천구","count":-2085},{"name":"마포구","count":-1937},{"name":"도봉구","count":-1852},{"name":"관악구","count":-1684},{"name":"구로구","count":-1665}]},
+      "limitations": ["순유입은 접근성 부족이나 특정 병원 선호의 직접 증거가 아닙니다."]
+    }
+  ],
+  "charts": [
+    {"chart_id":"medical_same_vs_different_district","title":"의료목적콜 같은구·다른구 이동 비교","alt_text":"전체콜과 의료목적콜의 같은구 및 다른구 이동 비율을 비교한 막대그래프","asset_path":"analysis/hospital/figures/medical_same_vs_different_district.png","analysis_ids":["medical_trip_scope"]},
+    {"chart_id":"medical_within_5km_coverage","title":"의료목적콜 5km 이내 이동 비율","alt_text":"같은구, 다른구, 전체 의료목적콜의 5km 이내와 초과 비율을 비교한 그래프","asset_path":"analysis/hospital/figures/medical_within_5km_coverage.png","analysis_ids":["medical_trip_distance_coverage"]}
+  ]
+}

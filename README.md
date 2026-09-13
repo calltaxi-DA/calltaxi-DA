@@ -10,14 +10,19 @@
 
 ## 실행
 
+저장소 루트의 `.env.example`을 `.env`로 복사한 뒤 Backend·Frontend 설정을 한 파일에서 관리합니다.
+
+```bash
+cp .env.example .env
+```
+
 ### 백엔드
 
 ```bash
-cd backend
-python -m venv .venv
-./.venv/Scripts/pip install -r requirements.txt   # macOS/Linux: .venv/bin/pip
-cp .env.example .env
-./.venv/Scripts/uvicorn app.main:app --reload      # macOS/Linux: .venv/bin/uvicorn ...
+python -m venv backend/.venv
+backend/.venv/Scripts/pip install -r backend/requirements.txt   # macOS/Linux: backend/.venv/bin/pip
+PYTHONPATH=backend:. backend/.venv/Scripts/uvicorn app.main:app --reload
+# macOS/Linux: PYTHONPATH=backend:. backend/.venv/bin/uvicorn app.main:app --reload
 curl http://localhost:8000/health
 ```
 
