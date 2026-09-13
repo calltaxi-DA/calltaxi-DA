@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import type { RecommendationResponse, TransportType } from '../api/recommendation'
 import {
   createTransportCostRecord,
+  fetchDailyTransportCosts,
   fetchMonthlyTransportCosts,
 } from '../api/transportCosts'
-import type { MonthlyTransportCostResponse } from '../api/transportCosts'
+import type { DailyTransportCostResponse, MonthlyTransportCostResponse } from '../api/transportCosts'
+
+type DailyTransportCostSummary = MonthlyTransportCostResponse['daily_summaries'][number]
 
 const transportLabels: Record<TransportType, string> = {
   calltaxi: '장애인 콜택시',
@@ -24,28 +27,124 @@ function won(value: number) {
   return `${value.toLocaleString('ko-KR')}원`
 }
 
+function hasCostTotals(value: unknown): value is { actual_cost_won: number; recommended_cost_won: number; potential_savings_won: number } {
+  if (!value || typeof value !== 'object') return false
+  const totals = value as Record<string, unknown>
+  return typeof totals.actual_cost_won === 'number'
+    && typeof totals.recommended_cost_won === 'number'
+    && typeof totals.potential_savings_won === 'number'
+}
+
+function isMonthlyTransportCostResponse(value: unknown): value is MonthlyTransportCostResponse {
+  if (!value || typeof value !== 'object') return false
+  const response = value as Record<string, unknown>
+  return typeof response.month === 'string'
+    && Array.isArray(response.daily_summaries)
+    && hasCostTotals(response.totals)
+}
+
+function isDailyTransportCostResponse(value: unknown): value is DailyTransportCostResponse {
+  if (!value || typeof value !== 'object') return false
+  const response = value as Record<string, unknown>
+  return typeof response.date === 'string'
+    && Array.isArray(response.records)
+    && hasCostTotals(response.totals)
+}
+
+function daysInMonth(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  if (!year || !monthNumber) return []
+  const lastDay = new Date(year, monthNumber, 0).getDate()
+  return Array.from({ length: lastDay }, (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`)
+}
+
 function TransportCostTracker({ result }: { result: RecommendationResponse }) {
   const initialDate = localDateString()
   const availableTypes = result.recommendations.map((item) => item.route.transport_type)
   const [travelDate, setTravelDate] = useState(initialDate)
   const [month, setMonth] = useState(initialDate.slice(0, 7))
+  const [selectedDate, setSelectedDate] = useState(initialDate)
   const [actualCost, setActualCost] = useState('')
   const [selectedTransport, setSelectedTransport] = useState<TransportType | ''>(availableTypes[0] ?? '')
   const [summary, setSummary] = useState<MonthlyTransportCostResponse | null>(null)
+  const [dailyDetail, setDailyDetail] = useState<DailyTransportCostResponse | null>(null)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [queryError, setQueryError] = useState(false)
+  const [monthlyQueryStatus, setMonthlyQueryStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [dailyQueryStatus, setDailyQueryStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const calendarRequestId = useRef(0)
+  const dailyRequestId = useRef(0)
 
-  async function refreshMonthlySummary(targetMonth: string) {
-    setSummary(await fetchMonthlyTransportCosts(targetMonth))
+  const summaryByDate = useMemo(() => {
+    const entries: Array<[string, DailyTransportCostSummary]> = (summary?.daily_summaries ?? [])
+      .map((day) => [day.date, day])
+    return new Map<string, DailyTransportCostSummary>(entries)
+  }, [summary])
+
+  async function loadMonthlySummary(targetMonth: string) {
+    const monthly = await fetchMonthlyTransportCosts(targetMonth)
+    if (!isMonthlyTransportCostResponse(monthly)) throw new Error('Invalid monthly transport cost response')
+    return monthly
+  }
+
+  async function loadDailyDetail(targetDate: string) {
+    const daily = await fetchDailyTransportCosts(targetDate)
+    if (!isDailyTransportCostResponse(daily)) throw new Error('Invalid daily transport cost response')
+    return daily
+  }
+
+  async function refreshCalendar(targetMonth: string, targetDate = selectedDate) {
+    const requestId = ++calendarRequestId.current
+    const detailRequestId = ++dailyRequestId.current
+    setMonthlyQueryStatus('loading')
+    setDailyQueryStatus('loading')
+    try {
+      const monthly = await loadMonthlySummary(targetMonth)
+      if (requestId !== calendarRequestId.current) return
+      setSummary(monthly)
+      setMonthlyQueryStatus('idle')
+
+      const dateForDetail = targetDate.startsWith(targetMonth) ? targetDate : `${targetMonth}-01`
+      setSelectedDate(dateForDetail)
+    } catch {
+      if (requestId !== calendarRequestId.current) return
+      setSummary(null)
+      setDailyDetail(null)
+      setMonthlyQueryStatus('error')
+      setDailyQueryStatus('idle')
+      return
+    }
+
+    try {
+      const dateForDetail = targetDate.startsWith(targetMonth) ? targetDate : `${targetMonth}-01`
+      const daily = await loadDailyDetail(dateForDetail)
+      if (requestId !== calendarRequestId.current || detailRequestId !== dailyRequestId.current) return
+      setDailyDetail(daily)
+      setDailyQueryStatus('idle')
+    } catch {
+      if (requestId !== calendarRequestId.current || detailRequestId !== dailyRequestId.current) return
+      setDailyDetail(null)
+      setDailyQueryStatus('error')
+    }
   }
 
   async function handleMonthlyQuery() {
+    await refreshCalendar(month)
+  }
+
+  async function handleDateSelect(date: string) {
+    const requestId = ++dailyRequestId.current
+    setSelectedDate(date)
+    setTravelDate(date)
+    setDailyQueryStatus('loading')
     try {
-      await refreshMonthlySummary(month)
-      setQueryError(false)
+      const daily = await loadDailyDetail(date)
+      if (requestId !== dailyRequestId.current) return
+      setDailyDetail(daily)
+      setDailyQueryStatus('idle')
     } catch {
-      setSummary(null)
-      setQueryError(true)
+      if (requestId !== dailyRequestId.current) return
+      setDailyDetail(null)
+      setDailyQueryStatus('error')
     }
   }
 
@@ -54,22 +153,30 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
     const parsedCost = Number(actualCost)
     if (!selectedTransport || !Number.isInteger(parsedCost) || parsedCost < 0) return
     setStatus('saving')
+    const recordMonth = travelDate.slice(0, 7)
     try {
       await createTransportCostRecord(result, travelDate, parsedCost, selectedTransport)
-      const recordMonth = travelDate.slice(0, 7)
-      setMonth(recordMonth)
-      await refreshMonthlySummary(recordMonth)
-      setActualCost('')
       setStatus('saved')
     } catch {
       setStatus('error')
+      return
     }
+
+    setMonth(recordMonth)
+    setSelectedDate(travelDate)
+    setActualCost('')
+    await refreshCalendar(recordMonth, travelDate)
   }
+
+  useEffect(() => {
+    void refreshCalendar(month)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <section className="transport-cost-tracker" aria-labelledby="transport-cost-title">
       <h2 id="transport-cost-title">교통비 기록</h2>
-      <p>실제 이용금액을 기록하면 Backend가 같은 경로의 금액 우선 추천과 비교합니다.</p>
+      <p>실제 이용금액을 기록하면 Backend가 같은 경로의 금액 우선 추천과 비교해 절약 가능 금액을 계산합니다.</p>
       <form className="transport-cost-form" onSubmit={handleSubmit}>
         <label>이용 날짜<input type="date" value={travelDate} onChange={(event) => setTravelDate(event.target.value)} required /></label>
         <label>실제 이용수단<select value={selectedTransport} onChange={(event) => setSelectedTransport(event.target.value as TransportType)}>
@@ -83,17 +190,57 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
 
       <div className="monthly-cost-summary">
         <label>조회 월<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>
-        <button type="button" onClick={handleMonthlyQuery}>월별 조회</button>
-        {queryError ? <p role="alert">월별 교통비를 불러오지 못했습니다.</p> : null}
+        <button type="button" onClick={handleMonthlyQuery} disabled={monthlyQueryStatus === 'loading'}>
+          {monthlyQueryStatus === 'loading' ? '조회 중…' : '월별 조회'}
+        </button>
+        {monthlyQueryStatus === 'error' ? <p role="alert">월별 교통비를 불러오지 못했습니다.</p> : null}
         {summary ? <>
-          <dl>
+          <dl aria-label={`${summary.month} 월 누적 교통비`}>
             <div><dt>실제 교통비</dt><dd>{won(summary.totals.actual_cost_won)}</dd></div>
             <div><dt>금액 우선 기준</dt><dd>{won(summary.totals.recommended_cost_won)}</dd></div>
             <div><dt>절약 가능 금액</dt><dd>{won(summary.totals.potential_savings_won)}</dd></div>
           </dl>
-          {summary.daily_summaries.length ? <ul>{summary.daily_summaries.map((day) => (
-            <li key={day.date}>{day.date}: 실제 {won(day.actual_cost_won)} / 절약 가능 {won(day.potential_savings_won)}</li>
-          ))}</ul> : <p>이 달의 교통비 기록이 없습니다.</p>}
+          <div className="cost-calendar" role="grid" aria-label={`${summary.month} 교통비 캘린더`}>
+            {daysInMonth(summary.month).map((date) => {
+              const day = summaryByDate.get(date)
+              return (
+                <button
+                  key={date}
+                  type="button"
+                  className={`cost-calendar-day${day ? ' has-record' : ''}${date === selectedDate ? ' selected' : ''}`}
+                  onClick={() => void handleDateSelect(date)}
+                  aria-label={`${date} 교통비 ${day ? `실제 ${won(day.actual_cost_won)}, 절약 가능 ${won(day.potential_savings_won)}` : '기록 없음'}`}
+                >
+                  <strong>{Number(date.slice(-2))}</strong>
+                  {day ? <span>{won(day.actual_cost_won)}</span> : <span>-</span>}
+                </button>
+              )
+            })}
+          </div>
+          <section className="daily-cost-detail" aria-labelledby="daily-cost-title">
+            <h3 id="daily-cost-title">{selectedDate} 이용 기록</h3>
+            {dailyQueryStatus === 'loading' ? <p>상세 기록을 불러오는 중입니다.</p> : null}
+            {dailyQueryStatus === 'error' ? <p role="alert">선택한 날짜의 상세 기록을 불러오지 못했습니다.</p> : null}
+            {dailyQueryStatus !== 'error' && dailyDetail ? <>
+              <dl>
+                <div><dt>실제 이용금액</dt><dd>{won(dailyDetail.totals.actual_cost_won)}</dd></div>
+                <div><dt>금액 우선 추천</dt><dd>{won(dailyDetail.totals.recommended_cost_won)}</dd></div>
+                <div><dt>절약 가능</dt><dd>{won(dailyDetail.totals.potential_savings_won)}</dd></div>
+              </dl>
+              {dailyDetail.records.length ? (
+                <ul>
+                  {dailyDetail.records.map((record) => (
+                    <li key={record.id}>
+                      {transportLabels[record.selected_transport_type]} 실제 {won(record.actual_cost_won)}
+                      {' / '}금액 우선 {transportLabels[record.recommended_transport_type]} {won(record.recommended_cost_won)}
+                      {' / '}절약 가능 {won(record.potential_savings_won)}
+                    </li>
+                  ))}
+                </ul>
+              ) : <p>선택한 날짜의 교통비 기록이 없습니다.</p>}
+            </> : null}
+            {dailyQueryStatus === 'idle' && !dailyDetail ? <p>날짜를 선택하면 상세 기록이 표시됩니다.</p> : null}
+          </section>
         </> : <p>조회할 월을 선택해주세요.</p>}
       </div>
     </section>

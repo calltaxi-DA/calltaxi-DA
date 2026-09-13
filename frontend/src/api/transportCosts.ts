@@ -27,6 +27,16 @@ export type MonthlyTransportCostResponse = {
   }
 }
 
+export type DailyTransportCostResponse = {
+  date: string
+  records: TransportCostRecord[]
+  totals: {
+    actual_cost_won: number
+    recommended_cost_won: number
+    potential_savings_won: number
+  }
+}
+
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '')
   || 'http://127.0.0.1:8000'
 
@@ -62,4 +72,16 @@ export async function fetchMonthlyTransportCosts(
   )
   if (!response.ok) throw new Error(`Monthly transport cost request failed with status ${response.status}`)
   return (await response.json()) as MonthlyTransportCostResponse
+}
+
+export async function fetchDailyTransportCosts(
+  date: string,
+  signal?: AbortSignal,
+): Promise<DailyTransportCostResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/transport-cost-records/daily?date=${encodeURIComponent(date)}`,
+    { signal },
+  )
+  if (!response.ok) throw new Error(`Daily transport cost request failed with status ${response.status}`)
+  return (await response.json()) as DailyTransportCostResponse
 }
