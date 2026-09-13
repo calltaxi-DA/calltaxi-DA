@@ -136,7 +136,7 @@ def test_recommendations_production_provider_calls_waiting_prediction_when_sourc
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    requested_at = datetime.now(ZoneInfo("Asia/Seoul")).replace(minute=15, second=0, microsecond=0)
+    requested_at = datetime(2026, 9, 13, 9, 15, tzinfo=ZoneInfo("Asia/Seoul"))
     operation_lookup = tmp_path / "operation-count.json"
     weather_lookup = tmp_path / "weather.json"
     operation_lookup.write_text(
@@ -155,6 +155,13 @@ def test_recommendations_production_provider_calls_waiting_prediction_when_sourc
     monkeypatch.setenv("APP_ODSAY_API_KEY", "")
     monkeypatch.setenv("ODSAY_API_KEY", "")
     get_settings.cache_clear()
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return requested_at.replace(tzinfo=None)
+            return requested_at.astimezone(tz)
 
     class FakeTmapRouteClient:
         def __init__(self, app_key: str) -> None:
@@ -184,6 +191,7 @@ def test_recommendations_production_provider_calls_waiting_prediction_when_sourc
 
     monkeypatch.setattr(recommendation_module, "TmapRouteClient", FakeTmapRouteClient)
     monkeypatch.setattr(recommendation_module, "estimate_waiting_minutes_for_input", fake_estimator)
+    monkeypatch.setattr(recommendation_module, "datetime", FixedDateTime)
     request_payload = _payload(["time", "cost", "walk"])
     request_payload["transport_types"] = ["calltaxi"]
     request_payload["calltaxi_purpose"] = "치료"
