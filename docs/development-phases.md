@@ -165,6 +165,34 @@
   - production feature set 확정 전, 각 feature가 inference 시점에 생성 가능한지와 데이터 출처가 무엇인지 다시 검증한다.
   - `analysis/`에 실제 모델/lookup 산출물을 export하기 전까지 `ai/waiting_time/estimator.py`는 미연결 상태를 유지한다.
 
+## Analysis Phase 3 — 병원 이동 이용패턴 서비스 활용 기준 (2026-09-13)
+
+- 브랜치: `analysis/phase3-hospital-usage-pattern` (base: `dev`)
+- 한 일: 기존 병원·의료목적 이동 Notebook과 저장된 output을 재실행하지 않고 확인해 Backend와 Frontend에서 제공할 의료 목적지 분석정보를 확정했다. 의료목적콜의 목적지 자치구·행정동별 이용량, 같은구·다른구 이동, 5km 거리 커버리지, 자치구 순유입·순유출을 제공 대상으로 선정했다. 개별 탑승건과 병원 식별자가 연결되지 않는 데이터 한계를 확인해 `병원별 이용량` 대신 `의료목적콜 도착 지역별 이용량`으로 표현 범위를 제한했다. 병원 이동 전용 시간대 및 특장차·임차택시 비교는 기존 분석 결과가 없음을 확인하고 전체콜·전체 바로콜 결과로 대체하지 않도록 명시했다.
+- 산출물:
+  - `analysis/hospital/hospital_destination_insights.md` — 의료목적콜 정의, 모집단, 확정 결과, 표·그래프 선정, Backend/Frontend 인계와 제공 금지 기준
+  - `analysis/README.md` — 병원 이동 분석 기준 문서 링크와 현재 제공 범위 추가
+- 확정 기준:
+  - 서비스의 병원 목적지 분석정보는 개별 병원 단위가 아니라 의료목적으로 기록된 이동의 목적지 자치구·행정동 단위 집계다.
+  - 목적지 서울 기준 126,705건, 서울 내부 OD 기준 126,566건, 100km 초과 이상치 제외 거리 분석 기준 126,561건을 서로 다른 모집단으로 구분한다.
+  - 목적지 이용량 상위 자치구·행정동, 같은구 41.8%·다른구 58.2%, 전체 5km 이내 55.9%, 자치구 순유입·순유출을 서비스 제공 후보로 확정한다.
+  - 의료기관 수·병원급 규모·재활의학과와 콜 건수의 관계는 탐색적 참고정보로만 유지하며 추천 점수·병원 평가·인과 설명에 사용하지 않는다.
+  - 기존 전체콜 시간대·요일 결과를 병원 이동 시간대 결과로 표시하지 않는다.
+  - 기존 임차택시·특장차 바로콜 대기시간 비교를 병원 이동 차량유형 비교로 표시하지 않는다. 병원 이동 전용 차량유형 분석은 현재 미확정이다.
+  - 서비스 코드가 Notebook 또는 `data/processed`를 직접 읽지 않는다. 실제 구현 전에 선택 집계를 `analysis/hospital/`로 수동 export해야 한다.
+- 검증 결과:
+  - 관련 Notebook 7개와 기존 이용패턴 기준 문서의 저장된 셀·output을 읽고, Notebook 재실행 및 `data/` 변경이 없음을 확인
+  - 문서에 목적지 이용량, 지역 간 이동, 거리, 시간대 결과의 범위, 특장차·임차택시 비교 상태, 선정 표·그래프, Backend/Frontend 인계가 모두 포함됨을 확인
+  - 기존 산출물 경로와 선정 이미지 4개의 존재 여부 확인
+  - `git diff --check` 통과
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 147개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - `cd frontend && npm test -- --run` — 18개 통과
+- 다음 Phase가 이어받을 것:
+  - Backend 분석정보 API 범위가 확정되면 필요한 집계 파일만 출처·생성일·갱신 방법과 함께 `analysis/hospital/`로 수동 export하고, Backend는 해당 export만 읽는다.
+  - Frontend는 `의료목적콜 도착 지역`이라는 표현과 모집단·한계를 함께 표시하고 Backend 값을 재계산하지 않는다.
+  - 개별 병원별 이용량을 제공하려면 병원 식별자·좌표와 탑승 목적지를 검증 가능하게 연결하는 데이터가 먼저 필요하다.
+  - 병원 이동 전용 시간대 및 특장차·임차택시 비교가 필요하면 기존 결과 활용 범위를 넘어서는 별도 분석으로 승인받아 수행한다.
+
 ## Analysis Phase 4 — 지하철 접근성 데이터 분석 기준 정리 (2026-09-12)
 
 - 브랜치: `analysis/phase4-subway-accessibility` (base: `dev`)
