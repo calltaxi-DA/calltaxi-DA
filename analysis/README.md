@@ -10,7 +10,13 @@
 
 ## 현재 상태
 
-아직 이곳으로 export된 Prediction 모델 파일이나 lookup table은 없다 — `ai/waiting_time/estimator.py`는 그래서 지금 `NotImplementedError`를 발생시킨다.
+통합 대기시간 Prediction 모델 산출물은 `analysis/waiting_time/`에 export되어 있다. 현재 export된 최종 모델은 RF 기반 `Feature Set v2 + 전일 차량운행 + 날씨` 모델이며, joblib artifact는 Git LFS로 관리한다.
+
+- `waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`
+- `waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json`
+- `waiting_time/rf_v2_prev_day_weather_serving_feature_mapping.md`
+
+다만 서비스 Adapter는 아직 실제 artifact 호출까지 연결하지 않았다. `ai/waiting_time/estimator.py`는 Phase 0 기준 입력·출력 계약과 feature 변환 구조를 정의하고, 실제 추론 함수는 모델 연결 전까지 `NotImplementedError`를 발생시킨다. 이는 검증되지 않은 fallback이나 가짜 대기시간을 서비스에 노출하지 않기 위한 동작이다.
 
 다만 통합 대기시간 Prediction 모델과 서비스 개발에서 사용할 데이터 기준은 [`waiting_time/data_criteria.md`](waiting_time/data_criteria.md)에 정리했다. 이 문서는 기존 전처리 Notebook을 재실행하지 않고, 임차택시·특장차 대기시간 전처리 기준, 당일/전일 접수 구분, 서비스 목표값(`접수_승차_분`)과 운영 KPI(`접수_배차_분`)의 차이를 확정하기 위한 기준 문서다. 실제 모델 파일이나 분석 산출물을 export할 때는 이 기준을 따른다.
 
