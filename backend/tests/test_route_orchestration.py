@@ -148,7 +148,11 @@ def test_provider_builds_three_backend_owned_routes_and_adds_conservative_waitin
     assert [route.transport_type for route in routes] == list(TransportType)
     calltaxi, subway, bus = routes
     assert seen_groups == ["임차택시_바로콜", "특장차_바로콜"]
+    assert calltaxi.predicted_waiting_time_seconds == 30 * 60
+    assert calltaxi.vehicle_time_seconds == 1_800
     assert calltaxi.total_time_seconds == 30 * 60 + 1_800
+    assert calltaxi.total_distance_meters == 12_500
+    assert calltaxi.total_cost_won == 3_000
     assert calltaxi.walking_distance_meters is None
     assert calltaxi.accessibility_status == AccessibilityStatus.NOT_VERIFIED
     assert any("1800초" in warning for warning in calltaxi.warnings)

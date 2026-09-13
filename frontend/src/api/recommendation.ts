@@ -11,6 +11,8 @@ export type RouteResult = {
   total_time_seconds: number | null
   total_distance_meters: number | null
   total_cost_won: number | null
+  predicted_waiting_time_seconds?: number | null
+  vehicle_time_seconds?: number | null
   walking_distance_meters: number | null
   walking_time_seconds: number | null
   metric_availability: Record<

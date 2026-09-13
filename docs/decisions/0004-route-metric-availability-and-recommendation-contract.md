@@ -21,6 +21,7 @@ Backend Phase 7은 세 이동수단을 사용자 우선순위로 정렬해야 �
 8. 2·3순위 metric이 없는 후보는 앞선 지표가 동률일 때 해당 metric이 있는 후보보다 뒤에 둔다. 수치 대체값은 만들지 않는다.
 9. 모든 우선순위 값이 같으면 `calltaxi`, `subway`, `low_floor_bus` 순서의 고정 tie-breaker를 사용해 응답 재현성을 보장한다. 이 순서는 선호 점수가 아니라 완전 동률 해소 규칙이다.
 10. 추천 정렬은 `backend/`의 순수 서비스에 두고 HTTP 라우터는 Backend provider 호출과 요청·응답 변환만 담당한다.
+11. 콜택시 `RouteResult`는 총 예상시간의 구성요소로 `predicted_waiting_time_seconds`와 `vehicle_time_seconds`를 함께 반환한다. 두 필드는 콜택시 전용 설명 필드이며 `metric_availability`와 추천 정렬에는 사용하지 않는다.
 
 ## 영향
 
@@ -31,5 +32,6 @@ Backend Phase 7은 세 이동수단을 사용자 우선순위로 정렬해야 �
 - `POST /routes/recommendations` 요청에는 `routes`가 존재하지 않으며 추가 필드도 거부한다. 서로 다른 출발지·목적지의 결과를 클라이언트가 조합하거나 지표를 조작할 수 없다.
 - `transport_types`에 없는 이동수단은 외부 provider를 호출하거나 `excluded_routes`에 넣지 않는다. 선택된 후보의 계산·제외·정렬만 Backend가 수행한다.
 - Backend Phase 7-2에서 TMAP 콜택시, ODsay 지하철·저상버스와 AI Adapter를 조합하는 운영 provider를 연결했다. 한 이동수단의 설정·외부 호출·예측이 불가능하면 해당 경로만 `unavailable`로 만들고 나머지 후보는 계속 추천한다.
+- 콜택시가 `available`이면 `total_time_seconds = predicted_waiting_time_seconds + vehicle_time_seconds`가 성립해야 한다. 지하철·저상버스에는 콜택시 전용 구성요소를 넣지 않는다.
 - 현재 대기시간 모델이 없어 콜택시는 실제 요청에서 `unavailable`이다. 모델 연결 테스트에서는 예측 대기시간과 차량 이동시간의 합산 및 세 이동수단 생성을 검증했다.
 - 따라서 Backend Phase 7 전체의 실제 TOP 3 완료 조건은 아직 충족하지 못했다. 검증된 Prediction 산출물과 inference 계약을 `analysis/`에 export하고 AI Adapter를 연결해야 한다.

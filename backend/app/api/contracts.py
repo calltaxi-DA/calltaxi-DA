@@ -106,6 +106,16 @@ class RouteResult(BaseModel):
         description="총 이동 거리(미터). 도보 구간을 포함한 전체 경로 거리다.",
     )
     total_cost_won: int | None = Field(default=None, ge=0, description="예상 비용(원)")
+    predicted_waiting_time_seconds: int | None = Field(
+        default=None,
+        ge=0,
+        description="장애인 콜택시 예측 대기시간(초). 콜택시 total_time_seconds의 구성요소다.",
+    )
+    vehicle_time_seconds: int | None = Field(
+        default=None,
+        ge=0,
+        description="장애인 콜택시 차량 이동시간(초). 콜택시 total_time_seconds의 구성요소다.",
+    )
     walking_distance_meters: int | None = Field(default=None, ge=0, description="도보 거리(미터)")
     walking_time_seconds: int | None = Field(default=None, ge=0, description="도보 시간(초)")
     metric_availability: RouteMetricAvailability | None = Field(
@@ -122,12 +132,17 @@ class RouteResult(BaseModel):
 
     @model_validator(mode="after")
     def validate_route_status_and_units(self) -> "RouteResult":
-        numeric_fields = {
+        comparable_metric_fields = {
             "total_time_seconds": self.total_time_seconds,
             "total_distance_meters": self.total_distance_meters,
             "total_cost_won": self.total_cost_won,
             "walking_distance_meters": self.walking_distance_meters,
             "walking_time_seconds": self.walking_time_seconds,
+        }
+        numeric_fields = {
+            **comparable_metric_fields,
+            "predicted_waiting_time_seconds": self.predicted_waiting_time_seconds,
+            "vehicle_time_seconds": self.vehicle_time_seconds,
         }
 
         if self.status == RouteStatus.UNAVAILABLE:
@@ -146,7 +161,7 @@ class RouteResult(BaseModel):
 
         if self.metric_availability is None:
             self.metric_availability = RouteMetricAvailability()
-        for field_name, value in numeric_fields.items():
+        for field_name, value in comparable_metric_fields.items():
             availability = getattr(self.metric_availability, field_name)
             if availability == MetricAvailability.AVAILABLE and value is None:
                 raise ValueError(f"available metric requires {field_name}")
@@ -154,6 +169,15 @@ class RouteResult(BaseModel):
                 raise ValueError(f"not_available metric must not include {field_name}")
         if self.unavailable_reason:
             raise ValueError("available route must not include unavailable_reason")
+        if self.transport_type == TransportType.CALLTAXI:
+            if self.predicted_waiting_time_seconds is None:
+                raise ValueError("available calltaxi route requires predicted_waiting_time_seconds")
+            if self.vehicle_time_seconds is None:
+                raise ValueError("available calltaxi route requires vehicle_time_seconds")
+            if self.total_time_seconds != self.predicted_waiting_time_seconds + self.vehicle_time_seconds:
+                raise ValueError("calltaxi total_time_seconds must equal waiting time plus vehicle time")
+        elif self.predicted_waiting_time_seconds is not None or self.vehicle_time_seconds is not None:
+            raise ValueError("waiting and vehicle time components are only available for calltaxi routes")
         if (
             self.walking_time_seconds is not None
             and self.total_time_seconds is not None

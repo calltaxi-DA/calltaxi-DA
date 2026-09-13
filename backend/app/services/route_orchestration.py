@@ -152,6 +152,8 @@ class BackendRecommendationRouteProvider:
             total_time_seconds=waiting_seconds + vehicle_time_seconds,
             total_distance_meters=distance_meters,
             total_cost_won=calculate_seoul_calltaxi_fare(distance_meters),
+            predicted_waiting_time_seconds=waiting_seconds,
+            vehicle_time_seconds=vehicle_time_seconds,
             walking_distance_meters=None,
             walking_time_seconds=None,
             metric_availability=RouteMetricAvailability(
