@@ -530,7 +530,7 @@
 
 - 브랜치: `backend/phase7-2-route-orchestration` (base: `dev`)
 - 완료 범위: 공개 추천 API가 TMAP 콜택시, ODsay 지하철·저상버스와 AI Adapter를 Backend 내부에서 조합하는 운영 `RecommendationRouteProvider`를 사용하도록 연결했다. 개별 이동수단의 설정·외부 호출·접근성 lookup·대기시간 예측이 실패하면 해당 경로만 `unavailable`로 만들고 다른 이동수단은 계속 추천한다. 검증된 대기시간 모델이 연결된 주입 테스트에서는 콜택시 총 이동시간과 세 이동수단 통합을 확인했다.
-- 전체 Phase 상태: **미완료**. 현재 `analysis/`에 Prediction 모델/lookup이 없고 `ai/waiting_time/estimator.py`가 `NotImplementedError`를 발생시키므로 실제 운영 요청에서 콜택시를 포함한 시간·비용 TOP 3을 반환할 수 없다. 가짜 대기시간은 사용하지 않는다.
+- 전체 Phase 상태: **미완료**. 현재 `analysis/`에 Prediction 모델 artifact와 serving feature mapping은 export됐지만, `ai/waiting_time/estimator.py`의 실제 artifact 호출과 Backend feature 생성 흐름은 아직 연결되지 않았다. 따라서 실제 운영 요청에서 콜택시를 포함한 시간·비용 TOP 3을 안정적으로 반환할 수 없으며, 가짜 대기시간은 사용하지 않는다.
 - 산출물:
   - `backend/app/services/route_orchestration.py` — 콜택시·지하철·저상버스 생성, 오류 격리, 대기시간 합산
   - `backend/app/api/recommendation.py` — 설정 기반 TMAP·ODsay client, 접근성 provider, AI Adapter 조합
@@ -542,9 +542,10 @@
   - 저상버스: 검토된 route mapping을 사용하는 ODsay 저상버스 client 결과만 사용한다.
   - 대기시간 모델 미연결·예측값 NaN/음수/비수치, 외부 경로 실패, 키 누락은 임의 수치로 대체하지 않는다.
 - 필수 선행조건:
-  - `analysis/`에 검증 완료된 통합 대기시간 Prediction 모델 또는 lookup export
-  - 실제 모델의 inference 입력 계약 확정. 최소한 현재 Adapter의 `hour_of_day`만으로 충분한지, 분석 기준의 차량구분·요일·출발/목적 지역·이용목적·예상 이동거리/시간을 받을지 결정 필요
-  - `ai/waiting_time/estimator.py`가 해당 export만 읽어 검증된 예측을 반환하도록 구현 및 AI 단위 테스트 추가
+  - 완료: `analysis/`에 검증 완료된 통합 대기시간 Prediction 모델 artifact, metadata, serving feature mapping export
+  - 완료: 실제 모델의 inference 입력 계약 확정. 현재 Adapter의 `hour_of_day`만으로는 부족하며, 요청 시각·이용목적·구/동·세부이동유형·TMAP 차량거리·전일 차량운행·날씨 feature를 받는 구조로 확정
+  - 남음: `ai/waiting_time/estimator.py`가 해당 export만 읽어 검증된 예측을 반환하도록 실제 artifact 호출 구현 및 AI 단위 테스트 추가
+  - 남음: Backend가 주소 정규화, TMAP 차량거리, 전일 차량운행, 날씨 feature를 생성한 뒤 AI Adapter를 호출하도록 orchestration 순서 확장
   - 실호출 환경의 `APP_TMAP_APP_KEY`, `APP_ODSAY_API_KEY`와 ODsay Server Key 등록 IP 준비
 - 검증 결과:
   - 예측 대기시간 30분 + 차량시간 1,800초 = 콜택시 총 3,600초 확인
@@ -690,3 +691,41 @@
   - 지하철 stationID 매핑·전체 역 coverage·실시간 시설 상태·환승 내부 동선은 추가 근거 필요.
   - Prediction 산출물과 inference 계약·성능 검증은 별도 모델 연결 Phase에서 진행.
   - 병원 결과는 reviewed-only 유지. 실시간 버스 API와 신규 의료시설 자료는 별도 승인된 데이터 연결 범위에서 검토.
+
+## AI Phase 0 — 대기시간 Prediction 연동 구조 정의 (2026-09-13)
+
+- 브랜치: `ai/phase0-wait-time-contract` (base: 최신 `origin/dev` `15a0b23`). 기존 로컬 작업은 원래 worktree에 보존하고, Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: 통합 장애인 콜택시 대기시간 Prediction 모델 1개를 Backend에서 사용할 수 있도록 입력·출력 형식, feature 정의, 단위, 호출 방식, 오류 처리 구조를 확정했다.
+- 한 일:
+  - `ai/waiting_time/estimator.py`에 `WaitingTimePredictionInput` dataclass를 추가해 Backend가 AI Adapter에 넘길 입력 계약을 정의했다.
+  - 학습 feature 이름과 단위를 유지하는 `to_model_features()` 변환을 추가했다. `승차거리`는 TMAP 차량거리 미터 단위이며 `승차거리_km`로 변환하지 않는다.
+  - 예측 목표값을 `접수→승차 대기시간`, 모델 출력 단위를 minutes로 확정했다. Backend 총 소요시간에는 후속 연결 Phase에서 seconds로 변환해 반영한다.
+  - `02:00~06:59`, 미지원 이용목적, 미지원 이동유형, 미지원 `model_group`, 주소 정규화 실패에 해당하는 빈 구/동, 유효하지 않은 numeric feature를 prediction unavailable 조건으로 고정했다.
+  - 기존 `estimate_waiting_minutes(hour_of_day)`는 Backend placeholder 호환을 위해 유지하고, 실제 artifact 호출 전까지 계속 `NotImplementedError`를 발생시킨다.
+  - `docs/decisions/0006-wait-time-prediction-contract.md`에 Backend 호출 순서, feature source, 오류 응답 원칙, 후속 작업 범위를 ADR로 기록했다.
+  - `analysis/README.md`의 대기시간 모델 export 상태를 최신화했다.
+- 산출물:
+  - `ai/waiting_time/estimator.py`
+  - `ai/tests/test_estimator.py`
+  - `docs/decisions/0006-wait-time-prediction-contract.md`
+  - `analysis/README.md`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - `ai/`는 FastAPI/HTTP를 import하지 않고 순수 Python dataclass 계약만 제공한다.
+  - `ai/`와 `backend/`는 `data/raw`, `data/processed`, `notebooks*/`를 직접 참조하지 않는다.
+  - 서비스 transport type은 계속 `calltaxi`이며, `model_group`은 모델 feature로만 사용한다.
+  - 실제 차량유형이 확정되지 않은 MVP에서는 후속 연결 Phase에서 `임차택시_바로콜`, `특장차_바로콜`을 모두 예측하고 보수적으로 큰 값을 사용하는 정책을 따른다.
+  - 모델 artifact 미연결 상태에서는 가짜 대기시간을 반환하지 않는다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py -q` — 21개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 165개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `git diff --check` — 통과
+- 자체 리뷰:
+  - 확정된 폴더 책임과 데이터 소유권을 변경하지 않았다.
+  - 실제 모델 로딩, 전일 차량운행 lookup, 날씨 lookup/API, Backend API 입력 확장은 후속 Phase로 남겼다.
+  - `analysis/waiting_time/*.joblib` artifact는 수정하지 않았다.
+- 다음에 이어받을 것:
+  - Backend route orchestration 순서를 TMAP 차량거리 확보 후 AI Adapter 호출로 변경한다.
+  - 추천 요청/API에 이용목적과 필요한 주소 metadata를 전달할지, Backend reverse geocoding으로 보완할지 확정한다.
+  - 전일 차량운행과 시간별 날씨 feature provider를 `analysis/` export 또는 운영 API로 연결한다.
+  - AI Adapter가 `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`을 lazy-load하고 예측값 검증·경고를 반환하도록 구현한다.
