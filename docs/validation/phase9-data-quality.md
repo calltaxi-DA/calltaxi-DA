@@ -8,7 +8,7 @@
 
 병원은 Phase 8에서 `reviewed_not_served`로 확정됐으므로 JSON·이미지와 출처의 일치, API·Frontend **미노출**을 검증했다. 병원 화면을 다시 연결하지 않는다. 모델이 없는 AI는 예측값을 검증하는 대신 기존 `NotImplementedError` 및 Backend의 unavailable 처리를 테스트했다.
 
-[기계 판독 결과](phase9-audit-2026-09-13.json)는 검토 후 보존한 이번 실행 결과다. 행 수·전체 행 중복·키 중복·컬럼별 빈 값·SHA-256·미매핑 목록·원본 대조 결과를 포함한다. `errors=[]`는 실행한 검사에 오류가 없다는 뜻이고 `warnings`는 사용 제한이다. 공백/빈 문자열을 결측으로 집계하며, `unknown`과 시설 상세의 `없음`은 빈 값과 구분한다. 숫자형 의미 오류는 별도 검사한다.
+[기계 판독 결과](phase9-audit-2026-09-13.json)는 검토 후 보존한 이번 실행 결과다. 행 수·전체 행 중복·키 중복·컬럼별 빈 값·SHA-256·미매핑 목록·원본 대조 결과를 포함한다. `errors=[]`는 실행한 검사에 오류가 없다는 뜻이고 `warnings`는 사용 제한이다. 공백/빈 문자열을 결측으로 집계하며, `unknown`과 시설 상세의 `없음`은 빈 값과 구분한다. 숫자형 의미 오류는 별도 검사한다. CI는 `--check-report`로 현재 커밋된 export와 repo 안 증거가 이 JSON의 비교 가능 snapshot에서 drift되지 않았는지 검사한다. 로컬 원본 파일이 필요한 source comparison metrics와 source availability warning은 CI 비교 범위에서 제외한다.
 
 ## 작업 전 구분
 
@@ -25,7 +25,7 @@ GitHub 기본 브랜치는 `main`이지만 서비스 코드가 없고, 기존 Ph
 |---|---|---|---|
 | 지하철 접근성 master | 158행, 키·행 중복 0, 빈 값 0. 실제 provider에서 158/158 역 일치 | 이용량 선택월 2025-12. 시설의 별도 수집 기준일 미기록 | Backend 역 단위 정적 접근성. 전체 수도권 역, 실시간 고장, 모든 환승 내부 동선을 보장하지 않음 |
 | 지하철 원본 정제 CSV | 1,896행, 월+호선+정규화역 키 중복 0. 최신월 158행의 export 컬럼 전부 일치 | 2025-01~12, 최신월 2025-12 | 오프라인 대조용. 서비스가 직접 읽지 않음 |
-| 저상버스 master | 364행, 키·행 중복 0. available 322 / unavailable 40 / unknown 2 | 승하차 2025년. 차량 metadata 기준일 364행 모두 unknown | Backend 노선 단위 저상버스 보유 상태. 특정 차량의 실제 도착 여부로 사용 금지 |
+| 저상버스 master | 364행, 키·행 중복 0. available 322 / unavailable 40 / unknown 2. 저상버스 count·flag·status와 혼잡 availability·row count·proxy 값 상호 정합성 통과 | 승하차 2025년. 차량 metadata 기준일 364행 모두 unknown | Backend 노선 단위 저상버스 보유 상태. 특정 차량의 실제 도착 여부로 사용 금지 |
 | ODsay 버스 mapping | 51행, 키·행 중복 0, 빈 값 0, master 미참조 0. 실제 provider 51/51 일치 | validation_date 2026-09-12 | ID+노선번호+유형이 모두 일치해야 함. 임의 노선번호 fallback 없음 |
 | 버스 원본 JSON | 364노선의 ID·유형·기종점·인가대수·저상대수·비율 대조, 불일치 0 | 명시적 수집일 없음 | 비율 168건은 소수 넷째 자리 반올림 차이. 날짜를 파일 수정일로 추정하지 않음 |
 | 혼잡 보조지표 원본 | 896,304행 / 320노선, proxy 결측·음수·비유한 값 0. count/max/p95/존재 플래그 불일치 0 | 2025년 집계 | 연간 추정 재차인원 보조지표. 현재 차량 혼잡으로 사용 금지. peak 시간·정류장·방향은 이번 독립 집계 대조 대상 아님 |
@@ -60,6 +60,9 @@ GitHub 기본 브랜치는 `main`이지만 서비스 코드가 없고, 기존 Ph
 # 커밋된 자료만: 원본 3개가 없으면 not_verified_source_missing을 명시
 python3 -m src.data_quality
 
+# 커밋된 audit JSON과 현재 export snapshot drift 검사
+python3 -m src.data_quality --check-report docs/validation/phase9-audit-2026-09-13.json
+
 # 로컬 원본이 있는 저장소를 읽기 전용으로 지정한 이번 전체 대조
 python3 -m src.data_quality --source-root /Users/pakrchansik/Desktop/calltaxi-DA
 
@@ -73,8 +76,8 @@ git diff --check
 ```
 
 - 전체 대조: 종료 코드 0, errors 0. 버스 결측·날짜 미확정·외부 mapping 한계 warning 5건 유지.
-- 원본 없는 clean worktree 대조: 종료 코드 0, export 검사는 통과. 원본 3개는 `not_verified_source_missing`이며 독립 재검증 완료로 세지 않는다. CI도 이 범위다.
-- Python: 174개 통과(Backend/AI 160 + 데이터 품질 14). 기존 Starlette/anyio DeprecationWarning 1건.
+- 원본 없는 clean worktree 대조: 종료 코드 0, export 검사는 통과. 원본 3개는 `not_verified_source_missing`이며 독립 재검증 완료로 세지 않는다. CI도 이 범위다. 다만 CI는 `--check-report docs/validation/phase9-audit-2026-09-13.json`로 행 수·해시·결측·미매핑 목록 등 커밋된 export snapshot의 drift를 실패 처리한다.
+- Python: 181개 통과(Backend/AI 160 + 데이터 품질 21). 기존 Starlette/anyio DeprecationWarning 1건.
 - Frontend: 21개 통과. TypeScript/Vite production build와 oxlint 통과.
 - 최초 검증 실패도 확인했다: 원본 지하철의 파생 key 컬럼 부재, 비율 168건의 문자열 정밀도 차이, `5522A` max의 부동소수 반올림 경계 차이. 데이터 변경 없이 원본 스키마에 맞춘 파생 key와 명시한 정밀도 비교로 수정하고 재실행했다. 실제 값 변화가 허용 범위를 넘으면 실패하는 테스트를 포함했다.
 - Git 상태 확인은 최초 LFS 임시파일 권한 부족으로 실패했다. 승인된 권한으로 재실행해 정상 확인했으며 기존 원본 데이터는 변경하지 않았다.

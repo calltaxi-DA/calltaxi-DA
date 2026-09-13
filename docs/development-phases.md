@@ -660,6 +660,8 @@
 - 브랜치: `analysis/phase9-data-quality` (base: 최신 `origin/dev` `2c7b12b`). 원격 기본 `main`에는 서비스 코드가 없어 기존 Phase 통합 기준 `dev`를 사용했다. 기존 로컬 교통비·지도 미커밋 변경은 원래 worktree에 보존했다.
 - 한 일:
   - `src/data_quality.py`에 읽기 전용 오프라인 검사 추가. export 행·키 중복, 컬럼별 결측, 숫자·접근성 상태, 매핑 참조·기준시점, 원본과 reviewed 결과의 일치를 검증한다. 오류는 종료 코드 1, 미검증 범위는 별도 warning/status로 출력한다.
+  - `--check-report` 모드를 추가해 현재 커밋된 export snapshot이 `docs/validation/phase9-audit-2026-09-13.json`과 drift되면 CI가 실패하도록 했다. 로컬 원본 파일이 필요한 source comparison metrics는 CI 비교 범위에서 제외한다.
+  - 원본 없는 CI에서도 버스 export 내부의 저상버스 count·flag·status와 혼잡 availability·row count·proxy 값의 상호 모순을 잡도록 검사를 강화했다.
   - 지하철·버스 전체 export를 실제 Backend provider와 대조하고, 미등록 역 및 버스 ID·번호·유형 불일치가 자동 매핑되지 않는지 검증했다.
   - 병원 집계 4개와 이미지 2개를 기존 CSV·노트북 저장 output에 대조하고 API/Frontend 미노출을 검증했다. 병원 서비스 연결은 추가하지 않았다.
   - Git 미추적 원본은 `--source-root`로 읽기 전용 대조하고, 없는 환경에서는 `not_verified_source_missing`을 명시한다. CI는 커밋된 자료만 검사한다.
@@ -675,13 +677,13 @@
   - 혼잡 원본 896,304행/320노선: count/max/p95/존재 플래그 일치. 실시간 혼잡으로 해석하지 않는다.
   - 병원 구 25행·동 416행 합계 126,705, 상위지역 JSON 일치. 범위·거리·순유입은 서로 다른 모집단을 유지한 채 기존 output 일치.
   - `python3 -m src.data_quality --source-root /Users/pakrchansik/Desktop/calltaxi-DA`: 오류 0, 종료 코드 0, 알려진 범위 제한 warning 5건.
-  - 원본 없는 `python3 -m src.data_quality`도 실행해 원본 3개의 미검증 상태를 확인.
-  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest src/tests backend/tests ai/tests -q`: 174개 통과. 기존 Starlette/anyio DeprecationWarning 1건.
+  - 원본 없는 `python3 -m src.data_quality`도 실행해 원본 3개의 미검증 상태를 확인. `python3 -m src.data_quality --check-report docs/validation/phase9-audit-2026-09-13.json`로 커밋된 export snapshot drift 없음 확인.
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest src/tests backend/tests ai/tests -q`: 181개 통과. 기존 Starlette/anyio DeprecationWarning 1건.
   - `npm test --prefix frontend`: 21개 통과. `npm run build --prefix frontend`, `npm run lint --prefix frontend`: 통과.
   - 최초 스키마·반올림 비교 실패와 LFS 권한 오류도 보고서/트러블슈팅에 기록하고 수정 후 재검증했다.
 - 자체 리뷰:
   - API/이벤트 계약, 데이터 소유권, 기술 스택, 서비스 코드, 원본/processed/analysis export, 기존 ADR·README 변경 없음.
-  - 검증 모듈은 오프라인 `src/`에만 위치하고 서비스 코드가 이를 import하지 않는다. CI에서 원본 부재를 검증 성공으로 숨기지 않는다.
+  - 검증 모듈은 오프라인 `src/`에만 위치하고 서비스 코드가 이를 import하지 않는다. CI에서 원본 부재를 원본 대조 성공으로 숨기지 않고, 커밋된 export 결과와 audit JSON의 drift는 별도 실패로 잡는다.
   - 미확정 시점과 일부 mapping만으로 최신성·전체 coverage를 주장하지 않는다. 기존 AI 미연결 동작을 유지한다.
 - 다음에 이어받을 것:
   - 버스 metadata 기준일 364건 unknown, 저상 정보 2노선 unknown, 전체 master 중 ODsay 미매핑 313노선.

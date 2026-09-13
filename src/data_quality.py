@@ -1,4 +1,6 @@
-"""Read-only Phase 9 audit. Run: python -m src.data_quality [--source-root PATH].
+"""Read-only Phase 9 audit.
+
+Run: python -m src.data_quality [--source-root PATH] [--check-report PATH].
 
 Stdlib-only offline analysis; never imports service code or writes analysis exports.
 Exit 1 denotes invalid exports; warnings identify explicitly unverified scope.
@@ -24,6 +26,7 @@ HOSPITAL = "analysis/hospital/hospital_analytics.json"
 SUBWAY_SOURCE = "data/processed/서울교통공사_장애인_지하철_승하차인원_정제_20251231.csv"
 BUS_SOURCE = "data/raw/bus/all_bus_routes.json"
 CONGESTION_SOURCE = "data/processed/bus/버스_저상노선_시간대별_추정재차인원_혼잡도_2025.csv"
+EXTERNAL_SOURCE_METRICS = {SUBWAY_SOURCE, BUS_SOURCE, CONGESTION_SOURCE}
 
 
 @dataclass
@@ -68,6 +71,43 @@ def nonnegative(value: str) -> bool:
         return math.isfinite(number) and number >= 0
     except ValueError:
         return False
+
+
+def export_snapshot(audit: Audit) -> dict[str, Any]:
+    """Return the CI-comparable part of an audit.
+
+    The committed Phase 9 report includes local original-source comparisons that
+    GitHub Actions cannot reproduce. This snapshot keeps reviewed exports and
+    repo-contained evidence drift checks while excluding external source metrics
+    and warning text whose content depends on local source availability.
+    """
+    return {
+        "metrics": {
+            key: value
+            for key, value in audit.metrics.items()
+            if key not in EXTERNAL_SOURCE_METRICS
+        },
+        "errors": audit.errors,
+    }
+
+
+def compare_report(current: Audit, expected_path: Path) -> list[str]:
+    expected = json.loads(expected_path.read_text(encoding="utf-8"))
+    expected_snapshot = export_snapshot(
+        Audit(metrics=expected.get("metrics", {}), errors=expected.get("errors", []))
+    )
+    current_snapshot = export_snapshot(current)
+    if current_snapshot == expected_snapshot:
+        return []
+    mismatches = []
+    current_metrics = current_snapshot["metrics"]
+    expected_metrics = expected_snapshot["metrics"]
+    for key in sorted(set(current_metrics) | set(expected_metrics)):
+        if current_metrics.get(key) != expected_metrics.get(key):
+            mismatches.append(f"report drift: metrics.{key}")
+    if current_snapshot["errors"] != expected_snapshot["errors"]:
+        mismatches.append("report drift: errors")
+    return mismatches
 
 
 def audit_exports(root: Path, source_root: Path | None = None) -> Audit:
@@ -131,17 +171,33 @@ def validate_bus(rows: list[dict[str, str]], mapping: list[dict[str, str]], audi
         key = row["route_number_normalized"]
         audit.check(normalized(row["route_number"]) == key, f"bus {key}: inconsistent canonical key")
         value = row["low_floor_bus_count"]
+        has_low_floor = row["has_low_floor_bus"]
+        audit.check(has_low_floor in {"0", "1", ""}, f"bus {key}: invalid has_low_floor_bus")
         expected = "unknown" if not value else "available" if float(value) > 0 else "unavailable"
         audit.check(row["accessibility_status"] == expected, f"bus {key}: inconsistent accessibility status")
         if value:
             audit.check(nonnegative(value) and float(value).is_integer(), f"bus {key}: invalid low-floor count")
             audit.check(nonnegative(row["authorized_bus_count"]) and float(value) <= float(row["authorized_bus_count"]), f"bus {key}: invalid authorized count")
+            if nonnegative(value):
+                audit.check((float(value) > 0) == (has_low_floor == "1"), f"bus {key}: low-floor flag/count mismatch")
             rate = float(row["low_floor_bus_rate"])
             audit.check(math.isfinite(rate) and 0 <= rate <= 1, f"bus {key}: invalid low-floor rate")
         else:
+            audit.check(has_low_floor == "", f"bus {key}: missing count must keep low-floor flag empty")
+            audit.check(row["accessibility_status"] == "unknown", f"bus {key}: missing count must remain unknown")
             audit.warnings.append(f"Bus {key}: low-floor metadata missing; unknown must remain excluded.")
         for column in ("stop_count", "congestion_row_count"):
             audit.check(row[column].isdigit(), f"bus {key}: invalid {column}")
+        congestion_available = row["congestion_data_available"]
+        audit.check(congestion_available in {"0", "1"}, f"bus {key}: invalid congestion_data_available")
+        if row["congestion_row_count"].isdigit():
+            row_count = int(row["congestion_row_count"])
+            if congestion_available == "0":
+                audit.check(row_count == 0, f"bus {key}: unavailable congestion must have zero rows")
+                audit.check(not row["max_low_floor_bus_load_per_bus"].strip() and not row["p95_low_floor_bus_load_per_bus"].strip(), f"bus {key}: unavailable congestion must not keep proxy values")
+            if congestion_available == "1":
+                audit.check(row_count > 0, f"bus {key}: available congestion must have rows")
+                audit.check(bool(row["max_low_floor_bus_load_per_bus"].strip()) and bool(row["p95_low_floor_bus_load_per_bus"].strip()), f"bus {key}: available congestion must keep proxy values")
         for column in ("max_low_floor_bus_load_per_bus", "p95_low_floor_bus_load_per_bus"):
             if row["congestion_data_available"] == "1":
                 audit.check(nonnegative(row[column]), f"bus {key}: invalid congestion proxy")
@@ -352,8 +408,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--source-root", type=Path)
+    parser.add_argument("--check-report", type=Path, help="Fail if the CI-comparable export snapshot differs from a committed audit JSON.")
     args = parser.parse_args()
     result = audit_exports(args.root, args.source_root)
+    if args.check_report:
+        result.errors.extend(compare_report(result, args.check_report))
     print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
     return int(bool(result.errors))
 
