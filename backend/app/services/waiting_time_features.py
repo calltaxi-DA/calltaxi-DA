@@ -226,14 +226,14 @@ def extract_district_and_dong(location: Location) -> tuple[str, str]:
     """Location.address에서 구/동을 추출한다.
 
     Kakao metadata 또는 reverse geocoding 결과가 `address`에 들어왔다는 전제의
-    최소 parser다. 확정된 행정구역 문자열이 없으면 예측을 중단한다.
+    최소 parser다. 확정된 행정동 문자열이 없으면 예측을 중단한다.
     """
 
     if location.address is None:
         raise WaitingTimeFeatureMappingError("주소 metadata가 없어 구/동을 정규화할 수 없습니다")
     tokens = location.address.replace(",", " ").split()
     gu = next((token for token in tokens if token.endswith("구")), None)
-    dong = next((token for token in tokens if token.endswith(("동", "가", "로")) and token != gu), None)
+    dong = next((token for token in tokens if token.endswith("동") and token != gu), None)
     if gu is None or dong is None:
         raise WaitingTimeFeatureMappingError("주소 metadata에서 구/동을 정규화할 수 없습니다")
     return gu, dong

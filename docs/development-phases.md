@@ -869,9 +869,10 @@
   - 한 model_group prediction만 실패하면 콜택시 전체를 unavailable 처리한다. 한쪽 성공값만 사용하는 fallback은 MVP serving 정책에 포함하지 않는다.
   - 추천 정렬 정책, 지하철/저상버스 provider, 분석 artifact, `data/`, `notebooks*/`, Frontend UI는 변경하지 않았다.
 - 검증 결과:
-  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests/test_waiting_time_features.py backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py backend/tests/test_config.py -q` — 61개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
-  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 232개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests/test_waiting_time_features.py backend/tests/test_recommendation_routes.py -q` — 49개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 235개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
   - 실제 `get_recommendation_route_provider()`를 사용하는 TestClient integration test에서 HTTP 요청 → TMAP fake → 설정 기반 `ConfiguredWaitingTimeInputBuilder` → `estimate_waiting_minutes_for_input()` fake → 콜택시 `RouteResult.total_time_seconds` 합산 경로를 확인했다.
+  - `extract_district_and_dong()`은 행정동이 포함된 주소(`서울특별시 중구 명동`)만 구/동으로 사용하고, 도로명 주소(`서울특별시 중구 세종대로 110`)와 좌표만 있는 요청은 Prediction unavailable로 fail-close하는지 확인했다.
 - 자체 리뷰:
   - `calltaxi_purpose`는 optional로 추가해 기존 호출을 깨지 않되, 값이 없을 때 예측 불가를 명시한다.
   - weather/operation-count 값을 임의 생성하지 않았다. 운영 lookup path와 해당 시각 값이 없으면 실운영 콜택시 route는 unavailable일 수 있다.

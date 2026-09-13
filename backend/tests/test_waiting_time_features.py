@@ -16,6 +16,7 @@ from app.services.waiting_time_features import (
     build_special_vehicle_waiting_time_input,
     derive_is_bad_weather,
     derive_movement_type,
+    extract_district_and_dong,
 )
 
 
@@ -114,6 +115,26 @@ def test_configured_waiting_time_input_builder_uses_configured_lookup_files(tmp_
     assert features["목적동"] == "역삼동"
     assert features["vehicle_operation_count_prev_day"] == 412.0
     assert features["temperature_c"] == 23.5
+
+
+def test_extract_district_and_dong_accepts_confirmed_dong_address() -> None:
+    location = Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 명동")
+
+    assert extract_district_and_dong(location) == ("중구", "명동")
+
+
+def test_extract_district_and_dong_rejects_road_name_as_dong() -> None:
+    location = Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 세종대로 110")
+
+    with pytest.raises(WaitingTimeFeatureMappingError, match="구/동"):
+        extract_district_and_dong(location)
+
+
+def test_extract_district_and_dong_rejects_coordinate_only_location() -> None:
+    location = Location(latitude=37.5666, longitude=126.9784)
+
+    with pytest.raises(WaitingTimeFeatureMappingError, match="주소 metadata"):
+        extract_district_and_dong(location)
 
 
 @pytest.mark.parametrize(
