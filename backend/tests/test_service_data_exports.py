@@ -20,10 +20,20 @@ def test_service_data_manifest_references_available_reviewed_exports() -> None:
         DEFAULT_SUBWAY_ACCESSIBILITY_MASTER_PATH: "backend subway accessibility provider",
         DEFAULT_LOW_FLOOR_BUS_ROUTE_MASTER_PATH: "backend low-floor bus provider",
         DEFAULT_ODSAY_BUS_ROUTE_MAPPING_PATH: "backend ODsay bus route provider",
+        REPOSITORY_ROOT
+        / "analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib": "ai waiting-time adapter",
+        REPOSITORY_ROOT
+        / "analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json": "ai waiting-time adapter",
+        REPOSITORY_ROOT
+        / "analysis/waiting_time/rf_v2_prev_day_weather_serving_feature_mapping.md": "ai waiting-time adapter",
     }
 
     assert manifest["schema_version"] == "1.1"
-    assert {item["domain"] for item in manifest["service_exports"]} == {"subway", "low_floor_bus"}
+    assert {item["domain"] for item in manifest["service_exports"]} == {
+        "subway",
+        "low_floor_bus",
+        "waiting_time",
+    }
     assert set(service_exports) == {
         str(path.relative_to(REPOSITORY_ROOT)) for path in expected_service_exports
     }
