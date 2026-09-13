@@ -62,10 +62,11 @@ PY
 ## 해결 방법
 
 - `WaitingTimePredictionAdapter`를 추가해 모델 artifact를 lazy-load한다.
+- public entrypoint가 요청마다 대용량 모델을 다시 로딩하지 않도록 모듈 레벨 기본 Adapter를 재사용한다.
 - 모델 파일이 없거나 Git LFS pointer이면 `WaitingTimeModelUnavailableError`를 발생시킨다.
 - `backend/requirements.txt`에 `joblib`, `pandas`, `scikit-learn`을 추가한다.
 - 모델 raw output은 Phase 2의 `map_prediction_output_to_waiting_time()`을 통해 검증한다.
-- 단위 테스트는 fake model loader와 fake model로 입력 전달, lazy-load 재사용, output mapping, missing artifact, LFS pointer reject를 검증한다.
+- 단위 테스트는 fake model loader와 fake model로 입력 전달, 동일 Adapter lazy-load 재사용, public entrypoint 기본 Adapter 재사용, output mapping, missing artifact, LFS pointer reject를 검증한다.
 
 ## 검증 결과
 
@@ -73,19 +74,57 @@ PY
 PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py -q
 ```
 
-- 31개 통과
+- 33개 통과
 
 ```bash
 PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py backend/tests/test_waiting_time_features.py backend/tests/test_route_orchestration.py -q
 ```
 
-- 65개 통과
+- 67개 통과
 
 ```bash
 PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q
 ```
 
-- 218개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+- 220개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+
+실제 artifact smoke test는 현재 worktree의 LFS pointer 상태 때문에 수행하지 못했다. 실제 joblib 파일을 내려받은 환경에서는 아래 명령으로 최소 호출 검증을 수행한다.
+
+```bash
+git lfs pull --include="analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib"
+pip install -r backend/requirements.txt
+PYTHONPATH=backend:. backend/.venv/bin/python - <<'PY'
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from ai.waiting_time.estimator import (
+    WaitingTimePredictionInput,
+    estimate_waiting_minutes_for_input,
+)
+
+prediction_input = WaitingTimePredictionInput(
+    requested_at=datetime(2026, 9, 13, 14, 30, tzinfo=ZoneInfo("Asia/Seoul")),
+    purpose="치료",
+    ride_distance_meters=12345.0,
+    origin_gu="중구",
+    origin_dong="명동",
+    destination_gu="강남구",
+    destination_dong="역삼동",
+    movement_type="구 간 이동",
+    model_group="특장차_바로콜",
+    vehicle_operation_count_prev_day=412.0,
+    temperature_c=23.5,
+    precipitation_mm=0.0,
+    wind_speed_ms=2.1,
+    snow_depth_cm=0.0,
+    is_bad_weather=False,
+)
+
+print(estimate_waiting_minutes_for_input(prediction_input).to_backend_output())
+PY
+```
+
+기대 결과는 `waitingTime`이 finite number이고 `unit`이 `minutes`인 출력이다.
 
 ## 남은 한계
 

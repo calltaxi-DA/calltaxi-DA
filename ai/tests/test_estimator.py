@@ -209,6 +209,51 @@ def test_prediction_input_based_estimator_uses_default_adapter(
     assert estimate_waiting_minutes_for_input(_prediction_input()) == fake_estimate
 
 
+def test_prediction_input_based_estimator_reuses_default_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"real joblib placeholder")
+    fake_model = _FakeWaitingTimeModel([10.0])
+    load_count = 0
+
+    def fake_loader(path: Path) -> _FakeWaitingTimeModel:
+        nonlocal load_count
+        load_count += 1
+        return fake_model
+
+    monkeypatch.setattr(estimator_module, "_build_model_input", lambda features: [features])
+    estimator_module._set_default_adapter_for_testing(
+        WaitingTimePredictionAdapter(model_path=model_path, model_loader=fake_loader)
+    )
+
+    try:
+        estimate_waiting_minutes_for_input(_prediction_input())
+        estimate_waiting_minutes_for_input(_prediction_input())
+    finally:
+        estimator_module._set_default_adapter_for_testing(None)
+
+    assert load_count == 1
+
+
+def test_prediction_input_based_estimator_accepts_explicit_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"real joblib placeholder")
+    monkeypatch.setattr(estimator_module, "_build_model_input", lambda features: [features])
+    adapter = WaitingTimePredictionAdapter(
+        model_path=model_path,
+        model_loader=lambda path: _FakeWaitingTimeModel([9.5]),
+    )
+
+    estimate = estimate_waiting_minutes_for_input(_prediction_input(), adapter=adapter)
+
+    assert estimate.waitingTime == 9.5
+
+
 def test_prediction_adapter_rejects_missing_model_artifact(tmp_path: Path) -> None:
     adapter = WaitingTimePredictionAdapter(model_path=tmp_path / "missing.joblib")
 

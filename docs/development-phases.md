@@ -805,6 +805,7 @@
   - Adapter는 `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`을 lazy-load하고, `WaitingTimePredictionInput.to_model_features()` 결과를 학습 feature 순서의 pandas DataFrame으로 변환해 모델 `predict()`에 전달한다.
   - 모델 raw output은 Phase 2의 `map_prediction_output_to_waiting_time()`을 통해 `WaitingTimeEstimate`와 `waitingTime` minutes 형식으로 변환한다.
   - `estimate_waiting_minutes_for_input()`은 더 이상 `NotImplementedError`를 발생시키지 않고 기본 Adapter를 호출한다.
+  - public entrypoint가 요청마다 1.48GB 모델을 다시 로딩하지 않도록 모듈 레벨 기본 Adapter를 재사용한다. 테스트에서는 명시적 Adapter 주입 또는 test-only setter로 교체할 수 있게 했다.
   - 모델 파일 없음, Git LFS pointer 상태, pandas/joblib 누락, 모델 로딩 실패, 모델 호출 실패를 명시적 Prediction error로 분리했다.
   - backend 서비스용 ML 추론 의존성으로 `joblib`, `pandas`, `scikit-learn`을 `backend/requirements.txt`에 추가했다.
   - 모델 artifact LFS pointer와 ML 의존성 누락 이슈를 `docs/troubleshooting/phase3-wait-time-prediction-adapter.md`에 기록했다.
@@ -822,9 +823,9 @@
   - 모델 파일이 없거나 Git LFS pointer 상태이면 가짜 대기시간을 반환하지 않고 `WaitingTimeModelUnavailableError`를 발생시킨다.
   - 현재 Phase는 Adapter 구현까지이며, Backend route orchestration이 실제 feature source를 모두 준비해 호출하는 연결은 후속 Phase로 남긴다.
 - 검증 결과:
-  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py -q` — 31개 통과
-  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py backend/tests/test_waiting_time_features.py backend/tests/test_route_orchestration.py -q` — 65개 통과
-  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 218개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py -q` — 33개 통과
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py backend/tests/test_waiting_time_features.py backend/tests/test_route_orchestration.py -q` — 67개 통과
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 220개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
   - 실제 1.48GB joblib artifact는 현재 worktree에서 Git LFS pointer 상태라 로딩 검증은 수행하지 못했다. 대신 missing artifact/LFS pointer를 unavailable error로 처리하는 단위 테스트를 추가했다.
   - `git diff --check` — 통과. 최초 실행은 Git LFS clean filter의 `.git/lfs/tmp` 쓰기 권한 문제로 실패했으나, 권한 승인 후 동일 검증이 통과했다.
 - 자체 리뷰:

@@ -280,10 +280,27 @@ def map_prediction_output_to_waiting_time(
 
 def estimate_waiting_minutes_for_input(
     prediction_input: WaitingTimePredictionInput,
+    adapter: WaitingTimePredictionAdapter | None = None,
 ) -> WaitingTimeEstimate:
     """통합 Prediction 입력 계약 기반 대기시간 예측 진입점."""
 
-    return WaitingTimePredictionAdapter().estimate(prediction_input)
+    active_adapter = adapter or _get_default_adapter()
+    return active_adapter.estimate(prediction_input)
+
+
+_default_adapter: WaitingTimePredictionAdapter | None = None
+
+
+def _get_default_adapter() -> WaitingTimePredictionAdapter:
+    global _default_adapter
+    if _default_adapter is None:
+        _default_adapter = WaitingTimePredictionAdapter()
+    return _default_adapter
+
+
+def _set_default_adapter_for_testing(adapter: WaitingTimePredictionAdapter | None) -> None:
+    global _default_adapter
+    _default_adapter = adapter
 
 
 def _coerce_prediction_minutes(raw_prediction: object) -> float:
