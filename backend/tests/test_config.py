@@ -49,3 +49,12 @@ def test_settings_prefers_app_odsay_api_key_over_alias(monkeypatch) -> None:
     settings = Settings()
 
     assert settings.odsay_api_key == "preferred-odsay-key"
+
+
+def test_transport_cost_database_path_is_resolved_from_repository_root(tmp_path: Path) -> None:
+    relative = Settings(_env_file=None, transport_cost_db_path="backend/var/test.sqlite3")
+    absolute_path = tmp_path / "costs.sqlite3"
+    absolute = Settings(_env_file=None, transport_cost_db_path=absolute_path)
+
+    assert relative.resolved_transport_cost_db_path == ROOT_ENV_PATH.parent / "backend/var/test.sqlite3"
+    assert absolute.resolved_transport_cost_db_path == absolute_path

@@ -23,10 +23,17 @@ class Settings(BaseSettings):
     cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     tmap_app_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_TMAP_APP_KEY", "TMAP_APP_KEY"))
     odsay_api_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_ODSAY_API_KEY", "ODSAY_API_KEY"))
+    transport_cost_db_path: Path = Path("backend/var/transport_costs.sqlite3")
 
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
+
+    @property
+    def resolved_transport_cost_db_path(self) -> Path:
+        if self.transport_cost_db_path.is_absolute():
+            return self.transport_cost_db_path
+        return ROOT_ENV_PATH.parent / self.transport_cost_db_path
 
 
 @lru_cache

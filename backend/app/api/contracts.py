@@ -6,6 +6,7 @@
 - 비용: 원
 """
 
+from datetime import date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -222,6 +223,65 @@ class RecommendationResponse(BaseModel):
     priorities: list[RecommendationPriority] = Field(min_length=3, max_length=3)
     recommendations: list[RankedRoute] = Field(max_length=3)
     excluded_routes: list[ExcludedRoute] = Field(default_factory=list)
+
+
+class TransportCostRecordCreate(BaseModel):
+    """실제 이용금액과 Backend가 다시 계산할 경로 조건."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    travel_date: date
+    actual_cost_won: int = Field(ge=0)
+    selected_transport_type: TransportType
+    origin: Location
+    destination: Location
+    transport_types: list[TransportType] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_transport_types(self) -> "TransportCostRecordCreate":
+        if len(self.transport_types) != len(set(self.transport_types)):
+            raise ValueError("transport_types must not contain duplicates")
+        if self.selected_transport_type not in self.transport_types:
+            raise ValueError("selected_transport_type must be included in transport_types")
+        return self
+
+
+class TransportCostRecord(BaseModel):
+    """저장된 실제 교통비와 금액 우선 추천 기준."""
+
+    id: int = Field(ge=1)
+    travel_date: date
+    actual_cost_won: int = Field(ge=0)
+    recommended_cost_won: int = Field(ge=0)
+    potential_savings_won: int = Field(ge=0)
+    selected_transport_type: TransportType
+    recommended_transport_type: TransportType
+    origin: Location
+    destination: Location
+    created_at: datetime
+
+
+class TransportCostTotals(BaseModel):
+    actual_cost_won: int = Field(ge=0)
+    recommended_cost_won: int = Field(ge=0)
+    potential_savings_won: int = Field(ge=0)
+
+
+class DailyTransportCostSummary(TransportCostTotals):
+    date: date
+    record_count: int = Field(ge=0)
+
+
+class DailyTransportCostResponse(BaseModel):
+    date: date
+    records: list[TransportCostRecord]
+    totals: TransportCostTotals
+
+
+class MonthlyTransportCostResponse(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    daily_summaries: list[DailyTransportCostSummary]
+    totals: TransportCostTotals
 
 
 class CalltaxiRouteResponse(BaseModel):

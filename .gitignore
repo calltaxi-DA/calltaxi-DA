@@ -63,3 +63,6 @@ results/
 
 # Logs
 *.log
+
+# Backend local state
+backend/var/*.sqlite3*
