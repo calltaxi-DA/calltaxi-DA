@@ -12,6 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ai.waiting_time.estimator import (
+    DEFAULT_MODEL_METADATA_PATH,
     DEFAULT_MODEL_NAME,
     OUT_OF_TRAINING_TARGET_RANGE_WARNING,
     SUPPORTED_MODEL_GROUPS,
@@ -22,9 +23,7 @@ from ai.waiting_time.estimator import (
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_METADATA_PATH = (
-    REPOSITORY_ROOT / "analysis" / "waiting_time" / "rf_wait_time_v2_prev_day_weather_final_metadata.json"
-)
+DEFAULT_METADATA_PATH = DEFAULT_MODEL_METADATA_PATH
 DEFAULT_VALIDATION_OUTPUT_PATH = (
     REPOSITORY_ROOT / "analysis" / "waiting_time" / "prediction_validation_phase4.json"
 )

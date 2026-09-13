@@ -9,6 +9,7 @@ Backend가 넘긴 순수 Python 입력 계약을 학습 feature로 변환하고,
 """
 
 import math
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -20,8 +21,44 @@ ModelFeatureValue: TypeAlias = str | int | float
 ModelLoader: TypeAlias = Callable[[Path], Any]
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_MODEL_PATH = (
-    REPOSITORY_ROOT / "analysis" / "waiting_time" / "rf_wait_time_v2_prev_day_weather_final.joblib"
+MODEL_PATH_ENV_VAR = "APP_WAITING_TIME_MODEL_PATH"
+MODEL_METADATA_PATH_ENV_VAR = "APP_WAITING_TIME_MODEL_METADATA_PATH"
+DEFAULT_MODEL_ARTIFACT_RELATIVE_PATH = Path(
+    "analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib"
+)
+DEFAULT_MODEL_METADATA_RELATIVE_PATH = Path(
+    "analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json"
+)
+
+
+def _load_repository_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    load_dotenv(REPOSITORY_ROOT / ".env", override=False)
+
+
+def _resolve_runtime_path(env_var_name: str, default_relative_path: Path) -> Path:
+    configured_path = os.environ.get(env_var_name)
+    if not configured_path:
+        return REPOSITORY_ROOT / default_relative_path
+
+    path = Path(configured_path)
+    if path.is_absolute():
+        return path
+    return REPOSITORY_ROOT / path
+
+
+_load_repository_dotenv()
+DEFAULT_MODEL_PATH = _resolve_runtime_path(
+    MODEL_PATH_ENV_VAR,
+    DEFAULT_MODEL_ARTIFACT_RELATIVE_PATH,
+)
+DEFAULT_MODEL_METADATA_PATH = _resolve_runtime_path(
+    MODEL_METADATA_PATH_ENV_VAR,
+    DEFAULT_MODEL_METADATA_RELATIVE_PATH,
 )
 SEOUL_TIMEZONE = ZoneInfo("Asia/Seoul")
 TARGET_DEFINITION = "접수→승차 대기시간"
