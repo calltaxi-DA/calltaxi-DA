@@ -74,8 +74,10 @@ describe('Frontend Phase 7 recommendation UI', () => {
   it('requires calltaxi purpose when calltaxi is selected', async () => {
     setupKakaoMock(); render(<App />); await selectRoutePlaces()
     expect(screen.getByRole('button', { name: '경로검색' })).toBeDisabled()
+    expect(screen.getByText('장애인 콜택시를 포함해 검색하려면 이동 조건 설정에서 이용목적을 선택해주세요.')).toBeInTheDocument()
     selectCalltaxiPurpose()
     expect(screen.getByRole('button', { name: '경로검색' })).toBeEnabled()
+    expect(screen.queryByText('장애인 콜택시를 포함해 검색하려면 이동 조건 설정에서 이용목적을 선택해주세요.')).not.toBeInTheDocument()
   })
 
   it('sends only selected transport types to the backend', async () => {

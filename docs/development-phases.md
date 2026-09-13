@@ -1054,8 +1054,9 @@
   - `RecommendationRequest` 타입에 Backend가 받는 `calltaxi_purpose`를 추가했다.
   - 장애인 콜택시가 선택된 경우 이용목적을 선택해야 경로검색을 보낼 수 있도록 입력 조건을 추가했다.
   - 콜택시 선택 시 `calltaxi_purpose`를 `POST /routes/recommendations` 요청 body에 포함하고, 콜택시를 해제한 경우에는 해당 값을 전송하지 않도록 했다.
+  - 콜택시가 선택되어 있는데 이용목적을 고르지 않아 `경로검색`이 비활성화된 경우, 버튼 근처에 비활성화 사유를 안내해 접힌 이동 조건 영역 때문에 사용자가 막히지 않도록 했다.
   - 입력 장소, 이동수단, 우선순위, 콜택시 이용목적이 변경되면 기존 추천 결과와 진행 중 요청을 무효화하는 기존 stale-response 방어 흐름을 유지했다.
-  - 프론트 테스트에 콜택시 이용목적 필수 조건과 request body mapping 검증을 추가했다.
+  - 프론트 테스트에 콜택시 이용목적 필수 조건, 안내 문구, request body mapping 검증을 추가했다.
 - 산출물:
   - `frontend/src/App.tsx`
   - `frontend/src/api/recommendation.ts`
@@ -1072,7 +1073,7 @@
   - 최초 `npm test -- --run`은 별도 worktree에 `node_modules`가 없어 `vitest: command not found`로 실패했다. `npm ci`로 `package-lock.json` 기준 의존성을 설치한 뒤 동일 명령이 통과했다.
 - 자체 리뷰:
   - 새 입력값은 Backend 계약에 이미 존재하는 `calltaxi_purpose`를 전달하기 위한 UI/요청 mapping이며, 임의 목적 기본값을 넣지 않는다.
-  - 이용목적이 없는 콜택시 요청을 막아 Backend가 필수 feature 누락으로 콜택시를 `unavailable` 처리하는 상황을 줄였다.
+  - 이용목적이 없는 콜택시 요청을 막아 Backend가 필수 feature 누락으로 콜택시를 `unavailable` 처리하는 상황을 줄였고, 버튼 비활성화 사유를 화면에 노출했다.
   - 기존 abort/request id 기반 stale-response 방어를 변경하지 않고, 콜택시 이용목적 변경도 동일하게 추천 결과를 무효화한다.
 - 다음에 이어받을 것:
   - 콜택시 결과 카드에서 `predicted_waiting_time_seconds`, `vehicle_time_seconds`, `total_time_seconds`를 사용자에게 어떻게 나눠 보여줄지 결정한다.

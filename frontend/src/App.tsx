@@ -578,6 +578,12 @@ function App() {
             </fieldset>
           </details>
 
+          {isCalltaxiSelected && calltaxiPurpose === '' ? (
+            <p className="field-hint" role="status">
+              장애인 콜택시를 포함해 검색하려면 이동 조건 설정에서 이용목적을 선택해주세요.
+            </p>
+          ) : null}
+
           <button type="submit" disabled={!canSearch}>
             경로검색
           </button>
