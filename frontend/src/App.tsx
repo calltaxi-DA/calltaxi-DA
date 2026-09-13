@@ -554,7 +554,7 @@ function App() {
         >
           {recommendationStatus === 'loading' ? (
             <section className="route-result-card loading-state">
-              <p>세 이동수단의 경로와 추천 순위를 계산하고 있습니다.</p>
+              <p>선택한 이동수단의 경로와 추천 순위를 계산하고 있습니다.</p>
             </section>
           ) : null}
           {recommendationStatus === 'error' ? (

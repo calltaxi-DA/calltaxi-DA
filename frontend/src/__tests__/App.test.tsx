@@ -70,6 +70,8 @@ describe('Frontend Phase 7 recommendation UI', () => {
   it('sends only selected transport types to the backend', async () => {
     setupKakaoMock(); const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ...recommendationResult(), transport_types: ['subway', 'low_floor_bus'] }) }); vi.stubGlobal('fetch', fetchMock); render(<App />); await selectRoutePlaces()
     fireEvent.click(screen.getByLabelText('장애인 콜택시')); fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+    expect(screen.getByText('선택한 이동수단의 경로와 추천 순위를 계산하고 있습니다.')).toBeInTheDocument()
+    expect(screen.queryByText(/세 이동수단의 경로/)).not.toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).transport_types).toEqual(['subway', 'low_floor_bus'])
   })
@@ -77,7 +79,7 @@ describe('Frontend Phase 7 recommendation UI', () => {
   it('requests backend-owned recommendations and compares ranked metrics and accessibility', async () => {
     setupKakaoMock(); const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => recommendationResult() }); vi.stubGlobal('fetch', fetchMock); render(<App />)
     await selectRoutePlaces(); fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
-    expect(screen.getByText('세 이동수단의 경로와 추천 순위를 계산하고 있습니다.')).toBeInTheDocument()
+    expect(screen.getByText('선택한 이동수단의 경로와 추천 순위를 계산하고 있습니다.')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: '추천 경로 최대 TOP 3' })).toBeInTheDocument()
     expect(screen.getByText('1위')).toBeInTheDocument(); expect(screen.getByText('2위')).toBeInTheDocument()
     expect(screen.getByText('39분')).toBeInTheDocument(); expect(screen.getByText('1,650원')).toBeInTheDocument(); expect(screen.getByText('330m')).toBeInTheDocument(); expect(screen.getByText('11분')).toBeInTheDocument()
