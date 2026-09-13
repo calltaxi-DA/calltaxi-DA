@@ -286,6 +286,19 @@ summary:focus-visible {
   font-weight: 900;
 }
 
+.compared-transports {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #eef4ff;
+}
+
+.compared-transports p {
+  margin: 4px 0 0;
+  color: #536079;
+  font-size: 0.88rem;
+}
+
 fieldset {
   margin: 18px 0 0;
   padding: 0;
@@ -487,6 +500,66 @@ button:disabled {
 .error-state h2 {
   margin: 0;
   font-size: 1rem;
+}
+
+.recommendation-results {
+  display: grid;
+  gap: 14px;
+}
+
+.recommendation-heading {
+  padding: 4px 4px 0;
+}
+
+.recommendation-heading h2,
+.recommendation-card h3,
+.excluded-routes h3 {
+  margin: 0;
+}
+
+.rank-badge {
+  display: grid;
+  min-width: 58px;
+  min-height: 58px;
+  place-items: center;
+  border-radius: 18px;
+  color: #ffffff;
+  background: #172033;
+}
+
+.accessibility-status,
+.excluded-routes,
+.empty-recommendation {
+  padding: 14px;
+  border-radius: 16px;
+  background: #eef8f2;
+  color: #355849;
+  font-size: 0.86rem;
+}
+
+.accessibility-status.not_verified {
+  background: #fff7e8;
+  color: #765318;
+}
+
+.accessibility-status.verified_unavailable,
+.excluded-routes {
+  background: #fff1ee;
+  color: #803a30;
+}
+
+.accessibility-status ul,
+.excluded-routes ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.empty-recommendation {
+  margin: 0;
+  background: #fff7e8;
+  color: #765318;
 }
 
 @media (max-width: 760px) {

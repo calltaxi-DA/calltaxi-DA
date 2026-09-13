@@ -400,6 +400,32 @@
   - 장애인 콜택시 결과 UI와 세 이동수단 추천 결과 UI는 각각 계약과 데이터가 준비된 전용 Frontend Phase에서 연결한다.
   - 실제 차량 단위 저상 여부는 검증 가능한 Backend 데이터가 확보된 뒤 다룬다.
 
+## Frontend Phase 7 — 교통수단 비교 및 추천 UI (2026-09-13)
+
+- 브랜치: `frontend/phase7-transport-recommendation-ui` (base: `dev`)
+- 한 일: 경로검색 시 공개 `POST /routes/recommendations`에 출발지·목적지와 중복 없는 시간·금액·도보 우선순위만 전송하고, Backend가 계산한 최대 TOP 3 순위를 그대로 표시한다. 추천 카드마다 총시간·비용·도보거리·도보시간·접근성 상태와 warning을 함께 보여주며, 지표가 `not_available`이면 0으로 보정하지 않고 `비교 불가`로 표시한다. Backend에서 제외한 이동수단은 추천 카드로 승격하지 않고 제외 사유를 별도 영역에 유지한다. 입력 장소나 우선순위가 변경되면 진행 중 요청을 취소하고 이전 결과를 무효화한다.
+- 산출물:
+  - `frontend/src/api/recommendation.ts` — 추천 요청·응답, 공통 지표 가용성·접근성 타입과 API client
+  - `frontend/src/components/RecommendationResults.tsx` — 순위, 이동수단별 네 지표, 접근성 상태·warning, 제외 사유 UI
+  - `frontend/src/App.tsx`, `frontend/src/index.css` — Backend-owned 추천 요청과 통합 결과 영역·상태 스타일 연결
+  - `frontend/src/__tests__/App.test.tsx` — 요청 계약, 우선순위 순서, TOP 3 표현, 지표 누락, 접근성, 제외·오류·stale 응답 검증
+- 검증 결과:
+  - `npm test -- --run` — 10개 통과
+  - `npm run lint` — oxlint 통과
+  - `npm run build` — TypeScript 및 Vite production build 통과
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_recommendation_routes.py backend/tests/test_recommendation_service.py backend/tests/test_route_orchestration.py backend/tests/test_route_contracts.py` — 43개 통과(기존 Starlette deprecation warning 1건)
+  - 로컬 Frontend proxy 실호출(서울시청→강남역, 시간 우선): HTTP 200, 저상버스 1위·지하철 2위와 각 경로 지표 반환 확인
+  - 실제 콜택시는 Prediction 모델 미연결로 제외 사유가 반환됨을 확인하고, 검증된 세 경로 응답 fixture로 1~3위 및 콜택시 도보 `비교 불가` 표시를 검증
+- 확정 기준:
+  - 추천 순위와 제외 여부는 Frontend에서 재계산하지 않고 Backend 응답을 단일 신뢰 소스로 사용한다.
+  - 세 이동수단은 항상 Backend 통합 대상이며, Frontend는 임의 경로 수치나 이동수단 필터를 추천 요청에 추가하지 않는다.
+  - `not_verified`는 접근성 확인됨으로 승격하지 않고, `verified_unavailable` 및 `not_available`도 정상값이나 0으로 대체하지 않는다.
+  - TOP 3은 조건을 만족하는 후보 중 최대 3개다. 모델·외부 API·접근성 조건으로 제외된 경로가 있으면 3개보다 적을 수 있다.
+- 남은 한계와 다음 작업:
+  - 실제 콜택시 포함 시간·금액 TOP 3은 검증된 대기시간 Prediction 모델을 AI Adapter에 연결한 뒤 운영 환경에서 재검증한다.
+  - 콜택시 승하차 접근 도보 데이터가 없는 동안 최소 도보 1순위에서는 콜택시가 제외된다.
+  - ODsay Server Key는 등록된 출구 IP에서만 실호출할 수 있으므로 배포 환경에서는 고정 egress IP가 필요하다.
+
 ## Analysis Phase 7 — 이동수단 비교 분석 (2026-09-12)
 
 - 브랜치: `analysis/phase7-transport-comparison` (base: `dev`)
