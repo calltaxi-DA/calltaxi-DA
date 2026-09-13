@@ -36,7 +36,7 @@
     }
   ],
   "charts": [
-    {"chart_id":"medical_same_vs_different_district","title":"의료목적콜 같은구·다른구 이동 비교","alt_text":"전체콜과 의료목적콜의 같은구 및 다른구 이동 비율을 비교한 막대그래프","asset_url":"/analytics/hospital/charts/medical_same_vs_different_district","analysis_ids":["medical_trip_scope"]},
-    {"chart_id":"medical_within_5km_coverage","title":"의료목적콜 5km 이내 이동 비율","alt_text":"같은구, 다른구, 전체 의료목적콜의 5km 이내와 초과 비율을 비교한 그래프","asset_url":"/analytics/hospital/charts/medical_within_5km_coverage","analysis_ids":["medical_trip_distance_coverage"]}
+    {"chart_id":"medical_same_vs_different_district","title":"의료목적콜 같은구·다른구 이동 비교","alt_text":"전체콜과 의료목적콜의 같은구 및 다른구 이동 비율을 비교한 막대그래프","asset_path":"analysis/hospital/figures/medical_same_vs_different_district.png","analysis_ids":["medical_trip_scope"]},
+    {"chart_id":"medical_within_5km_coverage","title":"의료목적콜 5km 이내 이동 비율","alt_text":"같은구, 다른구, 전체 의료목적콜의 5km 이내와 초과 비율을 비교한 그래프","asset_path":"analysis/hospital/figures/medical_within_5km_coverage.png","analysis_ids":["medical_trip_distance_coverage"]}
   ]
 }

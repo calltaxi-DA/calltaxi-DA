@@ -10,8 +10,8 @@
 
 ### 2026-09-13 — `backend/`에서 Uvicorn 실행 시 최상위 `ai` 모듈 import 실패
 
-- **문제 상황**: `backend/app/main.py`에 적힌 `uvicorn app.main:app` 명령을 `backend/`에서 실행해 Phase 8 API를 smoke test하자 애플리케이션 import 단계에서 `ModuleNotFoundError: No module named 'ai'`가 발생했다.
-- **영향**: 테스트가 통과해도 안내된 로컬 실행 명령만으로는 Backend가 시작되지 않아 병원 분석 API를 포함한 모든 endpoint를 사용할 수 없다.
+- **문제 상황**: `backend/app/main.py`에 적힌 `uvicorn app.main:app` 명령을 `backend/`에서 실행하자 애플리케이션 import 단계에서 `ModuleNotFoundError: No module named 'ai'`가 발생했다.
+- **영향**: 테스트가 통과해도 안내된 로컬 실행 명령만으로는 Backend가 시작되지 않아 서비스 endpoint를 사용할 수 없다.
 - **재현 방법**: 저장소의 `backend/`로 이동한 뒤 `.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8013`을 실행한다.
 - **원인**: Backend와 최상위 `ai/`는 같은 Python 프로세스와 가상환경을 사용하지만, `backend/`만 Python import path에 들어가면 형제 디렉터리인 저장소 루트의 `ai` package를 찾을 수 없다.
 - **검토한 대안**:
@@ -19,24 +19,24 @@
   - `ai`를 별도 package로 설치: 배포 구조를 함께 설계해야 하는 범위 확장이므로 이번 Phase에서는 제외했다.
   - 저장소 루트를 `PYTHONPATH`에 포함: 기존 테스트 실행 방식과 같고 구조 변경이 없어 채택했다.
 - **해결 방법**: `backend/`에서 실행할 때 `PYTHONPATH=..`를 지정하도록 `app.main`의 로컬 실행 안내를 바로잡았다.
-- **검증 결과**: `PYTHONPATH=.. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8013`으로 서버가 시작됐고 병원 JSON 및 PNG endpoint가 모두 HTTP 200을 반환했다.
+- **검증 결과**: `PYTHONPATH=.. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8013`으로 애플리케이션 import와 서버 시작이 정상 완료됐다.
 - **남은 한계**: 배포 환경도 저장소 루트를 import path에 포함하거나 `backend`와 `ai`를 설치 가능한 package로 구성해야 한다. 이번 Phase에서는 packaging 구조를 변경하지 않았다.
 
 ### 2026-09-13 — 분석 export 경로가 Backend 실행 디렉터리에 따라 달라짐
 
-- **문제 상황**: Phase 8의 병원 분석 loader를 기존 지하철·저상버스 provider와 같은 상대경로(`analysis/...`)로 구현한 뒤, 문서에 안내된 것처럼 `backend/`에서 애플리케이션을 실행하면 저장소 루트가 아니라 `backend/analysis/...`를 찾게 되는 문제를 확인했다.
-- **영향**: 저장소 루트에서 실행하는 테스트는 통과하지만 실제 Backend 실행에서는 병원 분석 API가 `503`을 반환하고, 지하철·저상버스 접근성 provider도 reviewed export를 읽지 못해 접근성 확인 또는 경로 추천이 이용불가 상태가 될 수 있다.
+- **문제 상황**: 지하철·저상버스 provider가 상대경로(`analysis/...`)를 사용할 때, 문서에 안내된 것처럼 `backend/`에서 애플리케이션을 실행하면 저장소 루트가 아니라 `backend/analysis/...`를 찾게 되는 문제를 확인했다.
+- **영향**: 저장소 루트에서 실행하는 테스트는 통과하지만 실제 Backend 실행에서는 지하철·저상버스 접근성 provider가 reviewed export를 읽지 못해 접근성 확인 또는 경로 추천이 이용불가 상태가 될 수 있다.
 - **재현 방법**:
   1. 기본 export 경로가 `Path("analysis/...")`인 상태에서 현재 디렉터리를 저장소 루트가 아닌 `backend/` 또는 임시 디렉터리로 바꾼다.
-  2. `load_hospital_analytics()`, `CsvSubwayAccessibilityProvider()`, `CsvLowFloorBusRouteProvider()`를 기본 인자로 생성한다.
+  2. `CsvSubwayAccessibilityProvider()`, `CsvLowFloorBusRouteProvider()`를 기본 인자로 생성한다.
   3. 현재 디렉터리 아래에 `analysis/`가 없어 파일을 찾지 못하는지 확인한다.
 - **원인**: `Path("analysis/...")`는 모듈 위치가 아니라 프로세스의 현재 작업 디렉터리를 기준으로 해석된다. 테스트 명령은 저장소 루트에서 실행되어 이 실행환경 차이를 드러내지 못했다.
 - **검토한 대안**:
   - Backend를 항상 저장소 루트에서만 실행하도록 제한: 기존 Uvicorn 실행 안내와 충돌하고 배포 실행 디렉터리에 취약해 제외했다.
   - 환경변수로 각 export 경로를 추가: 정적이고 저장소에 포함된 reviewed export에 운영 설정을 추가할 실익이 작아 제외했다.
   - 서비스 모듈의 실제 파일 위치에서 저장소 `analysis/`를 계산: 실행 디렉터리와 무관하고 기존 데이터 소유권을 유지해 채택했다.
-- **해결 방법**: 병원·지하철·저상버스 서비스가 `Path(__file__).resolve()`에서 저장소 루트를 구한 뒤 `analysis/`의 검토 완료 export를 가리키도록 기본 경로를 통일했다. 테스트에서는 임시 디렉터리로 `chdir`한 상태에서 세 loader/provider를 생성한다.
-- **검증 결과**: 저장소 밖 임시 작업 디렉터리에서도 병원 분석 4개, 지하철 접근성 lookup, 저상버스 route mapping이 로드됐고 전체 Backend/AI 테스트 154개가 통과했다.
+- **해결 방법**: 지하철·저상버스 서비스가 `Path(__file__).resolve()`에서 저장소 루트를 구한 뒤 `analysis/`의 검토 완료 export를 가리키도록 기본 경로를 통일했다. 테스트에서는 임시 디렉터리로 `chdir`한 상태에서 두 provider를 생성한다.
+- **검증 결과**: 저장소 밖 임시 작업 디렉터리에서도 지하철 접근성 lookup과 저상버스 route mapping이 로드됨을 확인했다.
 - **남은 한계**: 현재 기본 경로는 모노레포 폴더 구조를 전제로 한다. Backend만 별도 이미지로 배포한다면 `analysis/` export를 동일 상대 구조로 포함하거나 별도 배포 경로 설정 계약을 추가해야 한다.
 
 ### 2026-09-12 — Frontend에서 localhost Backend 직접 호출 시 CORS 차단

@@ -2,12 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { fetchRecommendations } from './api/recommendation'
-import { fetchHospitalAnalytics } from './api/hospitalAnalytics'
-import type { HospitalAnalyticsResponse } from './api/hospitalAnalytics'
 import type { RecommendationPriority, RecommendationResponse, TransportType } from './api/recommendation'
 import type { RouteLocation } from './api/subway'
 import RecommendationResults from './components/RecommendationResults'
-import HospitalAnalytics from './components/HospitalAnalytics'
 
 type LocationRole = 'origin' | 'destination'
 
@@ -175,8 +172,6 @@ function App() {
   const [recommendationStatus, setRecommendationStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const recommendationRequestRef = useRef(0)
   const recommendationAbortControllerRef = useRef<AbortController | null>(null)
-  const [hospitalAnalytics, setHospitalAnalytics] = useState<HospitalAnalyticsResponse | null>(null)
-  const [hospitalAnalyticsStatus, setHospitalAnalyticsStatus] = useState<'idle' | 'loading' | 'error'>('idle')
 
   const canSearch = selectedPlaces.origin !== null && selectedPlaces.destination !== null && selectedTransportTypes.length > 0
 
@@ -424,17 +419,6 @@ function App() {
     void loadRecommendations(originPlace, destinationPlace)
   }
 
-  const loadHospitalAnalytics = async () => {
-    setHospitalAnalyticsStatus('loading')
-    try {
-      setHospitalAnalytics(await fetchHospitalAnalytics())
-      setHospitalAnalyticsStatus('idle')
-    } catch {
-      setHospitalAnalytics(null)
-      setHospitalAnalyticsStatus('error')
-    }
-  }
-
   return (
     <main className="app-shell">
       <section className="map-layer" aria-label="지도 위치 확인">
@@ -561,14 +545,6 @@ function App() {
           ) : (
             <p>출발지·목적지를 선택하면 검색 조건이 표시됩니다.</p>
           )}
-        </section>
-
-        <section className="analytics-launcher">
-          <button type="button" onClick={() => void loadHospitalAnalytics()} disabled={hospitalAnalyticsStatus === 'loading'}>
-            {hospitalAnalyticsStatus === 'loading' ? '병원 이동 분석을 불러오는 중입니다.' : '병원 이동 분석 보기'}
-          </button>
-          {hospitalAnalyticsStatus === 'error' ? <p role="alert">병원 이동 분석정보를 불러오지 못했습니다.</p> : null}
-          {hospitalAnalytics ? <HospitalAnalytics result={hospitalAnalytics} /> : null}
         </section>
 
         <div

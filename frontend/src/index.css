@@ -393,18 +393,6 @@ button:disabled {
   font-size: 0.94rem;
 }
 
-.analytics-launcher { padding: 0 18px 18px; }
-.analytics-launcher > button { width: 100%; padding: 12px; border: 1px solid #b9c9f8; border-radius: 14px; background: #edf2ff; color: #25416f; font-weight: 900; }
-.hospital-analytics { display: grid; gap: 12px; margin-top: 12px; padding: 16px; border: 1px solid #d5dfed; border-radius: 18px; background: #fff; }
-.hospital-analytics h2, .hospital-analytics h3, .hospital-analytics p, .hospital-analytics figure { margin: 0; }
-.hospital-analytics h2 { font-size: 1.15rem; }
-.hospital-analytics h3 { font-size: 1rem; }
-.hospital-analytics ol { display: grid; gap: 6px; margin: 0; padding-left: 24px; }
-.hospital-analytics li { padding-left: 4px; }
-.hospital-analytics ol li { display: flex; justify-content: space-between; }
-.hospital-analytics img { display: block; width: 100%; height: auto; border-radius: 12px; }
-.hospital-analytics figcaption { margin-top: 5px; color: #536079; font-size: .82rem; }
-
 .route-result-region:empty {
   display: none;
 }

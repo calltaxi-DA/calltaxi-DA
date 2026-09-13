@@ -563,35 +563,30 @@
 ## Analysis Phase 8 — 서비스용 분석 데이터 생성 (2026-09-13)
 
 - 브랜치: `analysis/phase8-service-data-exports` (base: `dev`)
-- 한 일: Phase 3에서 확정한 병원 이동 집계 4개와 기존 그래프 2개를 `analysis/hospital/`의 reviewed JSON·PNG로 수동 export했다. Backend에 병원 분석정보 및 chart API를 추가하고, Frontend가 해당 API를 통해 도착 상위 자치구 표·선정 그래프·분석 한계를 표시하도록 연결했다. 기존 지하철 station accessibility master와 저상버스 route master·ODsay mapping은 이미 Backend provider에 연결되어 있음을 확인하고, 세 도메인의 서비스 export를 단일 manifest와 회귀 테스트로 검증했다. 병원 `analysis_id`별 `values`를 discriminated union으로 엄격히 검증하고, chart ID 오류와 배포 파일 누락을 각각 404와 503으로 구분했다.
+- 한 일: Phase 3에서 확정한 병원 이동 집계 4개와 기존 그래프 2개를 `analysis/hospital/`의 reviewed JSON·PNG로 수동 export했다. 병원 데이터는 후속 검토를 위해 유지하되 현재 서비스의 Backend API와 Frontend UI에는 노출하지 않기로 범위를 조정했다. 기존 지하철 station accessibility master와 저상버스 route master·ODsay mapping은 Backend provider에 연결되어 있음을 확인하고, 실제 서비스 consumer가 있는 export와 현재 미노출 reviewed export를 manifest에서 분리했다.
 - 산출물:
-  - `analysis/service_data_manifest.json` — 병원·지하철·저상버스 reviewed export와 consumer 목록
+  - `analysis/service_data_manifest.json` — 지하철·저상버스 `service_exports`와 병원 `reviewed_analysis_exports` 구분
   - `analysis/hospital/hospital_analytics.json`, `analysis/hospital/figures/`, `analysis/hospital/README.md` — 병원 정적 집계·선정 그래프·출처 및 갱신 기준
-  - `GET /analytics/hospital`, `GET /analytics/hospital/charts/{chart_id}` — 병원 분석 계약·정적 파일 API
-  - `frontend/src/components/HospitalAnalytics.tsx` — Backend 소유 값으로 상위 자치구 표, 분석 기간·한계와 그래프 표시
-  - `backend/tests/test_hospital_analytics.py`, `backend/tests/test_service_data_exports.py`, `frontend/src/__tests__/HospitalAnalytics.test.tsx` — 응답 계약, 경로 제한, export 연결, 렌더 검증
-  - `docs/troubleshooting.md` — 실행 디렉터리에 따른 상대경로 문제와 해결 기록
+  - `backend/tests/test_service_data_exports.py` — 서비스 export와 provider 기본 경로, 미노출 reviewed export 파일·그래프 참조 검증
+  - `docs/troubleshooting.md` — 지하철·저상버스 export의 실행 디렉터리 의존 문제와 해결 기록
 - 확정 범위:
   - 병원 분석은 개별 병원이 아니라 `의료목적으로 기록된 이동`의 목적지 지역 집계만 제공한다.
   - 병원 이동 전용 시간대·차량유형 비교, 실시간 진료·병상·무장애 시설 정보는 제공하지 않는다.
-  - Frontend는 `analysis/` 파일을 직접 읽거나 통계를 재계산하지 않고 Backend 응답과 chart URL만 사용한다.
+  - 병원 reviewed export는 현재 서비스 consumer가 없으며 Backend API와 Frontend UI에서 노출하지 않는다.
   - 지하철 접근성은 158행 station master, 저상버스는 364행 route master와 51행 ODsay mapping을 기존 provider가 사용한다. 실시간 고장·차량 도착·혼잡으로 해석하지 않는다.
-  - 서비스 loader/provider는 프로세스 현재 디렉터리가 아니라 저장소 위치 기준으로 `analysis/` export를 읽는다.
+  - 지하철·저상버스 provider는 프로세스 현재 디렉터리가 아니라 저장소 위치 기준으로 `analysis/` export를 읽는다.
 - 검증 결과:
   - 원격 fetch 후 Phase 브랜치 시작점과 최신 `origin/dev`가 동일한 커밋임을 확인
   - 병원 JSON 4개 `analysis_id`와 Phase 3 확정 수치·모집단·기간 대조
   - 선정 PNG 2개가 각각 949×699, 1187×504의 유효 PNG임을 확인
-  - manifest의 모든 export·Frontend asset 경로가 존재하고 세 도메인이 포함되는지 검증
-  - manifest 경로·consumer가 실제 loader/provider 기본 경로와 일치하고, chart `served_by`가 병원 JSON의 `asset_url`과 일치하는지 교차 검증
-  - `district_top5` 타입 오류, percentage 문자열, 필수 필드 누락 export가 `HospitalAnalyticsError`로 fail-close 되는지 검증
-  - unknown chart ID는 HTTP 404, 등록됐지만 누락된 chart 파일은 HTTP 503으로 구분되는지 검증
-  - 저장소 밖 임시 작업 디렉터리에서도 병원·지하철·저상버스 reviewed export가 로드되는지 검증
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 158개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
-  - `cd frontend && npm test -- --run` — 19개 통과
+  - manifest의 `service_exports`에 지하철·저상버스만 존재하고 실제 provider 경로·consumer와 일치하는지 검증
+  - 병원 JSON·PNG가 consumer 없는 `reviewed_not_served` 상태이며 JSON의 `asset_path`와 reviewed PNG 경로가 일치하는지 검증
+  - 저장소 밖 임시 작업 디렉터리에서도 지하철·저상버스 reviewed export가 로드되는지 검증
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 149개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - `cd frontend && npm test -- --run` — 18개 통과
   - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
   - `cd frontend && npm run lint` — oxlint 통과
   - 최초 `.venv/bin/uvicorn app.main:app` 실행은 `No module named 'ai'`로 실패했으며, `PYTHONPATH=..` 누락이 원인임을 확인해 실행 안내와 troubleshooting 문서를 수정
-  - `backend/`에서 `PYTHONPATH=.. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8013` 기동 후 병원 JSON·PNG endpoint 각각 HTTP 200과 올바른 content type 확인
   - `git diff --check` 통과
 - 다음 Phase가 이어받을 것:
   - 검증 완료된 통합 대기시간 Prediction 모델과 inference 계약을 별도 Phase에서 export·연결한다. Phase 8은 모델을 미리 구현하지 않는다.
