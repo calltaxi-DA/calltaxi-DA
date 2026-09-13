@@ -1,11 +1,17 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 import type { RecommendationResponse } from '../api/recommendation'
 import TransportCostTracker from '../components/TransportCostTracker'
 
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.setSystemTime(new Date('2026-09-13T00:00:00+09:00'))
+})
+
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -63,7 +69,7 @@ function jsonResponse(body: unknown, status = 200) {
   }))
 }
 
-function mockTransportCostFetch() {
+function mockTransportCostFetch({ failDaily = false }: { failDaily?: boolean } = {}) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
     const url = String(input)
     if (init && 'method' in init && init.method === 'POST') {
@@ -74,7 +80,10 @@ function mockTransportCostFetch() {
       }, 201)
     }
     if (url.includes('/transport-cost-records/monthly')) return jsonResponse(monthlyResponse)
-    if (url.includes('/transport-cost-records/daily')) return jsonResponse(dailyResponse)
+    if (url.includes('/transport-cost-records/daily')) {
+      if (failDaily) return jsonResponse({ detail: 'daily lookup failed' }, 500)
+      return jsonResponse(dailyResponse)
+    }
     return jsonResponse({}, 404)
   })
 }
@@ -108,4 +117,18 @@ test('submits actual cost and route conditions then refreshes the month', async 
     selected_transport_type: 'subway',
     transport_types: ['subway', 'low_floor_bus'],
   })
+})
+
+test('keeps saved status when refresh after saving fails', async () => {
+  mockTransportCostFetch({ failDaily: true })
+  render(<TransportCostTracker result={result} />)
+
+  fireEvent.change(screen.getByLabelText('이용 날짜'), { target: { value: '2026-09-13' } })
+  fireEvent.change(screen.getByLabelText('실제 이용금액(원)'), { target: { value: '2100' } })
+  fireEvent.click(screen.getByRole('button', { name: '교통비 저장' }))
+
+  expect(await screen.findByText('교통비를 저장했습니다.')).toBeInTheDocument()
+  expect(screen.queryByText('교통비를 저장하지 못했습니다.')).not.toBeInTheDocument()
+  expect(await screen.findByText('선택한 날짜의 상세 기록을 불러오지 못했습니다.')).toBeInTheDocument()
+  expect(screen.getByRole('grid', { name: '2026-09 교통비 캘린더' })).toBeInTheDocument()
 })

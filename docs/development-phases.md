@@ -637,7 +637,7 @@
   - `frontend/src/api/transportCosts.ts` — 날짜별 교통비 조회 client와 응답 타입 추가
   - `frontend/src/components/TransportCostTracker.tsx` — 월간 캘린더, 선택 날짜 상세 기록, 응답 shape 방어 처리
   - `frontend/src/index.css` — 교통비 캘린더와 날짜별 상세 UI 스타일
-  - `frontend/src/__tests__/TransportCostTracker.test.tsx` — 월 누적 합계, 캘린더 날짜 표시, 날짜별 상세 기록, 저장 후 월·일 상세 갱신 검증
+  - `frontend/src/__tests__/TransportCostTracker.test.tsx` — 월 누적 합계, 캘린더 날짜 표시, 날짜별 상세 기록, 저장 후 월·일 상세 갱신, 저장 성공 후 상세 조회 실패 시 상태 분리 검증
 - 확정 동작:
   - Frontend는 실제 금액·절약 가능 금액을 직접 재계산하지 않고 Backend 응답 값을 그대로 표시한다.
   - 월별 캘린더는 `GET /transport-cost-records/monthly`의 날짜별 집계를 사용한다.
@@ -645,7 +645,7 @@
   - 교통비 API 응답 shape가 예상과 다르면 화면을 깨뜨리지 않고 조회 오류 상태로 처리한다.
   - 병원 분석정보와 개별 병원 통계는 이번 UI에 표시하지 않는다.
 - 검증 결과:
-  - `cd frontend && npm test -- --run` — 20개 통과
+  - `cd frontend && npm test -- --run` — 21개 통과
   - `cd frontend && npm run lint` — oxlint 통과
   - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
   - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 157개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음

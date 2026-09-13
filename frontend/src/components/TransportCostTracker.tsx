@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import type { RecommendationResponse, TransportType } from '../api/recommendation'
@@ -69,7 +69,10 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
   const [summary, setSummary] = useState<MonthlyTransportCostResponse | null>(null)
   const [dailyDetail, setDailyDetail] = useState<DailyTransportCostResponse | null>(null)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [queryStatus, setQueryStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [monthlyQueryStatus, setMonthlyQueryStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [dailyQueryStatus, setDailyQueryStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const calendarRequestId = useRef(0)
+  const dailyRequestId = useRef(0)
 
   const summaryByDate = useMemo(() => {
     const entries: Array<[string, DailyTransportCostSummary]> = (summary?.daily_summaries ?? [])
@@ -77,31 +80,50 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
     return new Map<string, DailyTransportCostSummary>(entries)
   }, [summary])
 
-  async function refreshMonthlySummary(targetMonth: string) {
+  async function loadMonthlySummary(targetMonth: string) {
     const monthly = await fetchMonthlyTransportCosts(targetMonth)
     if (!isMonthlyTransportCostResponse(monthly)) throw new Error('Invalid monthly transport cost response')
-    setSummary(monthly)
     return monthly
   }
 
-  async function refreshDailyDetail(targetDate: string) {
+  async function loadDailyDetail(targetDate: string) {
     const daily = await fetchDailyTransportCosts(targetDate)
     if (!isDailyTransportCostResponse(daily)) throw new Error('Invalid daily transport cost response')
-    setDailyDetail(daily)
+    return daily
   }
 
   async function refreshCalendar(targetMonth: string, targetDate = selectedDate) {
-    setQueryStatus('loading')
+    const requestId = ++calendarRequestId.current
+    const detailRequestId = ++dailyRequestId.current
+    setMonthlyQueryStatus('loading')
+    setDailyQueryStatus('loading')
     try {
-      await refreshMonthlySummary(targetMonth)
+      const monthly = await loadMonthlySummary(targetMonth)
+      if (requestId !== calendarRequestId.current) return
+      setSummary(monthly)
+      setMonthlyQueryStatus('idle')
+
       const dateForDetail = targetDate.startsWith(targetMonth) ? targetDate : `${targetMonth}-01`
       setSelectedDate(dateForDetail)
-      await refreshDailyDetail(dateForDetail)
-      setQueryStatus('idle')
     } catch {
+      if (requestId !== calendarRequestId.current) return
       setSummary(null)
       setDailyDetail(null)
-      setQueryStatus('error')
+      setMonthlyQueryStatus('error')
+      setDailyQueryStatus('idle')
+      return
+    }
+
+    try {
+      const dateForDetail = targetDate.startsWith(targetMonth) ? targetDate : `${targetMonth}-01`
+      const daily = await loadDailyDetail(dateForDetail)
+      if (requestId !== calendarRequestId.current || detailRequestId !== dailyRequestId.current) return
+      setDailyDetail(daily)
+      setDailyQueryStatus('idle')
+    } catch {
+      if (requestId !== calendarRequestId.current || detailRequestId !== dailyRequestId.current) return
+      setDailyDetail(null)
+      setDailyQueryStatus('error')
     }
   }
 
@@ -110,14 +132,19 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
   }
 
   async function handleDateSelect(date: string) {
+    const requestId = ++dailyRequestId.current
     setSelectedDate(date)
     setTravelDate(date)
+    setDailyQueryStatus('loading')
     try {
-      await refreshDailyDetail(date)
-      setQueryStatus('idle')
+      const daily = await loadDailyDetail(date)
+      if (requestId !== dailyRequestId.current) return
+      setDailyDetail(daily)
+      setDailyQueryStatus('idle')
     } catch {
+      if (requestId !== dailyRequestId.current) return
       setDailyDetail(null)
-      setQueryStatus('error')
+      setDailyQueryStatus('error')
     }
   }
 
@@ -126,18 +153,19 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
     const parsedCost = Number(actualCost)
     if (!selectedTransport || !Number.isInteger(parsedCost) || parsedCost < 0) return
     setStatus('saving')
+    const recordMonth = travelDate.slice(0, 7)
     try {
       await createTransportCostRecord(result, travelDate, parsedCost, selectedTransport)
-      const recordMonth = travelDate.slice(0, 7)
-      setMonth(recordMonth)
-      setSelectedDate(travelDate)
-      await refreshMonthlySummary(recordMonth)
-      await refreshDailyDetail(travelDate)
-      setActualCost('')
       setStatus('saved')
     } catch {
       setStatus('error')
+      return
     }
+
+    setMonth(recordMonth)
+    setSelectedDate(travelDate)
+    setActualCost('')
+    await refreshCalendar(recordMonth, travelDate)
   }
 
   useEffect(() => {
@@ -162,10 +190,10 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
 
       <div className="monthly-cost-summary">
         <label>조회 월<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>
-        <button type="button" onClick={handleMonthlyQuery} disabled={queryStatus === 'loading'}>
-          {queryStatus === 'loading' ? '조회 중…' : '월별 조회'}
+        <button type="button" onClick={handleMonthlyQuery} disabled={monthlyQueryStatus === 'loading'}>
+          {monthlyQueryStatus === 'loading' ? '조회 중…' : '월별 조회'}
         </button>
-        {queryStatus === 'error' ? <p role="alert">교통비 내역을 불러오지 못했습니다.</p> : null}
+        {monthlyQueryStatus === 'error' ? <p role="alert">월별 교통비를 불러오지 못했습니다.</p> : null}
         {summary ? <>
           <dl aria-label={`${summary.month} 월 누적 교통비`}>
             <div><dt>실제 교통비</dt><dd>{won(summary.totals.actual_cost_won)}</dd></div>
@@ -191,7 +219,9 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
           </div>
           <section className="daily-cost-detail" aria-labelledby="daily-cost-title">
             <h3 id="daily-cost-title">{selectedDate} 이용 기록</h3>
-            {dailyDetail ? <>
+            {dailyQueryStatus === 'loading' ? <p>상세 기록을 불러오는 중입니다.</p> : null}
+            {dailyQueryStatus === 'error' ? <p role="alert">선택한 날짜의 상세 기록을 불러오지 못했습니다.</p> : null}
+            {dailyQueryStatus !== 'error' && dailyDetail ? <>
               <dl>
                 <div><dt>실제 이용금액</dt><dd>{won(dailyDetail.totals.actual_cost_won)}</dd></div>
                 <div><dt>금액 우선 추천</dt><dd>{won(dailyDetail.totals.recommended_cost_won)}</dd></div>
@@ -208,7 +238,8 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
                   ))}
                 </ul>
               ) : <p>선택한 날짜의 교통비 기록이 없습니다.</p>}
-            </> : <p>날짜를 선택하면 상세 기록이 표시됩니다.</p>}
+            </> : null}
+            {dailyQueryStatus === 'idle' && !dailyDetail ? <p>날짜를 선택하면 상세 기록이 표시됩니다.</p> : null}
           </section>
         </> : <p>조회할 월을 선택해주세요.</p>}
       </div>
