@@ -1,6 +1,6 @@
 """FastAPI 애플리케이션 진입점.
 
-로컬 실행: PYTHONPATH=.. uvicorn app.main:app --reload --port 8000 (backend/ 디렉터리에서)
+로컬 실행: PYTHONPATH=backend:. backend/.venv/bin/uvicorn app.main:app --reload --port 8000 (저장소 루트에서)
 """
 
 import logging

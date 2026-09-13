@@ -1,17 +1,20 @@
 """애플리케이션 설정 로딩.
 
-환경변수(.env)에서 값을 읽어 Settings 인스턴스 하나로 노출한다.
-새 설정값이 필요하면 이 클래스에 필드를 추가하고 backend/.env.example에도 반영한다.
+저장소 루트 `.env`에서 값을 읽어 Settings 인스턴스 하나로 노출한다.
+새 설정값이 필요하면 이 클래스에 필드를 추가하고 루트 `.env.example`에도 반영한다.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+ROOT_ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="APP_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ROOT_ENV_PATH, env_prefix="APP_", extra="ignore")
 
     env: str = "local"
     port: int = 8000

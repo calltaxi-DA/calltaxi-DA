@@ -575,6 +575,7 @@
   - 병원 reviewed export는 현재 서비스 consumer가 없으며 Backend API와 Frontend UI에서 노출하지 않는다.
   - 지하철 접근성은 158행 station master, 저상버스는 364행 route master와 51행 ODsay mapping을 기존 provider가 사용한다. 실시간 고장·차량 도착·혼잡으로 해석하지 않는다.
   - 지하철·저상버스 provider는 프로세스 현재 디렉터리가 아니라 저장소 위치 기준으로 `analysis/` export를 읽는다.
+  - Backend와 Frontend 환경설정은 저장소 루트 `.env` 한 곳에서 관리하며, Backend 실행 위치와 무관하게 같은 파일을 읽는다.
 - 검증 결과:
   - 원격 fetch 후 Phase 브랜치 시작점과 최신 `origin/dev`가 동일한 커밋임을 확인
   - 병원 JSON 4개 `analysis_id`와 Phase 3 확정 수치·모집단·기간 대조
@@ -582,11 +583,12 @@
   - manifest의 `service_exports`에 지하철·저상버스만 존재하고 실제 provider 경로·consumer와 일치하는지 검증
   - 병원 JSON·PNG가 consumer 없는 `reviewed_not_served` 상태이며 JSON의 `asset_path`와 reviewed PNG 경로가 일치하는지 검증
   - 저장소 밖 임시 작업 디렉터리에서도 지하철·저상버스 reviewed export가 로드되는지 검증
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 149개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 150개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
   - `cd frontend && npm test -- --run` — 18개 통과
   - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
   - `cd frontend && npm run lint` — oxlint 통과
   - 최초 `.venv/bin/uvicorn app.main:app` 실행은 `No module named 'ai'`로 실패했으며, `PYTHONPATH=..` 누락이 원인임을 확인해 실행 안내와 troubleshooting 문서를 수정
+  - `backend/` 실행 조건에서도 루트 `.env`의 TMAP·ODsay 키가 인식됨을 확인하고, 서울시청→강남역 실제 추천 요청에서 지하철·저상버스 추천과 콜택시 모델 미연결 제외 사유 반환 확인
   - `git diff --check` 통과
 - 다음 Phase가 이어받을 것:
   - 검증 완료된 통합 대기시간 Prediction 모델과 inference 계약을 별도 Phase에서 export·연결한다. Phase 8은 모델을 미리 구현하지 않는다.

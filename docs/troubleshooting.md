@@ -8,6 +8,20 @@
 
 ## 기록된 이슈
 
+### 2026-09-13 — 루트 `.env`의 경로 API 키를 Backend가 읽지 못함
+
+- **문제 상황**: 루트 `.env`에 `TMAP_APP_KEY`와 `ODSAY_API_KEY`가 설정돼 있는데도 `backend/`에서 실행한 Backend의 추천 결과가 나타나지 않았다.
+- **영향**: Backend는 두 외부 경로 client를 모두 미설정 상태로 구성하고 지하철·저상버스·콜택시 경로를 fail-closed 처리한다. Frontend는 추천 가능한 경로가 없다는 응답만 받는다.
+- **재현 방법**: 루트에만 `.env`가 있고 `backend/.env`는 없는 상태에서 저장소 루트와 `backend/`를 각각 현재 디렉터리로 삼아 `Settings()`의 TMAP·ODsay 설정 여부를 비교한다. 루트에서는 두 값이 인식되지만 `backend/`에서는 모두 인식되지 않는다.
+- **원인**: Pydantic Settings의 `env_file=".env"`가 설정 모듈이 아니라 프로세스 현재 작업 디렉터리를 기준으로 해석됐다. Frontend는 이미 Vite `envDir`로 루트 파일을 사용하지만 Backend는 실행 위치에 따라 다른 파일을 찾고 있었다.
+- **검토한 대안**:
+  - 루트와 `backend/`에 같은 비밀값을 복사: 갱신 누락과 값 불일치 위험이 있어 제외했다.
+  - 실행 명령에서 환경변수를 매번 export: 셸과 IDE 실행 설정마다 중복 관리가 필요해 제외했다.
+  - Backend 설정이 모듈 위치에서 계산한 루트 `.env`를 읽기: 실행 위치와 무관하고 Frontend와 단일 파일을 공유할 수 있어 채택했다.
+- **해결 방법**: `backend/app/core/config.py`의 `env_file`을 저장소 루트 절대경로로 고정하고 Backend·Frontend 설정 예시를 루트 `.env.example`에 통합했다. 중복되는 `backend/.env.example`과 `frontend/.env.example`은 제거하고 README 실행법을 저장소 루트 기준으로 변경했다.
+- **검증 결과**: 저장소 루트와 `backend/` 양쪽에서 TMAP·ODsay 설정이 모두 인식되고, 임시 작업 디렉터리에서도 Settings의 env 경로가 루트 `.env`로 유지되는 테스트를 추가했다. `backend/` 실행 조건에서 서울시청→강남역 실제 추천 요청이 HTTP 200으로 지하철·저상버스 추천을 반환했고, 콜택시는 Prediction 모델 미연결 사유로만 제외됐다.
+- **남은 한계**: 루트 `.env`는 커밋하지 않는다. 배포 환경에서는 파일 대신 동일한 환경변수를 배포 플랫폼에 설정해야 한다.
+
 ### 2026-09-13 — `backend/`에서 Uvicorn 실행 시 최상위 `ai` 모듈 import 실패
 
 - **문제 상황**: `backend/app/main.py`에 적힌 `uvicorn app.main:app` 명령을 `backend/`에서 실행하자 애플리케이션 import 단계에서 `ModuleNotFoundError: No module named 'ai'`가 발생했다.
@@ -165,7 +179,7 @@
 - **문제 상황**: Backend Phase 2에서 로컬 `APP_TMAP_APP_KEY` 또는 호환 변수 `TMAP_APP_KEY`를 사용해 `https://apis.openapi.sk.com/tmap/routes?version=1` 자동차 경로안내 API를 실제 호출했을 때 `403 Forbidden`이 반환됐다.
 - **영향**: 애플리케이션 코드의 요청 생성·응답 파싱·요금 계산은 mock 기반 테스트로 검증됐지만, 현재 로컬 키 상태에서는 실제 TMAP 자동차 경로 결과를 받을 수 없다. 운영에서도 같은 키 권한이면 `/routes/calltaxi`가 TMAP 실패로 `502`를 반환한다.
 - **재현 방법**:
-  1. `backend/.env` 또는 실행 환경에 `APP_TMAP_APP_KEY`를 설정한다(`TMAP_APP_KEY`도 로컬 호환용으로 읽을 수 있다).
+  1. 루트 `.env` 또는 실행 환경에 `APP_TMAP_APP_KEY`를 설정한다(`TMAP_APP_KEY`도 로컬 호환용으로 읽을 수 있다).
   2. 서울시청 → 서울역 좌표로 `TmapRouteClient.get_vehicle_route()`를 호출한다.
   3. TMAP 응답이 `403 Forbidden`으로 실패한다.
 - **원인**: HTTP 요청 자체는 TMAP 자동차 경로안내 문서의 `appKey` 헤더, `version=1`, WGS84 좌표, `totalValue=2` 기준으로 구성했다. 따라서 현재 확인 가능한 원인은 코드 파싱 문제가 아니라 발급 키의 자동차 경로안내 API 사용 권한, 상품 신청/활성화 상태, 또는 SK OpenAPI 콘솔의 키 제한 설정 문제로 판단한다.

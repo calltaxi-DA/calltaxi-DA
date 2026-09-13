@@ -1,4 +1,18 @@
-from app.core.config import Settings
+from pathlib import Path
+
+import pytest
+
+from app.core.config import ROOT_ENV_PATH, Settings
+
+
+def test_settings_use_repository_root_env_independent_of_working_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert ROOT_ENV_PATH == Path(__file__).resolve().parents[2] / ".env"
+    assert Settings.model_config["env_file"] == ROOT_ENV_PATH
 
 
 def test_settings_accepts_tmap_app_key_alias(monkeypatch) -> None:
