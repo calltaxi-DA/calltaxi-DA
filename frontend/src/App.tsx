@@ -5,6 +5,7 @@ import { fetchRecommendations } from './api/recommendation'
 import type { RecommendationPriority, RecommendationResponse, TransportType } from './api/recommendation'
 import type { RouteLocation } from './api/subway'
 import RecommendationResults from './components/RecommendationResults'
+import TransportCostTracker from './components/TransportCostTracker'
 
 type LocationRole = 'origin' | 'destination'
 
@@ -563,7 +564,15 @@ function App() {
               <p>Backend와 외부 경로 API 설정을 확인한 뒤 다시 검색해주세요.</p>
             </section>
           ) : null}
-          {recommendation ? <RecommendationResults result={recommendation} /> : null}
+          {recommendation ? <>
+            <RecommendationResults result={recommendation} />
+            {recommendation.recommendations.length ? (
+              <TransportCostTracker
+                key={`${recommendation.origin.latitude}-${recommendation.origin.longitude}-${recommendation.destination.latitude}-${recommendation.destination.longitude}-${recommendation.transport_types.join('-')}`}
+                result={recommendation}
+              />
+            ) : null}
+          </> : null}
         </div>
       </aside>
     </main>

@@ -594,3 +594,36 @@
   - 검증 완료된 통합 대기시간 Prediction 모델과 inference 계약을 별도 Phase에서 export·연결한다. Phase 8은 모델을 미리 구현하지 않는다.
   - 지하철 실시간 엘리베이터 상태, 차량 단위 저상버스 도착·혼잡·배차간격은 공식 HTTPS 데이터와 코드 정의가 확보된 뒤 별도 Phase에서 검토한다.
   - 병원별 통계가 필요하면 병원 식별자·좌표와 탑승 목적지를 검증 가능하게 연결하는 데이터가 선행되어야 한다.
+
+## Backend/Frontend Phase 8 — 교통비 기록 및 분석 데이터 연결 (2026-09-13)
+
+- 브랜치: `backend/phase8-transport-cost-records` (base: `dev`)
+- 범위 조정: 병원 이동 분석 Mapping은 요청에 따라 제외했다. 병원 reviewed export, manifest, Backend/Frontend 노출 상태는 변경하지 않았다.
+- 한 일: 추천 결과에서 실제 이용 날짜·이동수단·금액을 기록하고, Backend가 같은 출발지·목적지와 후보 이동수단을 비용 우선으로 다시 계산해 추천 비용과 절약 가능 금액을 저장하도록 구현했다. SQLite 저장소를 도입해 날짜별 원본 기록·합계와 월별 일자 집계·합계를 조회하고, Frontend가 Backend 응답을 그대로 표시하도록 연결했다.
+- 산출물:
+  - `backend/app/api/transport_costs.py`, `backend/app/api/contracts.py` — 생성·날짜별·월별 API와 요청/응답 계약
+  - `backend/app/services/transport_costs.py` — SQLite 저장, 실제/추천 비용과 절약 가능 금액 집계
+  - `frontend/src/api/transportCosts.ts`, `frontend/src/components/TransportCostTracker.tsx` — 실제 이용금액 입력과 월별 비교 UI
+  - `backend/tests/test_transport_cost_routes.py`, `frontend/src/__tests__/TransportCostTracker.test.tsx` — API·저장·집계·렌더·요청 회귀 검증
+  - `docs/decisions/0005-backend-owned-transport-cost-records.md` — 저장 소유권과 계산 경계 결정
+- 확정 동작:
+  - `POST /transport-cost-records`는 실제 금액과 경로 조건을 받고 Backend 계산 비용 우선 1위를 함께 저장한다.
+  - `GET /transport-cost-records/daily?date=YYYY-MM-DD`는 해당 날짜의 기록과 실제·추천·절약 합계를 반환한다.
+  - `GET /transport-cost-records/monthly?month=YYYY-MM`는 날짜별 집계와 월 합계를 반환한다.
+  - 절약 가능 금액은 음수가 되지 않으며 Frontend에서 재계산하지 않는다.
+  - 비용 추천이 불가능하면 임의 비용을 기록하지 않고 `503`으로 실패한다.
+  - DB 기본 경로는 분석 폴더가 아닌 `backend/var/transport_costs.sqlite3`이고 루트 `.env`에서 변경할 수 있다.
+- 검증 결과:
+  - 생성 시 저상버스 1,400원 비용 우선 추천, 실제 2,000원, 절약 가능 600원 저장 확인
+  - 날짜별 기록·합계, 월별 날짜 그룹·합계, 실제 금액이 추천보다 낮을 때 절약액 0 clamp 확인
+  - 잘못된 날짜·월·선택 이동수단 `422`, 비용 추천 불가 `503` 및 미저장 확인
+  - Frontend가 실제 금액과 기존 추천 조건을 전송하고 Backend 월별 합계를 그대로 렌더링하는지 확인
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 157개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - `cd frontend && npm test -- --run` — 20개 통과
+  - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
+  - `cd frontend && npm run lint` — oxlint 통과
+  - `git diff --check` 통과
+- 남은 범위:
+  - 인증·사용자별 소유권, 기록 수정·삭제, 결제/카드사 연동, 다중 Backend 인스턴스용 서버 DB는 후속 설계 대상이다.
+  - 실제 외부 경로 API의 과거 요금이 아니라 기록 저장 시점의 예상 비용을 비교 기준으로 사용한다.
+  - 병원 이동 분석 Mapping과 병원 서비스 노출은 이번 Phase에 포함하지 않는다.
