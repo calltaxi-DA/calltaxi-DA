@@ -413,7 +413,8 @@
   - `npm test -- --run` — 18개 통과
   - `npm run lint` — oxlint 통과
   - `npm run build` — TypeScript 및 Vite production build 통과
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_recommendation_routes.py backend/tests/test_recommendation_service.py backend/tests/test_route_orchestration.py backend/tests/test_route_contracts.py` — 46개 통과(기존 Starlette deprecation warning 1건)
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 147개 통과(기존 Starlette deprecation warning 1건)
+  - 명시적 로컬 Backend URL `http://127.0.0.1:8000/routes/recommendations`과 허용 Frontend origin CORS preflight 연결 검증
   - 로컬 Frontend proxy 실호출(서울시청→강남역, 시간 우선): HTTP 200, 저상버스 1위·지하철 2위와 각 경로 지표 반환 확인
   - 지하철만 선택한 로컬 Frontend proxy 실호출: HTTP 200, `transport_types=[subway]`, 지하철 1위만 반환되고 선택하지 않은 이동수단은 `excluded_routes`에도 포함되지 않음
   - 실제 콜택시는 Prediction 모델 미연결로 제외 사유가 반환됨을 확인하고, 검증된 세 경로 응답 fixture로 1~3위 및 콜택시 도보 `비교 불가` 표시를 검증
@@ -426,6 +427,7 @@
   - 실제 콜택시 포함 시간·금액 TOP 3은 검증된 대기시간 Prediction 모델을 AI Adapter에 연결한 뒤 운영 환경에서 재검증한다.
   - 콜택시 승하차 접근 도보 데이터가 없는 동안 최소 도보 1순위에서는 콜택시가 제외된다.
   - ODsay Server Key는 등록된 출구 IP에서만 실호출할 수 있으므로 배포 환경에서는 고정 egress IP가 필요하다.
+  - 로컬은 `VITE_API_BASE_URL=http://127.0.0.1:8000`, 배포는 실제 Backend URL과 `APP_CORS_ALLOW_ORIGINS`의 실제 Frontend origin을 함께 설정한다.
 
 ## Analysis Phase 7 — 이동수단 비교 분석 (2026-09-12)
 

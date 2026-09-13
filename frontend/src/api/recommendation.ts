@@ -43,19 +43,32 @@ type RecommendationRequest = {
   priorities: RecommendationPriority[]
 }
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '')
+  || 'http://127.0.0.1:8000'
 
 export async function fetchRecommendations(
   request: RecommendationRequest,
   signal?: AbortSignal,
 ): Promise<RecommendationResponse> {
-  const response = await fetch(`${apiBaseUrl}/routes/recommendations`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-    signal,
-  })
+  const requestUrl = `${apiBaseUrl}/routes/recommendations`
+  let response: Response
+  try {
+    response = await fetch(requestUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+    })
+  } catch (error) {
+    if (import.meta.env.DEV && !(error instanceof DOMException && error.name === 'AbortError')) {
+      console.error('Recommendation request connection failed', { requestUrl, error })
+    }
+    throw error
+  }
 
-  if (!response.ok) throw new Error(`Recommendation request failed with status ${response.status}`)
+  if (!response.ok) {
+    if (import.meta.env.DEV) console.error('Recommendation request failed', { requestUrl, status: response.status })
+    throw new Error(`Recommendation request failed with status ${response.status}`)
+  }
   return (await response.json()) as RecommendationResponse
 }

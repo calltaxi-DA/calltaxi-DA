@@ -100,8 +100,10 @@ describe('Frontend Phase 7 recommendation UI', () => {
   })
 
   it('shows a recoverable error when the recommendation API fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     setupKakaoMock(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 502 })); render(<App />)
     await selectRoutePlaces(); fireEvent.click(screen.getByRole('button', { name: '경로검색' })); expect(await screen.findByRole('alert')).toHaveTextContent('추천 경로를 불러오지 못했어요')
+    expect(consoleError).toHaveBeenCalledWith('Recommendation request failed', expect.objectContaining({ requestUrl: 'http://127.0.0.1:8000/routes/recommendations', status: 502 }))
   })
 
   it('ignores an older response after the destination changes', async () => {
