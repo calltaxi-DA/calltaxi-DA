@@ -730,3 +730,37 @@
   - 추천 요청/API에 이용목적과 필요한 주소 metadata를 전달할지, Backend reverse geocoding으로 보완할지 확정한다.
   - 전일 차량운행과 시간별 날씨 feature provider를 `analysis/` export 또는 운영 API로 연결한다.
   - AI Adapter가 `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`을 lazy-load하고 예측값 검증·경고를 반환하도록 구현한다.
+
+## AI Phase 1 — 특장차 Prediction Feature Mapping 연동 (2026-09-13)
+
+- 브랜치: `ai/phase1-special-vehicle-feature-mapping` (base: 최신 `origin/dev` `22d0e84`). 기존 로컬 문서 변경은 원래 worktree에 보존하고, Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: 통합 장애인 콜택시 대기시간 Prediction 모델에 필요한 입력값 중 특장차 예측에 사용할 Backend feature mapping을 서비스 구조에 연결했다. 실제 모델 artifact 호출은 하지 않고, Backend 입력값이 AI Adapter 입력 계약으로 정상 변환되는지 검증했다.
+- 한 일:
+  - `backend/app/services/waiting_time_features.py`를 추가해 Backend 입력값을 `WaitingTimePredictionInput`으로 변환하는 순수 service를 구현했다.
+  - 특장차 Phase 범위에 맞춰 `model_group`은 `특장차_바로콜`로 고정했다.
+  - `requested_at`은 AI Adapter가 Asia/Seoul 기준으로 정규화하도록 전달하고, TMAP 차량거리는 `승차거리` feature에 미터 단위 그대로 전달한다.
+  - 출발구·목적구 기준으로 `세부이동유형`을 `구 내 이동`, `구 간 이동`, `서울→서울 외`, `서울 외→서울` 중 하나로 파생한다. 서울 외↔서울 외 이동은 모델 대상이 아니므로 mapping error로 처리한다.
+  - 날씨 feature에서 `is_bad_weather`를 학습 당시 rule과 동일하게 파생한다. 강수, 적설, 3시간 신적설, -5도 이하, 풍속 5m/s 이상을 악천후 조건으로 본다.
+  - 필수 위치값 누락, `None` 위치값, 음수 강수·풍속·적설·신적설, 비숫자 날씨값을 명시적으로 거부한다.
+  - AI Adapter validation에서 발생한 `ValueError`를 Backend feature mapping 경계의 `WaitingTimeFeatureMappingError`로 감싸 후속 route orchestration에서 일관되게 처리할 수 있게 했다.
+- 산출물:
+  - `backend/app/services/waiting_time_features.py`
+  - `backend/tests/test_waiting_time_features.py`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - Backend feature mapper는 모델 artifact를 읽지 않고, `data/raw`, `data/processed`, `notebooks*/`도 직접 참조하지 않는다.
+  - Backend feature mapper는 AI Adapter의 순수 Python dataclass인 `WaitingTimePredictionInput`만 생성한다.
+  - 현재 Phase에서는 API 요청 schema, Frontend UI, reverse geocoding, 전일 차량운행 lookup, 날씨 lookup/API, 실제 모델 inference를 구현하지 않는다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests/test_waiting_time_features.py ai/tests/test_estimator.py -q` — 41개 통과
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 199개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `git diff --check` — 통과
+- 자체 리뷰:
+  - 기존 API/이벤트 계약과 추천 정렬 로직을 변경하지 않았다.
+  - `analysis/waiting_time/*.joblib` 및 metadata/export 문서는 수정하지 않았다.
+  - 특장차 feature mapping만 구현했고, 임차택시·양쪽 `model_group` 보수적 max 정책의 실제 호출은 후속 모델 연결 Phase에 남겼다.
+- 다음에 이어받을 것:
+  - 추천 요청/API에서 이용목적과 주소 metadata를 어떻게 받을지 확정한다.
+  - 주소 metadata가 부족할 때 사용할 reverse geocoding provider를 연결하고, Backend feature mapper에는 서울 25개 구 canonical name처럼 정규화 완료된 구/동만 전달되도록 검증한다.
+  - 전일 차량운행과 시간별 날씨 provider를 운영 데이터 또는 `analysis/` export 기준으로 연결한다.
+  - `BackendRecommendationRouteProvider`에서 TMAP 차량거리 계산 후 `build_special_vehicle_waiting_time_input()`을 호출하도록 순서를 확장한다.
