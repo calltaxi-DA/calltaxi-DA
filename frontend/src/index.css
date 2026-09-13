@@ -52,6 +52,67 @@
 .monthly-cost-summary dt { font-size: 0.8rem; }
 .monthly-cost-summary dd { margin: 0.25rem 0 0; font-weight: 800; }
 
+.cost-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.cost-calendar-day {
+  display: grid;
+  gap: 0.2rem;
+  min-height: 64px;
+  padding: 0.45rem;
+  border: 1px solid #d7e1dc;
+  border-radius: 10px;
+  background: #fff;
+  color: #536079;
+  text-align: left;
+}
+
+.cost-calendar-day strong {
+  color: #172033;
+}
+
+.cost-calendar-day span {
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cost-calendar-day.has-record {
+  border-color: #6ebd8f;
+  background: #ecf8f0;
+  color: #1c6b41;
+}
+
+.cost-calendar-day.selected {
+  border-color: #3157c7;
+  outline: 2px solid rgba(49, 87, 199, 0.22);
+}
+
+.daily-cost-detail {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #d7e1dc;
+  border-radius: 14px;
+  background: #f8fbf9;
+}
+
+.daily-cost-detail h3 {
+  margin: 0;
+}
+
+.daily-cost-detail ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
 * {
   box-sizing: border-box;
 }

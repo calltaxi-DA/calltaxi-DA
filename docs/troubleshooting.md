@@ -8,6 +8,24 @@
 
 ## 기록된 이슈
 
+### 2026-09-13 — 새 worktree에서 Backend 테스트 실행환경 누락
+
+- **문제 상황**: `phase8-cost-calendar-analysis-ui` worktree에서 Backend/AI 테스트를 실행하려 했지만 `backend/.venv/bin/python`이 없어 실패했다. 시스템 `python3`로 재시도했을 때는 Python 3.9 환경이라 `enum.StrEnum`을 지원하지 않았고, FastAPI 등 Backend 의존성도 설치되어 있지 않아 테스트 수집 단계에서 실패했다.
+- **영향**: 기능 변경과 무관하게 검증 명령이 실패해 Backend 회귀 여부를 확인할 수 없었다. Python 3.9로 실행하면 `StrEnum` import error와 `fastapi` 모듈 누락이 함께 발생한다.
+- **재현 방법**:
+  1. 새 git worktree를 만든다.
+  2. `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests`를 실행한다.
+  3. worktree에 `backend/.venv`가 없으면 shell이 Python 실행 파일을 찾지 못한다.
+  4. 시스템 Python 3.9로 `PYTHONPATH=backend:. python3 -m pytest backend/tests ai/tests`를 실행하면 `StrEnum` 미지원 또는 Backend 의존성 누락으로 수집 실패한다.
+- **원인**: git worktree는 Git 추적 파일만 checkout하므로 `.venv` 같은 로컬 가상환경은 공유되지 않는다. 또한 macOS 시스템 Python 3.9는 Backend 코드가 요구하는 Python 3.11+ 문법·표준 라이브러리(`StrEnum`, `X | None`)와 맞지 않는다.
+- **검토한 대안**:
+  - 기존 메인 작업트리의 venv 재사용: 해당 위치에 backend 전용 venv가 없어 사용할 수 없었다.
+  - 시스템 Python 사용: Python 버전과 의존성이 맞지 않아 제외했다.
+  - 새 worktree 내부에 Python 3.12 venv 생성: worktree를 독립적으로 검증할 수 있어 채택했다.
+- **해결 방법**: Python 3.12로 `backend/.venv`를 새로 만들고 `backend/requirements.txt`를 설치한 뒤 테스트를 실행했다. `uv`가 기본 홈 캐시에 접근하지 못하는 환경에서는 `UV_CACHE_DIR=/private/tmp/calltaxi-uv-cache`처럼 writable cache 경로를 지정한다.
+- **검증 결과**: `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests`가 157개 테스트 통과, 기존 Starlette/anyio `DeprecationWarning` 1건만 남았다.
+- **남은 한계**: 새 worktree마다 venv를 별도로 준비해야 한다. 표준 검증 명령은 Python 3.12 이상과 Backend requirements 설치가 선행되어야 한다.
+
 ### 2026-09-13 — 루트 `.env`의 경로 API 키를 Backend가 읽지 못함
 
 - **문제 상황**: 루트 `.env`에 `TMAP_APP_KEY`와 `ODSAY_API_KEY`가 설정돼 있는데도 `backend/`에서 실행한 Backend의 추천 결과가 나타나지 않았다.

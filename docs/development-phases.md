@@ -627,3 +627,29 @@
   - 인증·사용자별 소유권, 기록 수정·삭제, 결제/카드사 연동, 다중 Backend 인스턴스용 서버 DB는 후속 설계 대상이다.
   - 실제 외부 경로 API의 과거 요금이 아니라 기록 저장 시점의 예상 비용을 비교 기준으로 사용한다.
   - 병원 이동 분석 Mapping과 병원 서비스 노출은 이번 Phase에 포함하지 않는다.
+
+## Frontend Phase 8-1 — 교통비 캘린더 UI 보강 (2026-09-13)
+
+- 브랜치: `phase8-cost-calendar-analysis-ui` (base: `dev`)
+- 범위 조정: 사용자 요청에 따라 병원 분석정보 표시는 제외했다. `analysis/hospital/` reviewed export와 manifest의 병원 `reviewed_not_served` 상태는 변경하지 않았다.
+- 한 일: 기존 교통비 기록 API를 유지하면서 Frontend 교통비 UI를 월간 캘린더 형태로 보강했다. 월 누적 실제 이용금액·금액 우선 추천 비용·절약 가능 금액을 표시하고, 날짜별 칸에는 해당 일자의 실제 이용금액을 표시한다. 날짜를 선택하면 Backend의 날짜별 기록 API를 조회해 실제 이용수단, 실제 이용금액, 금액 우선 추천 이동수단·비용, 절약 가능 금액을 상세 표시한다.
+- 산출물:
+  - `frontend/src/api/transportCosts.ts` — 날짜별 교통비 조회 client와 응답 타입 추가
+  - `frontend/src/components/TransportCostTracker.tsx` — 월간 캘린더, 선택 날짜 상세 기록, 응답 shape 방어 처리
+  - `frontend/src/index.css` — 교통비 캘린더와 날짜별 상세 UI 스타일
+  - `frontend/src/__tests__/TransportCostTracker.test.tsx` — 월 누적 합계, 캘린더 날짜 표시, 날짜별 상세 기록, 저장 후 월·일 상세 갱신 검증
+- 확정 동작:
+  - Frontend는 실제 금액·절약 가능 금액을 직접 재계산하지 않고 Backend 응답 값을 그대로 표시한다.
+  - 월별 캘린더는 `GET /transport-cost-records/monthly`의 날짜별 집계를 사용한다.
+  - 날짜별 상세는 `GET /transport-cost-records/daily`의 원본 기록과 합계를 사용한다.
+  - 교통비 API 응답 shape가 예상과 다르면 화면을 깨뜨리지 않고 조회 오류 상태로 처리한다.
+  - 병원 분석정보와 개별 병원 통계는 이번 UI에 표시하지 않는다.
+- 검증 결과:
+  - `cd frontend && npm test -- --run` — 20개 통과
+  - `cd frontend && npm run lint` — oxlint 통과
+  - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 157개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - 최초 백엔드 테스트 실행은 새 worktree에 `backend/.venv`가 없어 실패했고, 시스템 Python 3.9로 재시도했을 때 FastAPI 미설치·`StrEnum` 미지원으로 수집 실패했다. 이후 Python 3.12 venv를 생성하고 `backend/requirements.txt`를 설치해 정상 검증했다.
+- 남은 범위:
+  - 인증·사용자별 교통비 기록 분리, 기록 수정·삭제, 결제/카드사 연동은 후속 설계 대상이다.
+  - 병원 분석정보 서비스 노출은 이번 Phase에서 제외했으며, 노출하려면 `analysis/service_data_manifest.json`과 Backend/Frontend API 범위를 별도 Phase에서 갱신해야 한다.
