@@ -86,12 +86,6 @@ const calltaxiPurposeOptions = [
 
 const defaultPriorityOrder = priorityOptions.map((option) => option.value)
 const defaultCenter = { lat: 37.566826, lng: 126.9786567 }
-const seoulServiceBounds = {
-  minLat: 37.413,
-  maxLat: 37.715,
-  minLng: 126.734,
-  maxLng: 127.269,
-}
 
 function getPlaceAddress(place: KakaoPlace) {
   return place.road_address_name || place.address_name || '주소 정보 없음'
@@ -113,10 +107,7 @@ function getLocationLabel(role: LocationRole) {
 
 function isInSupportedServiceArea(place: PlaceSelection | null) {
   if (!place) return true
-  return place.lat >= seoulServiceBounds.minLat
-    && place.lat <= seoulServiceBounds.maxLat
-    && place.lng >= seoulServiceBounds.minLng
-    && place.lng <= seoulServiceBounds.maxLng
+  return place.address.startsWith('서울 ') || place.address.startsWith('서울특별시 ')
 }
 
 function resolveKakaoMaps(resolve: () => void, reject: (reason: Error) => void) {
