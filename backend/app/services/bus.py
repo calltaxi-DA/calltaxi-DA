@@ -1,6 +1,7 @@
 """ODsay 버스 경로와 검토 완료된 저상버스 route master를 결합한다."""
 
 import csv
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -391,7 +392,9 @@ def _coerce_point(latitude: Any, longitude: Any, name: str | None = None) -> Rou
         lng = float(longitude)
     except (TypeError, ValueError):
         return None
-    if lat < -90 or lat > 90 or lng < -180 or lng > 180:
+    if not math.isfinite(lat) or not math.isfinite(lng):
+        return None
+    if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
         return None
     return RouteMapPoint(latitude=lat, longitude=lng, name=name)
 

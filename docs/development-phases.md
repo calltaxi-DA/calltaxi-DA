@@ -1242,11 +1242,15 @@
   - `RouteMapSegmentType`, `RouteMapPoint`, `RouteMapSegment`를 공통 계약에 추가하고 `RouteResult.route_map_segments`를 optional field로 노출했다.
   - `unavailable` 경로에는 지도 geometry를 포함하지 못하도록 Pydantic validator를 추가했다.
   - 지하철·저상버스 ODsay parser가 `graph`, `passStopList.stations`, `startX/startY/endX/endY` 순서로 확인 가능한 좌표만 추출해 `walk`/`subway`/`bus` 구간을 생성하도록 했다.
+  - ODsay geometry 좌표에 `NaN` 또는 무한대가 포함되면 해당 geometry만 제외하고 기존 route metric 계산은 유지하도록 `math.isfinite()` 방어와 회귀 테스트를 추가했다.
   - `/routes/subway`, `/routes/bus`, `/routes/recommendations` 응답에서 parser가 만든 `route_map_segments`를 보존하도록 연결했다.
   - API 계약 변경 근거와 한계를 `docs/decisions/0007-route-map-geometry-contract.md`에 기록했다.
 - 검증 결과:
   - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_route_contracts.py backend/tests/test_subway_service.py backend/tests/test_subway_routes.py backend/tests/test_bus_service.py backend/tests/test_bus_routes.py backend/tests/test_route_orchestration.py -q` — 118개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
   - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 272개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - 리뷰 반영 후 `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_subway_service.py backend/tests/test_bus_service.py -q` — 68개 통과
+  - 리뷰 반영 후 `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 278개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - 리뷰 반영 후 `git diff --check` — 통과
   - `PYTHONPATH=backend:. backend/.venv/bin/python -c "from app.main import create_app; s=create_app().openapi(); print(s['components']['schemas']['RouteResult']['properties']['route_map_segments']); print(s['components']['schemas']['RouteMapSegment']); print(s['components']['schemas']['RouteMapPoint'])"` — OpenAPI schema에 `route_map_segments`, `RouteMapSegment`, `RouteMapPoint` 노출 확인
 - 자체 리뷰:
   - 새 필드는 optional이라 기존 수치 추천 계약과 정렬 정책을 바꾸지 않는다.

@@ -109,6 +109,59 @@ def test_parse_bus_route_matches_each_bus_section_and_sums_all_walking_sections(
     assert route.route_map_segments[2].label == "N31"
 
 
+def test_parse_bus_route_ignores_malformed_graph_and_uses_endpoint_fallback() -> None:
+    payload = _odsay_bus_payload()
+    bus_section = payload["result"]["path"][0]["subPath"][3]
+    bus_section["graph"] = "126.9769 NaN|127.0276 37.4979"
+    bus_section["startX"] = 126.9769
+    bus_section["startY"] = 37.5714
+    bus_section["endX"] = 127.0276
+    bus_section["endY"] = 37.4979
+
+    route = parse_odsay_low_floor_bus_route(
+        payload,
+        DictRouteProvider({"7016": "available", "N31": "available"}),
+    )
+
+    assert route.total_time_seconds == 42 * 60
+    assert route.total_distance_meters == 11_400
+    assert route.route_map_segments is not None
+    assert route.route_map_segments[2].label == "N31"
+    assert [point.name for point in route.route_map_segments[2].points] == ["광화문", "강남역"]
+
+
+def test_parse_bus_route_drops_malformed_pass_stop_geometry_without_dropping_route() -> None:
+    payload = _odsay_bus_payload()
+    bus_section = payload["result"]["path"][0]["subPath"][1]
+    bus_section["passStopList"]["stations"][0]["y"] = "NaN"
+
+    route = parse_odsay_low_floor_bus_route(
+        payload,
+        DictRouteProvider({"7016": "available", "N31": "available"}),
+    )
+
+    assert route.total_time_seconds == 42 * 60
+    assert route.walking_distance_meters == 310 + 140 + 330
+    assert route.route_map_segments is not None
+    assert [segment.label for segment in route.route_map_segments] == ["도보", "N31"]
+
+
+def test_parse_bus_route_drops_malformed_endpoint_geometry_without_dropping_route() -> None:
+    payload = _odsay_bus_payload()
+    walking_section = payload["result"]["path"][0]["subPath"][0]
+    walking_section["startY"] = "NaN"
+
+    route = parse_odsay_low_floor_bus_route(
+        payload,
+        DictRouteProvider({"7016": "available", "N31": "available"}),
+    )
+
+    assert route.total_time_seconds == 42 * 60
+    assert route.walking_time_seconds == (5 + 3 + 4) * 60
+    assert route.route_map_segments is not None
+    assert [segment.segment_type.value for segment in route.route_map_segments] == ["bus", "bus"]
+
+
 def test_parse_bus_route_uses_later_path_when_first_path_has_no_accessible_lane() -> None:
     payload = _odsay_bus_payload()
     inaccessible_path = payload["result"]["path"][0]

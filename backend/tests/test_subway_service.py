@@ -94,6 +94,50 @@ def test_parse_odsay_subway_route_sums_total_walking_distance_and_time() -> None
     assert route.route_map_segments[2].points[-1].longitude == 127.027621
 
 
+def test_parse_odsay_subway_route_ignores_malformed_graph_and_uses_endpoint_fallback() -> None:
+    payload = _odsay_payload()
+    subway_section = payload["result"]["path"][0]["subPath"][3]
+    subway_section["graph"] = "126.977108 NaN|127.027621 37.497942"
+    subway_section["startX"] = 126.977108
+    subway_section["startY"] = 37.565715
+    subway_section["endX"] = 127.027621
+    subway_section["endY"] = 37.497942
+
+    route = parse_odsay_subway_route(payload)
+
+    assert route.total_time_seconds == 37 * 60
+    assert route.total_distance_meters == 9_200
+    assert route.route_map_segments is not None
+    assert route.route_map_segments[2].label == "2호선"
+    assert [point.name for point in route.route_map_segments[2].points] == ["시청", "강남역"]
+
+
+def test_parse_odsay_subway_route_drops_malformed_pass_stop_geometry_without_dropping_route() -> None:
+    payload = _odsay_payload()
+    subway_section = payload["result"]["path"][0]["subPath"][1]
+    subway_section["passStopList"]["stations"][0]["y"] = "NaN"
+
+    route = parse_odsay_subway_route(payload)
+
+    assert route.total_time_seconds == 37 * 60
+    assert route.walking_distance_meters == 680
+    assert route.route_map_segments is not None
+    assert [segment.label for segment in route.route_map_segments] == ["도보", "2호선"]
+
+
+def test_parse_odsay_subway_route_drops_malformed_endpoint_geometry_without_dropping_route() -> None:
+    payload = _odsay_payload()
+    walking_section = payload["result"]["path"][0]["subPath"][0]
+    walking_section["startY"] = "NaN"
+
+    route = parse_odsay_subway_route(payload)
+
+    assert route.total_time_seconds == 37 * 60
+    assert route.walking_time_seconds == 11 * 60
+    assert route.route_map_segments is not None
+    assert [segment.segment_type.value for segment in route.route_map_segments] == ["subway", "subway"]
+
+
 def test_parse_odsay_subway_route_rejects_missing_subway_route() -> None:
     payload = {"result": {"path": [{"pathType": 3, "info": {"totalTime": 5}, "subPath": [{"trafficType": 3}]}]}}
 
