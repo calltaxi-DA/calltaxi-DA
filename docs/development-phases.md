@@ -1228,3 +1228,32 @@
   - 운영/시연 환경에서는 runtime check를 배포 전 smoke test에 포함한다.
   - `backend/.venv`가 pip 없이 생성되는 환경에서는 venv 재생성 또는 `ensurepip` 가능 여부를 환경 세팅 가이드에 반영한다.
   - 실제 운영 lookup fresheness와 Prediction warning 관측 지표는 운영 모니터링 Phase에서 정리한다.
+
+## Backend Phase 10 — RouteResult 지도 geometry 계약 (2026-09-14)
+
+- 브랜치: `frontend/phase10-route-map-usability` (기존 Phase 10 브랜치 재사용). 작업 전 `git fetch origin`과 원격 기본 브랜치 확인을 수행했고, `origin/HEAD -> origin/main`, 로컬 `main` up to date 상태를 확인했다. 기존 `backend/app/services/subway.py` 미커밋 변경은 임의 수정·삭제하지 않고 같은 파일에서 보존했다.
+- 작업 전 정리:
+  - 반드시 읽은 파일: `AGENTS.md`, `docs/architecture.md`, `docs/development-phases.md`, `docs/decisions/0003-frontend-map-sdk-exception.md`, `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md`, `analysis/transport_comparison_criteria.md`, `docs/troubleshooting.md`, `backend/app/api/contracts.py`, `backend/app/services/subway.py`, `backend/app/services/bus.py`, `backend/app/services/route_orchestration.py`, 관련 backend 테스트
+  - 이번 Phase에서 수정한 파일: `backend/app/api/contracts.py`, `backend/app/services/subway.py`, `backend/app/services/bus.py`, `backend/app/api/subway.py`, `backend/app/api/bus.py`, `backend/app/services/route_orchestration.py`, `backend/tests/test_route_contracts.py`, `backend/tests/test_subway_service.py`, `backend/tests/test_subway_routes.py`, `backend/tests/test_bus_service.py`, `backend/tests/test_bus_routes.py`, `backend/tests/test_route_orchestration.py`, `docs/decisions/0007-route-map-geometry-contract.md`, `docs/development-phases.md`
+  - 참고만 하고 수정하지 않은 파일: `analysis/` export CSV/모델 파일, `data/`, `notebooks*/`, `src/`, `ai/waiting_time/`, `frontend/src/`
+  - 이번 Phase 범위에 포함하지 않은 작업: Kakao Map polyline UI, 추천 카드 클릭 시 지도 전환, 환승 내부 무장애 동선 보완, 복합 이동수단 추천, ODsay/서울버스 신규 export, 콜택시 대기시간 모델 변경, 추천 정렬 정책 변경, 실시간 버스 도착/차량 단위 저상 여부 반영
+- 핵심 목표: Frontend가 후속 Phase에서 추천 경로를 지도 polyline으로 그릴 수 있도록, Backend `RouteResult`에 지도 표시용 경로 구간 계약을 추가했다.
+- 한 일:
+  - `RouteMapSegmentType`, `RouteMapPoint`, `RouteMapSegment`를 공통 계약에 추가하고 `RouteResult.route_map_segments`를 optional field로 노출했다.
+  - `unavailable` 경로에는 지도 geometry를 포함하지 못하도록 Pydantic validator를 추가했다.
+  - 지하철·저상버스 ODsay parser가 `graph`, `passStopList.stations`, `startX/startY/endX/endY` 순서로 확인 가능한 좌표만 추출해 `walk`/`subway`/`bus` 구간을 생성하도록 했다.
+  - `/routes/subway`, `/routes/bus`, `/routes/recommendations` 응답에서 parser가 만든 `route_map_segments`를 보존하도록 연결했다.
+  - API 계약 변경 근거와 한계를 `docs/decisions/0007-route-map-geometry-contract.md`에 기록했다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_route_contracts.py backend/tests/test_subway_service.py backend/tests/test_subway_routes.py backend/tests/test_bus_service.py backend/tests/test_bus_routes.py backend/tests/test_route_orchestration.py -q` — 118개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 272개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -c "from app.main import create_app; s=create_app().openapi(); print(s['components']['schemas']['RouteResult']['properties']['route_map_segments']); print(s['components']['schemas']['RouteMapSegment']); print(s['components']['schemas']['RouteMapPoint'])"` — OpenAPI schema에 `route_map_segments`, `RouteMapSegment`, `RouteMapPoint` 노출 확인
+- 자체 리뷰:
+  - 새 필드는 optional이라 기존 수치 추천 계약과 정렬 정책을 바꾸지 않는다.
+  - 좌표가 없거나 불완전한 구간은 geometry에서 제외하고, metric 계산을 0 보정하거나 실패시키지 않는다.
+  - Backend가 보행로 또는 환승 내부 동선을 임의 생성하지 않으므로 기존 도보 metric 한계 warning을 유지한다.
+  - 콜택시 차량 상세 polyline은 TMAP 상세 geometry 응답 필드 검증 후 별도 Phase에서 연결한다.
+- 다음에 이어받을 것:
+  - `frontend/src/api/recommendation.ts`에 `route_map_segments` 타입을 반영하고, Kakao Map `Polyline`으로 추천 1위 경로를 기본 표시한다.
+  - 추천 카드 선택 상태를 도입해 사용자가 1~3위 경로를 클릭하면 지도 polyline을 해당 경로로 전환한다.
+  - 실제 ODsay smoke test로 불광역→서울역 같은 샘플 경로의 `route_map_segments` coverage를 확인하고, 좌표 누락 구간은 보행/환승 데이터 보완 Phase로 분리한다.

@@ -11,7 +11,15 @@ from ai.waiting_time.estimator import (
     WaitingTimePredictionError,
     WaitingTimePredictionInput,
 )
-from app.api.contracts import AccessibilityStatus, Location, RouteStatus, TransportType
+from app.api.contracts import (
+    AccessibilityStatus,
+    Location,
+    RouteMapPoint,
+    RouteMapSegment,
+    RouteMapSegmentType,
+    RouteStatus,
+    TransportType,
+)
 from app.services.bus import LowFloorBusRouteMetrics, OdsayBusRouteError, SelectedBusLane
 from app.services.calltaxi import TmapRouteError
 from app.services.route_orchestration import BackendRecommendationRouteProvider
@@ -43,6 +51,16 @@ class FakeSubwayClient:
             fare_won=1_500,
             station_keys=(SubwayStationKey("2호선", "시청"), SubwayStationKey("2호선", "강남")),
             summary="시청역 → 강남역 지하철 경로",
+            route_map_segments=(
+                RouteMapSegment(
+                    segment_type=RouteMapSegmentType.SUBWAY,
+                    label="2호선",
+                    points=[
+                        RouteMapPoint(latitude=37.565715, longitude=126.977108, name="시청"),
+                        RouteMapPoint(latitude=37.497942, longitude=127.027621, name="강남"),
+                    ],
+                ),
+            ),
         )
 
 
@@ -61,6 +79,16 @@ class FakeBusClient:
             fare_won=1_400,
             selected_lanes=(SelectedBusLane("402", "402", "시청", "강남역"),),
             summary="402 저상버스 경로",
+            route_map_segments=(
+                RouteMapSegment(
+                    segment_type=RouteMapSegmentType.BUS,
+                    label="402",
+                    points=[
+                        RouteMapPoint(latitude=37.565715, longitude=126.977108, name="시청"),
+                        RouteMapPoint(latitude=37.497942, longitude=127.027621, name="강남역"),
+                    ],
+                ),
+            ),
         )
 
 
@@ -186,7 +214,11 @@ def test_provider_builds_three_backend_owned_routes_and_adds_conservative_waitin
     assert any("임차택시/특장차" in warning for warning in calltaxi.warnings)
     assert "out_of_training_target_range" in calltaxi.warnings
     assert subway.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
+    assert subway.route_map_segments is not None
+    assert subway.route_map_segments[0].segment_type == RouteMapSegmentType.SUBWAY
     assert bus.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
+    assert bus.route_map_segments is not None
+    assert bus.route_map_segments[0].label == "402"
 
 
 def test_provider_uses_waiting_time_backend_output_contract_for_total_time() -> None:

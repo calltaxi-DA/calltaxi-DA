@@ -77,6 +77,7 @@ def calculate_low_floor_bus_route(
         walking_time_seconds=route.walking_time_seconds,
         accessibility_status=AccessibilityStatus.VERIFIED_AVAILABLE,
         summary=route.summary,
+        route_map_segments=list(route.route_map_segments) or None,
         warnings=[
             "저상버스 접근성은 노선 단위 보유 정보이며 특정 시간·정류장의 저상버스 도착을 보장하지 않습니다.",
             "walking_time_seconds와 walking_distance_meters는 ODsay가 제공한 모든 도보 subPath의 합계이며 실제 보행로 실측값은 아닙니다.",

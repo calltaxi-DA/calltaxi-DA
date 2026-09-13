@@ -12,7 +12,7 @@ from typing import Any, Protocol
 
 import httpx
 
-from app.api.contracts import AccessibilityStatus, Location
+from app.api.contracts import AccessibilityStatus, Location, RouteMapPoint, RouteMapSegment, RouteMapSegmentType
 
 ODSAY_SUBWAY_ROUTE_URL = "https://api.odsay.com/v1/api/searchPubTransPathT"
 ANALYSIS_DIR = Path(__file__).resolve().parents[3] / "analysis"
@@ -51,6 +51,7 @@ class SubwayRouteMetrics:
     fare_won: int
     station_keys: tuple[SubwayStationKey, ...]
     summary: str
+    route_map_segments: tuple[RouteMapSegment, ...]
 
 
 @dataclass(frozen=True)
@@ -195,11 +196,16 @@ def parse_odsay_subway_route(payload: dict[str, Any]) -> SubwayRouteMetrics:
 
     total_time_minutes = _coerce_non_negative_int(info.get("totalTime"), field_name="totalTime")
     fare_won = _coerce_optional_non_negative_int(info.get("payment"), default=0, field_name="payment")
-    total_distance_meters = _coerce_optional_non_negative_int(info.get("totalDistance"), default=0, field_name="totalDistance")
+    total_distance_meters = _coerce_optional_non_negative_distance(
+        info.get("totalDistance"),
+        default=0,
+        field_name="totalDistance",
+    )
 
     walking_distance_meters = _sum_walking_distance_meters(sub_paths)
     walking_time_seconds = _sum_walking_time_seconds(sub_paths)
     station_keys = tuple(_extract_station_keys(sub_paths))
+    route_map_segments = tuple(_extract_route_map_segments(sub_paths))
 
     if total_distance_meters == 0:
         # 일부 ODsay 응답/Mock은 totalDistance 없이 구간별 거리만 제공한다.
@@ -218,6 +224,7 @@ def parse_odsay_subway_route(payload: dict[str, Any]) -> SubwayRouteMetrics:
         fare_won=fare_won,
         station_keys=station_keys,
         summary=_build_summary(station_keys),
+        route_map_segments=route_map_segments,
     )
 
 
@@ -343,6 +350,90 @@ def _extract_station_keys(sub_paths: list[Any]) -> list[SubwayStationKey]:
     return _deduplicate_station_keys(station_keys)
 
 
+def _extract_route_map_segments(sub_paths: list[Any]) -> list[RouteMapSegment]:
+    segments: list[RouteMapSegment] = []
+    for section in sub_paths:
+        if not isinstance(section, dict):
+            continue
+        traffic_type = section.get("trafficType")
+        points = _extract_section_points(section)
+        if len(points) < 2:
+            continue
+        if traffic_type == WALKING_TRAFFIC_TYPE:
+            segments.append(RouteMapSegment(segment_type=RouteMapSegmentType.WALK, label="도보", points=points))
+        elif traffic_type == SUBWAY_TRAFFIC_TYPE:
+            segments.append(
+                RouteMapSegment(
+                    segment_type=RouteMapSegmentType.SUBWAY,
+                    label=_extract_line_name(section),
+                    points=points,
+                )
+            )
+    return segments
+
+
+def _extract_section_points(section: dict[str, Any]) -> list[RouteMapPoint]:
+    graph_points = _parse_graph_points(section.get("graph"))
+    if len(graph_points) >= 2:
+        return graph_points
+
+    stop_points = _extract_pass_stop_points(section)
+    if len(stop_points) >= 2:
+        return stop_points
+
+    endpoint_points = [
+        _coerce_point(section.get("startY"), section.get("startX"), _optional_text(section.get("startName"))),
+        _coerce_point(section.get("endY"), section.get("endX"), _optional_text(section.get("endName"))),
+    ]
+    return [point for point in endpoint_points if point is not None]
+
+
+def _parse_graph_points(value: Any) -> list[RouteMapPoint]:
+    if not isinstance(value, str):
+        return []
+    points: list[RouteMapPoint] = []
+    for raw_point in value.split("|"):
+        coordinates = raw_point.strip().split()
+        if len(coordinates) != 2:
+            return []
+        point = _coerce_point(coordinates[1], coordinates[0])
+        if point is None:
+            return []
+        points.append(point)
+    return points
+
+
+def _extract_pass_stop_points(section: dict[str, Any]) -> list[RouteMapPoint]:
+    pass_stop_list = section.get("passStopList")
+    if not isinstance(pass_stop_list, dict):
+        return []
+    stations = pass_stop_list.get("stations")
+    if not isinstance(stations, list):
+        return []
+    points: list[RouteMapPoint] = []
+    for station in stations:
+        if not isinstance(station, dict):
+            return []
+        point = _coerce_point(station.get("y"), station.get("x"), _optional_text(station.get("stationName")))
+        if point is None:
+            return []
+        points.append(point)
+    return points
+
+
+def _coerce_point(latitude: Any, longitude: Any, name: str | None = None) -> RouteMapPoint | None:
+    if isinstance(latitude, bool) or isinstance(longitude, bool):
+        return None
+    try:
+        lat = float(latitude)
+        lng = float(longitude)
+    except (TypeError, ValueError):
+        return None
+    if lat < -90 or lat > 90 or lng < -180 or lng > 180:
+        return None
+    return RouteMapPoint(latitude=lat, longitude=lng, name=name)
+
+
 def _extract_line_name(section: dict[str, Any]) -> str:
     lane = section.get("lane")
     if isinstance(lane, list) and lane and isinstance(lane[0], dict):
@@ -393,6 +484,13 @@ def _normalize_station_name(value: Any) -> str | None:
     return text or None
 
 
+def _optional_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    return text or None
+
+
 def _deduplicate_station_keys(station_keys: list[SubwayStationKey]) -> list[SubwayStationKey]:
     seen: set[SubwayStationKey] = set()
     result: list[SubwayStationKey] = []
@@ -438,6 +536,20 @@ def _coerce_optional_non_negative_int(value: Any, default: int, field_name: str)
     if value is None:
         return default
     return _coerce_non_negative_int(value, field_name=field_name)
+
+
+def _coerce_optional_non_negative_distance(value: Any, default: int, field_name: str) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        raise OdsayRouteError(f"{field_name} must be a non-negative number", reason=f"invalid_{field_name}")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise OdsayRouteError(f"{field_name} must be a non-negative number", reason=f"invalid_{field_name}") from exc
+    if number < 0 or number != number or number == float("inf"):
+        raise OdsayRouteError(f"{field_name} must be finite and non-negative", reason=f"invalid_{field_name}")
+    return round(number)
 
 
 def _coerce_bool_flag(value: Any) -> bool:

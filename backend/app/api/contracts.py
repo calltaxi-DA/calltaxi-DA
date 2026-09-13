@@ -90,6 +90,31 @@ class Location(BaseModel):
     address: str | None = Field(default=None, description="주소 또는 행정구역명")
 
 
+class RouteMapSegmentType(StrEnum):
+    """지도에 표시할 경로 구간의 이동 방식."""
+
+    WALK = "walk"
+    SUBWAY = "subway"
+    BUS = "bus"
+    VEHICLE = "vehicle"
+
+
+class RouteMapPoint(BaseModel):
+    """지도 polyline을 구성하는 좌표점."""
+
+    latitude: float = Field(ge=-90, le=90, allow_inf_nan=False, description="WGS84 위도")
+    longitude: float = Field(ge=-180, le=180, allow_inf_nan=False, description="WGS84 경도")
+    name: str | None = Field(default=None, description="정류장·역 등 표시 이름")
+
+
+class RouteMapSegment(BaseModel):
+    """지도 polyline 표시용 경로 구간."""
+
+    segment_type: RouteMapSegmentType
+    label: str | None = Field(default=None, description="노선명, 버스번호 또는 도보 구간 설명")
+    points: list[RouteMapPoint] = Field(min_length=2, description="구간 polyline 좌표")
+
+
 class RouteResult(BaseModel):
     """이동수단별 경로 결과의 공통 응답 단위."""
 
@@ -128,6 +153,10 @@ class RouteResult(BaseModel):
     )
     unavailable_reason: str | None = Field(default=None, description="경로 계산 불가 사유")
     summary: str | None = Field(default=None, description="경로 요약 문구")
+    route_map_segments: list[RouteMapSegment] | None = Field(
+        default=None,
+        description="Frontend가 지도 polyline으로 표시할 수 있는 경로 구간. 외부 API가 좌표를 제공한 구간만 포함한다.",
+    )
     warnings: list[str] = Field(default_factory=list, description="주의 조건")
 
     @model_validator(mode="after")
@@ -150,6 +179,8 @@ class RouteResult(BaseModel):
                 raise ValueError("unavailable route must not include numeric route metrics")
             if not self.unavailable_reason:
                 raise ValueError("unavailable route requires unavailable_reason")
+            if self.route_map_segments is not None:
+                raise ValueError("unavailable route must not include map geometry")
             if self.metric_availability is None:
                 self.metric_availability = RouteMetricAvailability.unavailable()
             if any(

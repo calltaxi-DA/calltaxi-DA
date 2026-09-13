@@ -43,7 +43,17 @@ def _odsay_bus_payload() -> dict:
                     "pathType": 2,
                     "info": {"totalTime": 42, "totalDistance": 11_400, "payment": 1_500},
                     "subPath": [
-                        {"trafficType": 3, "distance": 310, "sectionTime": 5},
+                        {
+                            "trafficType": 3,
+                            "distance": 310,
+                            "sectionTime": 5,
+                            "startX": 126.9706,
+                            "startY": 37.5547,
+                            "endX": 126.9728,
+                            "endY": 37.5558,
+                            "startName": "서울역",
+                            "endName": "서울역버스환승센터",
+                        },
                         {
                             "trafficType": 2,
                             "distance": 4_700,
@@ -54,6 +64,12 @@ def _odsay_bus_payload() -> dict:
                                 {"busNo": "999", "busID": 1, "type": 11},
                                 {"busNo": " 7016 ", "busID": 2, "type": 12},
                             ],
+                            "passStopList": {
+                                "stations": [
+                                    {"stationName": "서울역버스환승센터", "x": "126.9728", "y": "37.5558"},
+                                    {"stationName": "광화문", "x": "126.9769", "y": "37.5714"},
+                                ]
+                            },
                         },
                         {"trafficType": 3, "distance": 140, "sectionTime": 3},
                         {
@@ -63,6 +79,7 @@ def _odsay_bus_payload() -> dict:
                             "startName": "광화문",
                             "endName": "강남역",
                             "lane": [{"busNo": "N31", "busID": 3, "type": 11}],
+                            "graph": "126.9769 37.5714|127.0276 37.4979",
                         },
                         {"trafficType": 3, "distance": 330, "sectionTime": 4},
                     ],
@@ -84,6 +101,12 @@ def test_parse_bus_route_matches_each_bus_section_and_sums_all_walking_sections(
     assert route.fare_won == 1_500
     assert [lane.route_number_normalized for lane in route.selected_lanes] == ["7016", "N31"]
     assert route.summary == "7016 → N31 저상버스 경로"
+    assert route.route_map_segments is not None
+    assert [segment.segment_type.value for segment in route.route_map_segments] == ["walk", "bus", "bus"]
+    assert route.route_map_segments[0].points[0].name == "서울역"
+    assert route.route_map_segments[1].label == "7016"
+    assert route.route_map_segments[1].points[-1].name == "광화문"
+    assert route.route_map_segments[2].label == "N31"
 
 
 def test_parse_bus_route_uses_later_path_when_first_path_has_no_accessible_lane() -> None:

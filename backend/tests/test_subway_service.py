@@ -28,7 +28,17 @@ def _odsay_payload() -> dict:
                         "payment": 1400,
                     },
                     "subPath": [
-                        {"trafficType": 3, "distance": 320, "sectionTime": 5},
+                        {
+                            "trafficType": 3,
+                            "distance": 320,
+                            "sectionTime": 5,
+                            "startX": 126.9783882,
+                            "startY": 37.5666103,
+                            "endX": 126.972559,
+                            "endY": 37.554648,
+                            "startName": "서울시청",
+                            "endName": "서울역",
+                        },
                         {
                             "trafficType": 1,
                             "distance": 4600,
@@ -36,6 +46,12 @@ def _odsay_payload() -> dict:
                             "startName": "서울역",
                             "endName": "시청",
                             "lane": [{"name": "1호선"}],
+                            "passStopList": {
+                                "stations": [
+                                    {"stationName": "서울역", "x": "126.972559", "y": "37.554648"},
+                                    {"stationName": "시청", "x": "126.977108", "y": "37.565715"},
+                                ]
+                            },
                         },
                         {"trafficType": 3, "distance": 110, "sectionTime": 2},
                         {
@@ -45,6 +61,7 @@ def _odsay_payload() -> dict:
                             "startName": "시청",
                             "endName": "강남역",
                             "lane": [{"name": "2호선"}],
+                            "graph": "126.977108 37.565715|127.027621 37.497942",
                         },
                         {"trafficType": 3, "distance": 250, "sectionTime": 4},
                     ],
@@ -69,6 +86,12 @@ def test_parse_odsay_subway_route_sums_total_walking_distance_and_time() -> None
         SubwayStationKey(line_name="2호선", station_name="강남"),
     )
     assert route.summary == "서울역 → 강남역 지하철 경로"
+    assert route.route_map_segments is not None
+    assert [segment.segment_type.value for segment in route.route_map_segments] == ["walk", "subway", "subway"]
+    assert route.route_map_segments[0].points[0].name == "서울시청"
+    assert route.route_map_segments[1].points[0].name == "서울역"
+    assert route.route_map_segments[2].label == "2호선"
+    assert route.route_map_segments[2].points[-1].longitude == 127.027621
 
 
 def test_parse_odsay_subway_route_rejects_missing_subway_route() -> None:

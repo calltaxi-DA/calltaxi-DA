@@ -196,6 +196,7 @@ class BackendRecommendationRouteProvider:
             walking_time_seconds=route.walking_time_seconds,
             accessibility_status=accessibility_status,
             summary=route.summary,
+            route_map_segments=list(route.route_map_segments) or None,
             warnings=warnings,
         )
 
@@ -223,6 +224,7 @@ class BackendRecommendationRouteProvider:
             walking_time_seconds=route.walking_time_seconds,
             accessibility_status=AccessibilityStatus.VERIFIED_AVAILABLE,
             summary=route.summary,
+            route_map_segments=list(route.route_map_segments) or None,
             warnings=[BUS_ACCESSIBILITY_WARNING, BUS_WALKING_WARNING],
         )
 
