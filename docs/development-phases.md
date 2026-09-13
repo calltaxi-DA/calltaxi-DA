@@ -795,3 +795,45 @@
   - 실제 artifact 연결 Phase에서 모델 `predict()` 결과를 `map_prediction_output_to_waiting_time()`에 통과시켜 출력 검증을 일원화한다.
   - 임차택시·특장차 양쪽 `model_group` 예측을 수행하고 보수적 max 정책과 warning 병합 정책을 구현한다.
   - Backend route orchestration에서 `expected_minutes` 또는 `waitingTime`을 seconds로 변환해 차량 이동시간과 합산한다.
+
+## AI Phase 3 — Prediction Adapter 구현 (2026-09-13)
+
+- 브랜치: `ai/phase3-prediction-adapter` (base: 최신 `origin/dev` `3df65bc`). 기존 로컬 문서 변경은 원래 worktree에 보존하고, Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: 통합 장애인 콜택시 대기시간 Prediction 모델 artifact를 Backend에서 직접 사용할 수 있도록 AI Adapter의 모델 호출 구조를 구현했다.
+- 한 일:
+  - `ai/waiting_time/estimator.py`에 `WaitingTimePredictionAdapter`를 추가했다.
+  - Adapter는 `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`을 lazy-load하고, `WaitingTimePredictionInput.to_model_features()` 결과를 학습 feature 순서의 pandas DataFrame으로 변환해 모델 `predict()`에 전달한다.
+  - 모델 raw output은 Phase 2의 `map_prediction_output_to_waiting_time()`을 통해 `WaitingTimeEstimate`와 `waitingTime` minutes 형식으로 변환한다.
+  - `estimate_waiting_minutes_for_input()`은 더 이상 `NotImplementedError`를 발생시키지 않고 기본 Adapter를 호출한다.
+  - public entrypoint가 요청마다 1.48GB 모델을 다시 로딩하지 않도록 모듈 레벨 기본 Adapter를 재사용한다. 테스트에서는 명시적 Adapter 주입 또는 test-only setter로 교체할 수 있게 했다.
+  - 모델 파일 없음, Git LFS pointer 상태, pandas/joblib 누락, 모델 로딩 실패, 모델 호출 실패를 명시적 Prediction error로 분리했다.
+  - backend 서비스용 ML 추론 의존성으로 `joblib`, `pandas`, `scikit-learn`을 `backend/requirements.txt`에 추가했다.
+  - 모델 artifact LFS pointer와 ML 의존성 누락 이슈를 `docs/troubleshooting/phase3-wait-time-prediction-adapter.md`에 기록했다.
+  - `analysis/README.md`를 Adapter 실제 artifact 호출 상태와 남은 Backend orchestration 연결 범위에 맞게 갱신했다.
+- 산출물:
+  - `ai/waiting_time/estimator.py`
+  - `ai/tests/test_estimator.py`
+  - `backend/requirements.txt`
+  - `analysis/README.md`
+  - `docs/troubleshooting/phase3-wait-time-prediction-adapter.md`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - AI Adapter는 FastAPI/HTTP나 Backend schema를 import하지 않고 순수 Python 타입으로 동작한다.
+  - 서비스 코드는 `data/raw`, `data/processed`, `notebooks*/`를 직접 참조하지 않고 `analysis/`의 reviewed artifact만 참조한다.
+  - 모델 파일이 없거나 Git LFS pointer 상태이면 가짜 대기시간을 반환하지 않고 `WaitingTimeModelUnavailableError`를 발생시킨다.
+  - 현재 Phase는 Adapter 구현까지이며, Backend route orchestration이 실제 feature source를 모두 준비해 호출하는 연결은 후속 Phase로 남긴다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py -q` — 33개 통과
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py backend/tests/test_waiting_time_features.py backend/tests/test_route_orchestration.py -q` — 67개 통과
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 220개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - 실제 1.48GB joblib artifact는 현재 worktree에서 Git LFS pointer 상태라 로딩 검증은 수행하지 못했다. 대신 missing artifact/LFS pointer를 unavailable error로 처리하는 단위 테스트를 추가했다.
+  - `git diff --check` — 통과. 최초 실행은 Git LFS clean filter의 `.git/lfs/tmp` 쓰기 권한 문제로 실패했으나, 권한 승인 후 동일 검증이 통과했다.
+- 자체 리뷰:
+  - 모델 artifact와 metadata 파일은 수정하지 않았다.
+  - Backend API request schema, Frontend UI, 전일 차량운행 lookup, 날씨 lookup/API, route orchestration 순서 변경은 이번 Phase 범위에서 제외했다.
+  - 테스트는 대용량 모델 파일에 의존하지 않도록 fake model loader로 Adapter 호출 흐름을 검증했다.
+- 다음에 이어받을 것:
+  - 실제 배포/시연 환경에서 `git lfs pull --include="analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib"` 및 backend ML 의존성 설치 후 artifact 로딩 smoke test를 수행한다.
+  - Backend route orchestration에서 TMAP 차량거리 계산 후 feature source를 만들고 `estimate_waiting_minutes_for_input()`을 호출하도록 연결한다.
+  - 임차택시·특장차 양쪽 `model_group` 예측 후 보수적 max를 사용하는 정책과 warning 전달 방식을 구현한다.
+  - 130분 초과 warning을 Backend `RouteResult.warnings` 또는 API 응답에 연결한다.

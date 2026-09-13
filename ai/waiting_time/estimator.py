@@ -1,28 +1,32 @@
-"""AI Adapter: 장애인 콜택시 통합 대기시간 Prediction 모델 연동 계약.
+"""AI Adapter: 장애인 콜택시 통합 대기시간 Prediction 모델 연동.
 
 이 모듈은 예측 모델 자체가 아니라, backend가 예측 모델을 호출하기 위해 쓰는
 순수 Python 어댑터다. 서비스 코드는 `data/`나 `notebooks*/`를 직접 참조하지 않고,
 검토 완료되어 `analysis/`에 export된 모델 산출물만 이 경계를 통해 사용한다.
 
-Phase 0에서는 Backend가 넘겨야 하는 입력 계약과 모델 feature 변환만 정의한다.
-아직 실제 모델 로딩/추론은 연결하지 않았으므로 호출 시 NotImplementedError를
-발생시킨다 — 연결 전까지 가짜 값을 반환해 문제를 숨기지 않는다.
-
-TODO: `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`과
-메타데이터를 읽는 실제 모델 호출을 후속 AI 연결 Phase에서 구현한다.
+Backend가 넘긴 순수 Python 입력 계약을 학습 feature로 변환하고, 검토 완료되어
+`analysis/`에 export된 모델 artifact를 lazy-load해 예측 결과를 반환한다.
 """
 
 import math
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, TypeAlias
 from zoneinfo import ZoneInfo
 
 ModelFeatureValue: TypeAlias = str | int | float
+ModelLoader: TypeAlias = Callable[[Path], Any]
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MODEL_PATH = (
+    REPOSITORY_ROOT / "analysis" / "waiting_time" / "rf_wait_time_v2_prev_day_weather_final.joblib"
+)
 SEOUL_TIMEZONE = ZoneInfo("Asia/Seoul")
 TARGET_DEFINITION = "접수→승차 대기시간"
 WAITING_TIME_UNIT = "minutes"
+DEFAULT_MODEL_NAME = "rf_wait_time_v2_prev_day_weather_final"
 SUPPORTED_MODEL_GROUPS = ("임차택시_바로콜", "특장차_바로콜")
 SUPPORTED_PURPOSES = ("기타", "귀가", "치료", "재활", "통학/출근", "종교")
 SUPPORTED_MOVEMENT_TYPES = ("구 내 이동", "구 간 이동", "서울→서울 외", "서울 외→서울")
@@ -50,6 +54,18 @@ MODEL_FEATURE_COLUMNS = (
 )
 
 
+class WaitingTimePredictionError(RuntimeError):
+    """대기시간 Prediction Adapter에서 발생하는 공통 예외."""
+
+
+class WaitingTimeModelUnavailableError(WaitingTimePredictionError):
+    """모델 artifact 또는 추론 의존성을 사용할 수 없을 때 발생한다."""
+
+
+class WaitingTimeModelInferenceError(WaitingTimePredictionError):
+    """모델 호출 자체가 실패했을 때 발생한다."""
+
+
 @dataclass(frozen=True)
 class WaitingTimeEstimate:
     expected_minutes: float
@@ -75,6 +91,58 @@ class WaitingTimeEstimate:
             "unit": WAITING_TIME_UNIT,
             "warnings": self.warnings,
         }
+
+
+@dataclass
+class WaitingTimePredictionAdapter:
+    """`analysis/`의 대기시간 모델 artifact를 호출하는 순수 Python Adapter."""
+
+    model_path: Path = DEFAULT_MODEL_PATH
+    model_name: str = DEFAULT_MODEL_NAME
+    model_loader: ModelLoader | None = None
+    _model: Any | None = field(default=None, init=False, repr=False)
+
+    def estimate(self, prediction_input: "WaitingTimePredictionInput") -> WaitingTimeEstimate:
+        features = prediction_input.to_model_features()
+        model = self._load_model()
+        model_input = _build_model_input(features)
+        try:
+            raw_prediction = model.predict(model_input)
+        except WaitingTimePredictionError:
+            raise
+        except Exception as exc:
+            raise WaitingTimeModelInferenceError("대기시간 Prediction 모델 호출에 실패했습니다") from exc
+
+        return map_prediction_output_to_waiting_time(
+            raw_prediction,
+            hour_of_day=int(features["hour"]),
+            model_name=self.model_name,
+        )
+
+    def _load_model(self) -> Any:
+        if self._model is None:
+            self._validate_model_artifact()
+            loader = self.model_loader or _load_joblib_model
+            try:
+                self._model = loader(self.model_path)
+            except WaitingTimePredictionError:
+                raise
+            except Exception as exc:
+                raise WaitingTimeModelUnavailableError(
+                    "대기시간 Prediction 모델 artifact를 로딩할 수 없습니다"
+                ) from exc
+        return self._model
+
+    def _validate_model_artifact(self) -> None:
+        if not self.model_path.exists():
+            raise WaitingTimeModelUnavailableError(
+                f"대기시간 Prediction 모델 artifact가 없습니다: {self.model_path}"
+            )
+        if _is_git_lfs_pointer(self.model_path):
+            raise WaitingTimeModelUnavailableError(
+                "대기시간 Prediction 모델 artifact가 Git LFS pointer 상태입니다. "
+                "git lfs pull로 실제 joblib 파일을 내려받아야 합니다."
+            )
 
 
 @dataclass(frozen=True)
@@ -212,17 +280,27 @@ def map_prediction_output_to_waiting_time(
 
 def estimate_waiting_minutes_for_input(
     prediction_input: WaitingTimePredictionInput,
+    adapter: WaitingTimePredictionAdapter | None = None,
 ) -> WaitingTimeEstimate:
-    """통합 Prediction 입력 계약 기반 대기시간 예측 진입점.
+    """통합 Prediction 입력 계약 기반 대기시간 예측 진입점."""
 
-    후속 연결 Phase에서 이 함수가 `analysis/`의 모델 artifact를 로딩하고,
-    `prediction_input.to_model_features()` 결과를 모델에 전달한다.
-    """
+    active_adapter = adapter or _get_default_adapter()
+    return active_adapter.estimate(prediction_input)
 
-    _ = prediction_input.to_model_features()
-    raise NotImplementedError(
-        "장애인 콜택시 통합 대기시간 Prediction 모델 artifact 호출은 아직 연결되지 않았습니다."
-    )
+
+_default_adapter: WaitingTimePredictionAdapter | None = None
+
+
+def _get_default_adapter() -> WaitingTimePredictionAdapter:
+    global _default_adapter
+    if _default_adapter is None:
+        _default_adapter = WaitingTimePredictionAdapter()
+    return _default_adapter
+
+
+def _set_default_adapter_for_testing(adapter: WaitingTimePredictionAdapter | None) -> None:
+    global _default_adapter
+    _default_adapter = adapter
 
 
 def _coerce_prediction_minutes(raw_prediction: object) -> float:
@@ -253,3 +331,37 @@ def _unwrap_single_prediction(raw_prediction: object) -> Any:
         return _unwrap_single_prediction(raw_prediction[0])
 
     return raw_prediction
+
+
+def _build_model_input(features: dict[str, ModelFeatureValue]) -> Any:
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        raise WaitingTimeModelUnavailableError(
+            "대기시간 Prediction 모델 입력 생성을 위해 pandas가 필요합니다"
+        ) from exc
+
+    return pd.DataFrame([features], columns=MODEL_FEATURE_COLUMNS)
+
+
+def _load_joblib_model(model_path: Path) -> Any:
+    try:
+        import joblib
+    except ImportError as exc:
+        raise WaitingTimeModelUnavailableError(
+            "대기시간 Prediction 모델 로딩을 위해 joblib이 필요합니다"
+        ) from exc
+
+    return joblib.load(model_path)
+
+
+def _is_git_lfs_pointer(path: Path) -> bool:
+    try:
+        with path.open("rb") as file:
+            header = file.read(64)
+    except OSError as exc:
+        raise WaitingTimeModelUnavailableError(
+            f"대기시간 Prediction 모델 artifact를 읽을 수 없습니다: {path}"
+        ) from exc
+
+    return header.startswith(b"version https://git-lfs.github.com/spec/v1")

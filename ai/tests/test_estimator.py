@@ -1,12 +1,16 @@
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
+import ai.waiting_time.estimator as estimator_module
 from ai.waiting_time.estimator import (
     MODEL_FEATURE_COLUMNS,
     OUT_OF_TRAINING_TARGET_RANGE_WARNING,
     WAITING_TIME_UNIT,
+    WaitingTimeModelUnavailableError,
+    WaitingTimePredictionAdapter,
     WaitingTimePredictionInput,
     estimate_waiting_minutes,
     estimate_waiting_minutes_for_input,
@@ -122,9 +126,152 @@ def test_prediction_input_rejects_negative_weather_features(
         _prediction_input(**{field_name: -0.1})
 
 
-def test_prediction_input_based_estimator_raises_until_model_artifact_is_connected() -> None:
-    with pytest.raises(NotImplementedError):
+class _FakeWaitingTimeModel:
+    def __init__(self, raw_prediction: object = [15.5]) -> None:
+        self.raw_prediction = raw_prediction
+        self.seen_input: object | None = None
+
+    def predict(self, model_input: object) -> object:
+        self.seen_input = model_input
+        return self.raw_prediction
+
+
+def test_prediction_adapter_calls_model_with_training_features_and_returns_waiting_time(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"real joblib placeholder")
+    fake_model = _FakeWaitingTimeModel([15.5])
+    seen_loader_paths: list[Path] = []
+
+    def fake_loader(path: Path) -> _FakeWaitingTimeModel:
+        seen_loader_paths.append(path)
+        return fake_model
+
+    def fake_model_input_builder(features: dict[str, object]) -> list[dict[str, object]]:
+        return [features]
+
+    monkeypatch.setattr(estimator_module, "_build_model_input", fake_model_input_builder)
+
+    adapter = WaitingTimePredictionAdapter(
+        model_path=model_path,
+        model_name="test_rf_model",
+        model_loader=fake_loader,
+    )
+
+    estimate = adapter.estimate(_prediction_input())
+
+    assert seen_loader_paths == [model_path]
+    assert fake_model.seen_input == [_prediction_input().to_model_features()]
+    assert estimate.waitingTime == 15.5
+    assert estimate.expected_minutes == 15.5
+    assert estimate.model_name == "test_rf_model"
+    assert estimate.hour_of_day == 14
+
+
+def test_prediction_adapter_reuses_lazy_loaded_model(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"real joblib placeholder")
+    fake_model = _FakeWaitingTimeModel([10.0])
+    load_count = 0
+
+    def fake_loader(path: Path) -> _FakeWaitingTimeModel:
+        nonlocal load_count
+        load_count += 1
+        return fake_model
+
+    monkeypatch.setattr(estimator_module, "_build_model_input", lambda features: [features])
+
+    adapter = WaitingTimePredictionAdapter(model_path=model_path, model_loader=fake_loader)
+
+    adapter.estimate(_prediction_input())
+    adapter.estimate(_prediction_input())
+
+    assert load_count == 1
+
+
+def test_prediction_input_based_estimator_uses_default_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_estimate = map_prediction_output_to_waiting_time(12.0, hour_of_day=14, model_name="fake")
+
+    class FakeDefaultAdapter:
+        def estimate(self, prediction_input: WaitingTimePredictionInput) -> object:
+            assert prediction_input.to_model_features()["hour"] == 14
+            return fake_estimate
+
+    monkeypatch.setattr(estimator_module, "WaitingTimePredictionAdapter", FakeDefaultAdapter)
+
+    assert estimate_waiting_minutes_for_input(_prediction_input()) == fake_estimate
+
+
+def test_prediction_input_based_estimator_reuses_default_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"real joblib placeholder")
+    fake_model = _FakeWaitingTimeModel([10.0])
+    load_count = 0
+
+    def fake_loader(path: Path) -> _FakeWaitingTimeModel:
+        nonlocal load_count
+        load_count += 1
+        return fake_model
+
+    monkeypatch.setattr(estimator_module, "_build_model_input", lambda features: [features])
+    estimator_module._set_default_adapter_for_testing(
+        WaitingTimePredictionAdapter(model_path=model_path, model_loader=fake_loader)
+    )
+
+    try:
         estimate_waiting_minutes_for_input(_prediction_input())
+        estimate_waiting_minutes_for_input(_prediction_input())
+    finally:
+        estimator_module._set_default_adapter_for_testing(None)
+
+    assert load_count == 1
+
+
+def test_prediction_input_based_estimator_accepts_explicit_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"real joblib placeholder")
+    monkeypatch.setattr(estimator_module, "_build_model_input", lambda features: [features])
+    adapter = WaitingTimePredictionAdapter(
+        model_path=model_path,
+        model_loader=lambda path: _FakeWaitingTimeModel([9.5]),
+    )
+
+    estimate = estimate_waiting_minutes_for_input(_prediction_input(), adapter=adapter)
+
+    assert estimate.waitingTime == 9.5
+
+
+def test_prediction_adapter_rejects_missing_model_artifact(tmp_path: Path) -> None:
+    adapter = WaitingTimePredictionAdapter(model_path=tmp_path / "missing.joblib")
+
+    with pytest.raises(WaitingTimeModelUnavailableError, match="artifact가 없습니다"):
+        adapter.estimate(_prediction_input())
+
+
+def test_prediction_adapter_rejects_git_lfs_pointer_artifact(tmp_path: Path) -> None:
+    model_path = tmp_path / "model.joblib"
+    model_path.write_text(
+        "version https://git-lfs.github.com/spec/v1\n"
+        "oid sha256:0000\n"
+        "size 1480271962\n"
+    )
+    adapter = WaitingTimePredictionAdapter(model_path=model_path)
+
+    with pytest.raises(WaitingTimeModelUnavailableError, match="Git LFS pointer"):
+        adapter.estimate(_prediction_input())
 
 
 def test_prediction_output_maps_numeric_prediction_to_backend_waiting_time() -> None:
