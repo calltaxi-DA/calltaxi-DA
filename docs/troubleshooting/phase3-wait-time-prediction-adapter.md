@@ -131,3 +131,61 @@ PY
 - 현재 worktree의 모델 파일은 Git LFS pointer 상태이므로 실제 1.48GB artifact 로딩 검증은 별도 `git lfs pull` 이후 수행해야 한다.
 - Backend route orchestration은 아직 feature source를 모두 준비해 `estimate_waiting_minutes_for_input()`으로 넘기도록 연결되지 않았다.
 - 임차택시·특장차 양쪽 `model_group` 예측 후 보수적 max를 사용하는 정책은 후속 Phase에서 구현해야 한다.
+
+## Phase 4 추가 검증 메모
+
+### 문제 상황
+
+Phase 4 Prediction 결과 검증 worktree에서는 `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`이 실제 1.4GB artifact 상태였지만, backend venv에는 `joblib`, `pandas`, `scikit-learn`이 설치되어 있지 않아 실제 sample prediction 실행 전 의존성 확인에서 누락이 재현됐다.
+
+### 영향
+
+- artifact가 준비되어 있어도 모델 입력 DataFrame 생성과 joblib 로딩을 수행할 수 없다.
+- 이 상태에서 실제 Prediction 결과 검증을 통과 처리하면 운영 환경의 의존성 누락을 놓칠 수 있다.
+
+### 재현 방법
+
+```bash
+/Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pip show joblib pandas scikit-learn
+```
+
+Phase 4 시작 시점에는 `joblib`, `pandas`, `scikit-learn`이 `Package(s) not found`로 확인됐다.
+
+### 원인
+
+Phase 3에서 `backend/requirements.txt`에는 ML 추론 의존성을 추가했지만, 로컬 backend venv에는 아직 해당 requirements가 재설치되지 않았다.
+
+### 검토한 대안
+
+1. **fake adapter로만 Phase 4 검증**
+   - 장점: 빠르고 CI 의존성이 낮다.
+   - 단점: 실제 joblib artifact의 output type/unit/값 범위를 확인하지 못한다.
+   - 판단: 채택하지 않음.
+
+2. **backend requirements를 설치하고 실제 artifact로 sample validation 실행**
+   - 장점: Phase 4 핵심 목표인 실제 Prediction 결과 검증을 수행할 수 있다.
+   - 단점: 로컬 venv 상태와 대용량 artifact 준비에 의존한다.
+   - 판단: 채택.
+
+### 해결 방법
+
+```bash
+/Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pip install -r backend/requirements.txt
+```
+
+설치 후 `joblib==1.4.2`, `pandas==2.2.3`, `scikit-learn==1.9.0`이 준비되었고, 실제 sample prediction 검증을 수행했다.
+
+### 검증 결과
+
+```bash
+PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m ai.waiting_time.validation --output analysis/waiting_time/prediction_validation_phase4.json
+```
+
+- `임차택시_바로콜`: `41.21341000519471` minutes
+- `특장차_바로콜`: `40.50492956696943` minutes
+- conservative max: `41.21341000519471` minutes, `2473` seconds
+- Null/NaN/음수 없음, output type finite numeric, unit `minutes`
+
+### 남은 한계
+
+- 실제 artifact smoke validation은 CI 기본 테스트와 분리한다. CI 환경에서 Git LFS artifact 또는 ML 의존성이 없으면 단위 테스트는 fake adapter 기반 검증까지만 수행한다.
