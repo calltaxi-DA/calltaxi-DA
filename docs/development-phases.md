@@ -410,7 +410,7 @@
   - `frontend/src/App.tsx`, `frontend/src/index.css` — Backend-owned 추천 요청과 통합 결과 영역·상태 스타일 연결
   - `frontend/src/__tests__/App.test.tsx` — 요청 계약, 우선순위 순서, TOP 3 표현, 지표 누락, 접근성, 제외·오류·stale 응답 검증
 - 검증 결과:
-  - `npm test -- --run` — 10개 통과
+  - `npm test -- --run` — 13개 통과
   - `npm run lint` — oxlint 통과
   - `npm run build` — TypeScript 및 Vite production build 통과
   - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_recommendation_routes.py backend/tests/test_recommendation_service.py backend/tests/test_route_orchestration.py backend/tests/test_route_contracts.py` — 43개 통과(기존 Starlette deprecation warning 1건)

@@ -17,25 +17,25 @@ const accessibilityLabels: Record<AccessibilityStatus, string> = {
   not_verified: '접근성 미확인',
 }
 
-function duration(value: number | null) {
-  if (value === null) return '비교 불가'
+function duration(value: number | null, available = true) {
+  if (!available || value === null) return '비교 불가'
   const hours = Math.floor(value / 3600)
   const minutes = Math.ceil((value % 3600) / 60)
   if (!hours) return `${minutes}분`
   return minutes ? `${hours}시간 ${minutes}분` : `${hours}시간`
 }
 
-function distance(value: number | null) {
-  if (value === null) return '비교 불가'
+function distance(value: number | null, available = true) {
+  if (!available || value === null) return '비교 불가'
   return value < 1000 ? `${value.toLocaleString('ko-KR')}m` : `${(value / 1000).toFixed(1)}km`
 }
 
 function RouteMetrics({ route }: { route: RouteResult }) {
   const metrics = [
-    ['총시간', duration(route.total_time_seconds)],
-    ['비용', route.total_cost_won === null ? '비교 불가' : `${route.total_cost_won.toLocaleString('ko-KR')}원`],
-    ['도보거리', distance(route.walking_distance_meters)],
-    ['도보시간', duration(route.walking_time_seconds)],
+    ['총시간', duration(route.total_time_seconds, route.metric_availability.total_time_seconds === 'available')],
+    ['비용', route.metric_availability.total_cost_won === 'available' && route.total_cost_won !== null ? `${route.total_cost_won.toLocaleString('ko-KR')}원` : '비교 불가'],
+    ['도보거리', distance(route.walking_distance_meters, route.metric_availability.walking_distance_meters === 'available')],
+    ['도보시간', duration(route.walking_time_seconds, route.metric_availability.walking_time_seconds === 'available')],
   ]
   return <dl className="route-metrics">{metrics.map(([label, value]) => (
     <div className="metric" key={label}><dt>{label}</dt><dd>{value}</dd></div>

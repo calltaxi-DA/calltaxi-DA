@@ -27,10 +27,15 @@ function recommendationResult(): RecommendationResponse {
   }
 }
 
-function setupKakaoMock() {
+function setupKakaoMock(
+  keywordSearch = vi.fn((keyword: string, callback: (results: MockPlace[], status: string) => void) => callback([keyword === '강남역' ? destinationPlace : originPlace], 'OK')),
+) {
   vi.stubEnv('KAKAO_JS_KEY', 'test-key')
-  const keywordSearch = vi.fn((keyword: string, callback: (results: MockPlace[], status: string) => void) => callback([keyword === '강남역' ? destinationPlace : originPlace], 'OK'))
-  window.kakao = { maps: { load: (callback) => callback(), Map: vi.fn(function () { return { setCenter: vi.fn() } }), LatLng: vi.fn(function (lat, lng) { return { lat, lng } }), Marker: vi.fn(function () { return { setMap: vi.fn() } }), services: { Places: vi.fn(function () { return { keywordSearch } }), Status: { OK: 'OK', ZERO_RESULT: 'ZERO_RESULT' } } } }
+  const setCenter = vi.fn()
+  const markerSetMap = vi.fn()
+  const markerConstructor = vi.fn(function () { return { setMap: markerSetMap } })
+  window.kakao = { maps: { load: (callback) => callback(), Map: vi.fn(function () { return { setCenter } }), LatLng: vi.fn(function (lat, lng) { return { lat, lng } }), Marker: markerConstructor, services: { Places: vi.fn(function () { return { keywordSearch } }), Status: { OK: 'OK', ZERO_RESULT: 'ZERO_RESULT' } } } }
+  return { keywordSearch, markerConstructor, markerSetMap, setCenter }
 }
 
 async function selectRoutePlaces() {
@@ -84,7 +89,7 @@ describe('Frontend Phase 7 recommendation UI', () => {
   })
 
   it('shows unknown walking metrics as comparison unavailable rather than zero', () => {
-    const result = recommendationResult(); result.recommendations[0].route.walking_distance_meters = null; result.recommendations[0].route.walking_time_seconds = null; result.recommendations[0].route.metric_availability.walking_distance_meters = 'not_available'; result.recommendations[0].route.metric_availability.walking_time_seconds = 'not_available'
+    const result = recommendationResult(); result.recommendations[0].route.metric_availability = { ...result.recommendations[0].route.metric_availability, walking_distance_meters: 'not_available', walking_time_seconds: 'not_available' }
     render(<RecommendationResults result={result} />); expect(screen.getAllByText('비교 불가')).toHaveLength(2); expect(screen.queryByText('0m')).not.toBeInTheDocument(); expect(screen.queryByText('0분')).not.toBeInTheDocument()
   })
 
@@ -125,5 +130,43 @@ describe('Frontend Phase 7 recommendation UI', () => {
     render(<RecommendationResults result={result} />)
     expect(screen.getByText('현재 추천 가능한 경로가 없습니다.')).toBeInTheDocument()
     expect(screen.getByText(/대기시간 예측 불가/)).toBeInTheDocument(); expect(screen.getByText(/지하철 경로 계산 불가/)).toBeInTheDocument(); expect(screen.getByText(/저상버스 경로 계산 불가/)).toBeInTheDocument()
+  })
+
+  it('stores selected coordinates and creates a marker centered on the selected place', async () => {
+    const { markerConstructor, setCenter } = setupKakaoMock()
+    render(<App />)
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.click(screen.getByRole('button', { name: /서울시청/ }))
+    expect(screen.getByText(/37.566826/)).toBeInTheDocument()
+    expect(screen.getByText(/126.978657/)).toBeInTheDocument()
+    expect(markerConstructor).toHaveBeenCalledTimes(1)
+    expect(setCenter).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a stale place response after a newer search response', async () => {
+    const callbacks: Array<(results: MockPlace[], status: string) => void> = []
+    setupKakaoMock(vi.fn((_keyword: string, callback: (results: MockPlace[], status: string) => void) => { callbacks.push(callback) }))
+    render(<App />)
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+    const originInput = screen.getByLabelText('출발지')
+    fireEvent.change(originInput, { target: { value: '서울' } }); fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.change(originInput, { target: { value: '강남' } }); fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    act(() => callbacks[1]([destinationPlace], 'OK'))
+    expect(screen.getByRole('button', { name: /강남역/ })).toBeInTheDocument()
+    act(() => callbacks[0]([originPlace], 'OK'))
+    expect(screen.queryByRole('button', { name: /서울시청/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /강남역/ })).toBeInTheDocument()
+  })
+
+  it('distinguishes a Kakao Places service error from no search results', async () => {
+    setupKakaoMock(vi.fn((_keyword: string, callback: (results: MockPlace[], status: string) => void) => callback([], 'ERROR')))
+    render(<App />)
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    expect(screen.getByText('장소검색 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하세요.')).toBeInTheDocument()
+    expect(screen.queryByText(/검색 결과가 없습니다/)).not.toBeInTheDocument()
   })
 })
