@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../App'
@@ -154,7 +154,8 @@ describe('Frontend Phase 7 recommendation UI', () => {
     const result = recommendationResult()
     result.recommendations.push({ rank: 3, route: {
       transport_type: 'calltaxi', status: 'available', total_time_seconds: 3600, total_distance_meters: 12000,
-      total_cost_won: 2500, walking_distance_meters: null, walking_time_seconds: null,
+      total_cost_won: 2500, predicted_waiting_time_seconds: 1500, vehicle_time_seconds: 2100,
+      walking_distance_meters: null, walking_time_seconds: null,
       metric_availability: { total_time_seconds: 'available', total_distance_meters: 'available', total_cost_won: 'available', walking_distance_meters: 'not_available', walking_time_seconds: 'not_available' },
       accessibility_status: 'not_verified', unavailable_reason: null, summary: '장애인 콜택시 경로',
       warnings: ['콜택시 승하차 접근 도보 데이터가 없어 도보 지표를 비교할 수 없습니다.'],
@@ -163,6 +164,15 @@ describe('Frontend Phase 7 recommendation UI', () => {
     render(<RecommendationResults result={result} />)
     expect(screen.getByText('3위')).toBeInTheDocument(); expect(screen.getAllByText('장애인 콜택시')).toHaveLength(1)
     expect(screen.getAllByText('비교 불가')).toHaveLength(2); expect(screen.getByText(/승하차 접근 도보 데이터가 없어/)).toBeInTheDocument()
+    const breakdown = screen.getByLabelText('장애인 콜택시 시간 구성')
+    expect(within(breakdown).getByText('예상 대기시간')).toBeInTheDocument()
+    expect(within(breakdown).getByText('차량 이동시간')).toBeInTheDocument()
+    expect(within(breakdown).getByText('총 예상시간')).toBeInTheDocument()
+    expect(within(breakdown).getByText('25분')).toBeInTheDocument()
+    expect(within(breakdown).getByText('35분')).toBeInTheDocument()
+    expect(within(breakdown).getByText('1시간')).toBeInTheDocument()
+    expect(screen.getByText('12.0km')).toBeInTheDocument()
+    expect(screen.getByText('2,500원')).toBeInTheDocument()
   })
 
   it('requires both selected places before requesting recommendations', async () => {

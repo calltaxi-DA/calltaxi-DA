@@ -32,14 +32,39 @@ function distance(value: number | null, available = true) {
 
 function RouteMetrics({ route }: { route: RouteResult }) {
   const metrics = [
-    ['총시간', duration(route.total_time_seconds, route.metric_availability.total_time_seconds === 'available')],
-    ['비용', route.metric_availability.total_cost_won === 'available' && route.total_cost_won !== null ? `${route.total_cost_won.toLocaleString('ko-KR')}원` : '비교 불가'],
+    ['총 예상시간', duration(route.total_time_seconds, route.metric_availability.total_time_seconds === 'available')],
+    ['이동거리', distance(route.total_distance_meters, route.metric_availability.total_distance_meters === 'available')],
+    ['예상요금', route.metric_availability.total_cost_won === 'available' && route.total_cost_won !== null ? `${route.total_cost_won.toLocaleString('ko-KR')}원` : '비교 불가'],
     ['도보거리', distance(route.walking_distance_meters, route.metric_availability.walking_distance_meters === 'available')],
     ['도보시간', duration(route.walking_time_seconds, route.metric_availability.walking_time_seconds === 'available')],
   ]
   return <dl className="route-metrics">{metrics.map(([label, value]) => (
     <div className="metric" key={label}><dt>{label}</dt><dd>{value}</dd></div>
   ))}</dl>
+}
+
+function CalltaxiTimeBreakdown({ route }: { route: RouteResult }) {
+  if (route.transport_type !== 'calltaxi' || route.status !== 'available') return null
+
+  const items = [
+    ['예상 대기시간', duration(route.predicted_waiting_time_seconds ?? null, route.predicted_waiting_time_seconds !== null && route.predicted_waiting_time_seconds !== undefined)],
+    ['차량 이동시간', duration(route.vehicle_time_seconds ?? null, route.vehicle_time_seconds !== null && route.vehicle_time_seconds !== undefined)],
+    ['총 예상시간', duration(route.total_time_seconds, route.metric_availability.total_time_seconds === 'available')],
+  ]
+
+  return (
+    <section className="calltaxi-time-breakdown" aria-label="장애인 콜택시 시간 구성">
+      <h4>장애인 콜택시 시간 구성</h4>
+      <dl className="component-metrics">
+        {items.map(([label, value]) => (
+          <div className="component-metric" key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
 }
 
 function RecommendationResults({ result }: { result: RecommendationResponse }) {
@@ -60,6 +85,7 @@ function RecommendationResults({ result }: { result: RecommendationResponse }) {
             </div>
           </div>
           <RouteMetrics route={route} />
+          <CalltaxiTimeBreakdown route={route} />
           <div className={`accessibility-status ${route.accessibility_status}`}>
             <strong>{accessibilityLabels[route.accessibility_status]}</strong>
             {route.warnings.length ? <ul>{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
