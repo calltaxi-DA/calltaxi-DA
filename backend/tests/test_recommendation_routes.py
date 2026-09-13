@@ -21,6 +21,8 @@ def _routes() -> list[dict[str, object]]:
             "total_time_seconds": 1800,
             "total_distance_meters": 12000,
             "total_cost_won": 2500,
+            "predicted_waiting_time_seconds": 600,
+            "vehicle_time_seconds": 1200,
             "walking_distance_meters": None,
             "walking_time_seconds": None,
             "metric_availability": {
@@ -163,10 +165,22 @@ def test_recommendations_production_provider_calls_waiting_prediction_when_sourc
 
     seen_model_groups: list[str] = []
 
+    class FakeEstimate:
+        def __init__(self, expected_minutes: int) -> None:
+            self.expected_minutes = expected_minutes
+            self.warnings = ()
+
+        def to_backend_output(self) -> dict[str, object]:
+            return {
+                "waitingTime": self.expected_minutes,
+                "unit": "minutes",
+                "warnings": self.warnings,
+            }
+
     def fake_estimator(prediction_input) -> object:
         seen_model_groups.append(prediction_input.model_group)
         expected_minutes = 20 if prediction_input.model_group == "임차택시_바로콜" else 30
-        return type("FakeEstimate", (), {"expected_minutes": expected_minutes, "warnings": ()})()
+        return FakeEstimate(expected_minutes)
 
     monkeypatch.setattr(recommendation_module, "TmapRouteClient", FakeTmapRouteClient)
     monkeypatch.setattr(recommendation_module, "estimate_waiting_minutes_for_input", fake_estimator)
@@ -181,7 +195,12 @@ def test_recommendations_production_provider_calls_waiting_prediction_when_sourc
     assert response.status_code == 200
     payload = response.json()
     assert seen_model_groups == ["임차택시_바로콜", "특장차_바로콜"]
-    assert payload["recommendations"][0]["route"]["total_time_seconds"] == 30 * 60 + 1_800
+    calltaxi_route = payload["recommendations"][0]["route"]
+    assert calltaxi_route["predicted_waiting_time_seconds"] == 30 * 60
+    assert calltaxi_route["vehicle_time_seconds"] == 1_800
+    assert calltaxi_route["total_time_seconds"] == 30 * 60 + 1_800
+    assert calltaxi_route["total_distance_meters"] == 12_500
+    assert calltaxi_route["total_cost_won"] == 3_000
     assert payload["excluded_routes"] == []
     get_settings.cache_clear()
 
