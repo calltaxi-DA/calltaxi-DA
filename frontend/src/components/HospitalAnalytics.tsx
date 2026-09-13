@@ -3,7 +3,7 @@ import { hospitalChartUrl } from '../api/hospitalAnalytics'
 
 function HospitalAnalytics({ result }: { result: HospitalAnalyticsResponse }) {
   const regions = result.analyses.find((item) => item.analysis_id === 'medical_destination_top_regions')
-  const districtTop5 = (regions?.values.district_top5 ?? []) as Array<{ name: string; count: number }>
+  const districtTop5 = regions?.values.district_top5 ?? []
   const limitations = [...new Set(result.analyses.flatMap((item) => item.limitations))]
   return (
     <section className="hospital-analytics" aria-label="병원 이동 분석정보">

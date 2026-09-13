@@ -563,7 +563,7 @@
 ## Analysis Phase 8 — 서비스용 분석 데이터 생성 (2026-09-13)
 
 - 브랜치: `analysis/phase8-service-data-exports` (base: `dev`)
-- 한 일: Phase 3에서 확정한 병원 이동 집계 4개와 기존 그래프 2개를 `analysis/hospital/`의 reviewed JSON·PNG로 수동 export했다. Backend에 병원 분석정보 및 chart API를 추가하고, Frontend가 해당 API를 통해 도착 상위 자치구 표·선정 그래프·분석 한계를 표시하도록 연결했다. 기존 지하철 station accessibility master와 저상버스 route master·ODsay mapping은 이미 Backend provider에 연결되어 있음을 확인하고, 세 도메인의 서비스 export를 단일 manifest와 회귀 테스트로 검증했다.
+- 한 일: Phase 3에서 확정한 병원 이동 집계 4개와 기존 그래프 2개를 `analysis/hospital/`의 reviewed JSON·PNG로 수동 export했다. Backend에 병원 분석정보 및 chart API를 추가하고, Frontend가 해당 API를 통해 도착 상위 자치구 표·선정 그래프·분석 한계를 표시하도록 연결했다. 기존 지하철 station accessibility master와 저상버스 route master·ODsay mapping은 이미 Backend provider에 연결되어 있음을 확인하고, 세 도메인의 서비스 export를 단일 manifest와 회귀 테스트로 검증했다. 병원 `analysis_id`별 `values`를 discriminated union으로 엄격히 검증하고, chart ID 오류와 배포 파일 누락을 각각 404와 503으로 구분했다.
 - 산출물:
   - `analysis/service_data_manifest.json` — 병원·지하철·저상버스 reviewed export와 consumer 목록
   - `analysis/hospital/hospital_analytics.json`, `analysis/hospital/figures/`, `analysis/hospital/README.md` — 병원 정적 집계·선정 그래프·출처 및 갱신 기준
@@ -582,8 +582,11 @@
   - 병원 JSON 4개 `analysis_id`와 Phase 3 확정 수치·모집단·기간 대조
   - 선정 PNG 2개가 각각 949×699, 1187×504의 유효 PNG임을 확인
   - manifest의 모든 export·Frontend asset 경로가 존재하고 세 도메인이 포함되는지 검증
+  - manifest 경로·consumer가 실제 loader/provider 기본 경로와 일치하고, chart `served_by`가 병원 JSON의 `asset_url`과 일치하는지 교차 검증
+  - `district_top5` 타입 오류, percentage 문자열, 필수 필드 누락 export가 `HospitalAnalyticsError`로 fail-close 되는지 검증
+  - unknown chart ID는 HTTP 404, 등록됐지만 누락된 chart 파일은 HTTP 503으로 구분되는지 검증
   - 저장소 밖 임시 작업 디렉터리에서도 병원·지하철·저상버스 reviewed export가 로드되는지 검증
-  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 154개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 158개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
   - `cd frontend && npm test -- --run` — 19개 통과
   - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
   - `cd frontend && npm run lint` — oxlint 통과

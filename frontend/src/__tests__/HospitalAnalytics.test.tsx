@@ -13,7 +13,7 @@ describe('hospital analytics', () => {
       analyses: [{
         analysis_id: 'medical_destination_top_regions', title: '의료목적콜 도착이 많은 지역',
         population_definition: '의료목적 탑승완료', aggregation_unit: '자치구',
-        values: { district_top5: [{ name: '노원구', count: 11531 }] }, limitations: ['개별 병원 방문량이 아닙니다.'],
+        values: { district_top5: [{ name: '노원구', count: 11531 }], neighborhood_top5: [] }, limitations: ['개별 병원 방문량이 아닙니다.'],
       }],
       charts: [{ chart_id: 'chart', title: '이동 비교', alt_text: '이동 비율 비교 그래프', asset_url: '/analytics/hospital/charts/chart', analysis_ids: [] }],
     }

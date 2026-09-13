@@ -4,7 +4,13 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
 
 from app.api.contracts import HospitalAnalyticsResponse
-from app.services.hospital_analytics import HospitalAnalyticsError, load_hospital_analytics, resolve_hospital_chart
+from app.services.hospital_analytics import (
+    HospitalAnalyticsError,
+    HospitalChartUnavailableError,
+    UnknownHospitalChartError,
+    load_hospital_analytics,
+    resolve_hospital_chart,
+)
 
 router = APIRouter(prefix="/analytics/hospital", tags=["analytics"])
 
@@ -21,5 +27,7 @@ def get_hospital_analytics() -> HospitalAnalyticsResponse:
 def get_hospital_chart(chart_id: str) -> FileResponse:
     try:
         return FileResponse(resolve_hospital_chart(chart_id), media_type="image/png")
-    except HospitalAnalyticsError as exc:
+    except UnknownHospitalChartError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except HospitalChartUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc

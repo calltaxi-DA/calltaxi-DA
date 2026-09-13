@@ -18,6 +18,14 @@ class HospitalAnalyticsError(RuntimeError):
     pass
 
 
+class UnknownHospitalChartError(HospitalAnalyticsError):
+    pass
+
+
+class HospitalChartUnavailableError(HospitalAnalyticsError):
+    pass
+
+
 def load_hospital_analytics(path: Path = DEFAULT_HOSPITAL_ANALYTICS_PATH) -> HospitalAnalyticsResponse:
     try:
         with path.open(encoding="utf-8") as file:
@@ -29,8 +37,8 @@ def load_hospital_analytics(path: Path = DEFAULT_HOSPITAL_ANALYTICS_PATH) -> Hos
 def resolve_hospital_chart(chart_id: str, chart_dir: Path = DEFAULT_HOSPITAL_CHART_DIR) -> Path:
     filename = CHART_FILES.get(chart_id)
     if filename is None:
-        raise HospitalAnalyticsError("unknown hospital chart")
+        raise UnknownHospitalChartError("unknown hospital chart")
     path = chart_dir / filename
     if not path.is_file():
-        raise HospitalAnalyticsError("hospital chart is unavailable")
+        raise HospitalChartUnavailableError("hospital chart is unavailable")
     return path
