@@ -1154,6 +1154,41 @@
   - 실제 운영 Backend와 연결한 smoke test에서 콜택시 available 응답이 내려오는 환경을 구성해 카드 표시를 확인한다.
   - 필요하면 결과 카드의 시각적 강조 순서(총 예상시간 vs 대기시간)를 사용자 테스트 후 조정한다.
 
+## Frontend Phase 10 — 지도 검색 사용성 및 지원지역 안내 (2026-09-14)
+
+- 브랜치: `frontend/phase10-route-map-usability` (base: 최신 `origin/dev` `b260232`). 기존 변경사항은 임의 수정·삭제하지 않고 Phase 전용 브랜치에서만 작업했다.
+- 작업 전 확인:
+  - 반드시 읽은 파일: `AGENTS.md`, `docs/architecture.md`, `docs/decisions/0003-frontend-map-sdk-exception.md`, `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md`, `docs/decisions/0005-backend-owned-transport-cost-records.md`, `docs/development-phases.md`, `frontend/src/App.tsx`, `frontend/src/__tests__/App.test.tsx`, `frontend/src/index.css`
+  - 이번 Phase에서 수정한 파일: `frontend/src/App.tsx`, `frontend/src/__tests__/App.test.tsx`, `frontend/src/index.css`, `docs/development-phases.md`
+  - 참고만 하고 수정하지 않은 파일: `backend/`, `ai/`, `analysis/`, `data/`, `notebooks*/`, `docs/architecture.md`, `docs/decisions/`
+  - 이번 Phase 범위에 포함하지 않은 작업: `RouteResult` geometry 계약 추가, 지도 polyline 실제 경로 표시, 콜택시+지하철 등 복합 이동수단 추천, Backend 추천 정렬·외부 provider 변경, AI Prediction 모델 변경
+- 핵심 목표: 전국 장소검색이 가능한 지도 UI에서 현재 서비스가 지원하는 서울 경로검색 범위를 명확히 안내하고, 검색 패널의 불필요한 좌표·요약 노출을 제거했다.
+- 한 일:
+  - 출발지·목적지 선택 후 입력창 아래에 표시되던 주소와 좌표 블록을 제거했다. 선택 좌표 상태, 지도 marker 생성, Backend 요청 payload는 그대로 유지한다.
+  - `입력 조건 요약` 섹션을 제거해 사용자가 지도와 검색 조건, 추천 결과에 집중하도록 정리했다.
+  - Kakao Places 검색 결과가 서울 밖 좌표를 선택할 수 있는 상황을 고려해, 출발지 또는 목적지가 서울 서비스 범위 밖이면 경로검색 버튼을 비활성화하고 안내 문구를 표시한다.
+  - 서울 밖 장소 선택 시 Backend 추천 API를 호출하지 않는 렌더 테스트를 추가했다.
+  - 기존 marker 생성 테스트를 화면 좌표 노출이 아니라 내부 지도 marker/center 호출 검증으로 조정했다.
+- 확정 동작:
+  - Frontend는 Kakao Places 전국 검색 자체를 막지 않지만, 현재 Backend 경로·접근성 데이터가 서울 중심인 점을 반영해 서울 밖 경로검색 요청은 보내지 않는다.
+  - 좌표는 사용자에게 직접 노출하지 않지만, 지도 marker와 Backend 요청용 내부 상태에는 유지된다.
+  - 경로 계산, 추천 정렬, 요금·시간·도보 판단은 계속 Backend API 계약을 따른다.
+- 검증 결과:
+  - `frontend/`에서 `npm test -- --run` — 2개 파일, 23개 테스트 통과.
+  - `frontend/`에서 `npm run build` — TypeScript build 및 Vite production build 통과.
+  - `frontend/`에서 `npm run lint` — 통과.
+  - 권한 있는 로컬 확인 기준 Backend `http://127.0.0.1:8000/docs` — `200 OK`.
+  - 권한 있는 로컬 확인 기준 Frontend `http://127.0.0.1:5174/` — `200 OK`.
+- 자체 리뷰:
+  - 이번 변경은 Frontend 표시와 요청 전 validation에 한정했고 Backend/API/AI 계약은 변경하지 않았다.
+  - 서울 서비스 범위는 좌표 bounding box로 보수적으로 차단하는 UI guard이며, 행정구역 reverse geocoding이나 실제 서비스 권역 판정 API를 새로 만들지는 않았다.
+  - 지도에 실제 경로선을 그리려면 Backend가 polyline/geometry를 응답하는 계약 변경이 필요하므로 이번 PR에 임의 구현하지 않았다.
+  - 복합 이동수단 추천은 단일 이동수단별 `RouteResult` 비교 계약을 넘어서는 기능이라 후속 설계 대상으로 남겼다.
+- 다음에 이어받을 것:
+  - Backend `RouteResult` 또는 별도 route geometry 계약을 설계한 뒤 Kakao Map polyline으로 실제 경로를 표시한다.
+  - 장거리 이동에서 콜택시+지하철, 저상버스+지하철 등 복합 이동수단 후보를 생성·정렬하는 Backend 계약을 별도 Phase에서 설계한다.
+  - 서울 서비스 권역을 bounding box보다 정확히 판정해야 하면 Backend 지원지역 API 또는 reverse geocoding 기반 정책을 먼저 확정한다.
+
 ## AI Phase 8 — 실행환경 및 모델 파일 관리 (2026-09-14)
 
 - 브랜치: `ai/phase8-model-runtime-management` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.

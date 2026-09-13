@@ -8,6 +8,7 @@ import RecommendationResults from '../components/RecommendationResults'
 type MockPlace = { id: string; place_name: string; address_name: string; road_address_name: string; x: string; y: string }
 const originPlace = createPlace('origin', '서울시청', '126.9786567', '37.566826')
 const destinationPlace = createPlace('destination', '강남역', '127.027621', '37.497942')
+const busanPlace = createPlace('busan', '부산역', '129.039616', '35.115225')
 
 function createPlace(id: string, placeName: string, x: string, y: string): MockPlace {
   return { id, place_name: placeName, address_name: `${placeName} 지번주소`, road_address_name: `${placeName} 도로명주소`, x, y }
@@ -213,10 +214,30 @@ describe('Frontend Phase 7 recommendation UI', () => {
     fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '서울시청' } })
     fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
     fireEvent.click(screen.getByRole('button', { name: /서울시청/ }))
-    expect(screen.getByText(/37.566826/)).toBeInTheDocument()
-    expect(screen.getByText(/126.978657/)).toBeInTheDocument()
+    expect(screen.queryByText(/37.566826/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/126.978657/)).not.toBeInTheDocument()
     expect(markerConstructor).toHaveBeenCalledTimes(1)
     expect(setCenter).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not request recommendations for places outside the supported Seoul service area', async () => {
+    setupKakaoMock(vi.fn((keyword: string, callback: (results: MockPlace[], status: string) => void) => callback([keyword === '부산역' ? busanPlace : destinationPlace], 'OK')))
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '부산역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.click(screen.getByRole('button', { name: /부산역/ }))
+    fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '강남역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[1])
+    fireEvent.click(screen.getByRole('button', { name: /강남역/ }))
+    selectCalltaxiPurpose()
+
+    expect(screen.getByRole('button', { name: '경로검색' })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent('현재 서울 지역의 출발지·목적지만 경로검색을 지원합니다.')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('ignores a stale place response after a newer search response', async () => {
