@@ -7,10 +7,12 @@ Phase 8에서 통합 장애인 콜택시 대기시간 Prediction 모델 실행�
 1. `backend/.venv`는 Python 3.12이지만 `pip`가 없어 `backend/requirements.txt` 설치 명령을 실행할 수 없었다.
 2. 루트 `.venv`에는 `pip`가 있었지만 `joblib`, `pandas` 버전이 `backend/requirements.txt`와 달랐다.
 3. sandbox 네트워크 제한 상태에서는 PyPI DNS 조회가 실패해 requirements 설치가 실패했다.
+4. 최초 runtime check는 artifact 존재와 metadata feature drift는 확인했지만, reviewed model version 자체를 구분하는 `model_name`, `created_at`, `reported_test_MAE`, artifact size까지는 확인하지 못했다.
 
 ## 영향
 
 - Python 버전이 맞아도 ML 추론 의존성 버전이 다르면 RandomForest joblib artifact를 같은 조건으로 실행했다고 보기 어렵다.
+- 같은 경로에 다른 joblib 또는 metadata가 들어가도 feature 순서만 같으면 “동일 모델”로 오인할 수 있다.
 - `pip`가 없는 venv에서는 새 개발자가 requirements를 재설치하거나 버전 drift를 복구하기 어렵다.
 - 네트워크 제한 환경에서는 dependencies 설치가 실패할 수 있으므로, 실패 원인을 모델 파일 문제와 구분해야 한다.
 
@@ -59,9 +61,9 @@ PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/.venv/bin/python -m ai.waiting
 
 ## 해결 방법
 
-- `ai.waiting_time.runtime` 모듈을 추가해 Python 3.12, `joblib/pandas/scikit-learn` pinned version, joblib artifact 존재 여부, Git LFS pointer 여부, metadata feature drift를 점검한다.
+- `ai.waiting_time.runtime` 모듈을 추가해 Python 3.12, `joblib/pandas/scikit-learn/numpy/scipy/threadpoolctl` pinned version, joblib artifact 존재 여부, artifact size, Git LFS pointer 여부, metadata model name/created_at/reported MAE/feature drift를 점검한다.
 - 루트 `.env.example`에 `APP_WAITING_TIME_MODEL_PATH`, `APP_WAITING_TIME_MODEL_METADATA_PATH`를 추가해 새 환경에서 artifact 경로를 명시적으로 설정할 수 있게 했다.
-- 네트워크 권한을 허용한 뒤 루트 `.venv`에 `backend/requirements.txt`를 설치해 `joblib==1.4.2`, `pandas==2.2.3`, `scikit-learn==1.9.0` 상태로 맞췄다.
+- 네트워크 권한을 허용한 뒤 루트 `.venv`에 `backend/requirements.txt`를 설치해 `joblib==1.4.2`, `pandas==2.2.3`, `scikit-learn==1.9.0`, `numpy==2.5.2`, `scipy==1.18.1`, `threadpoolctl==3.6.0` 상태로 맞췄다.
 
 ## 검증 결과
 
@@ -70,9 +72,10 @@ PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/.venv/bin/python -m ai.waiting
 ```
 
 - Python 3.12.14 확인
-- `joblib==1.4.2`, `pandas==2.2.3`, `scikit-learn==1.9.0` 확인
+- `joblib==1.4.2`, `pandas==2.2.3`, `scikit-learn==1.9.0`, `numpy==2.5.2`, `scipy==1.18.1`, `threadpoolctl==3.6.0` 확인
 - `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib` 실제 artifact 확인
-- metadata `target_unit=minutes`, feature 순서 일치 확인
+- artifact size `1480271962` bytes 확인
+- metadata `model_name`, `created_at`, `reported_test_MAE`, `target_unit=minutes`, feature 순서 일치 확인
 
 ```bash
 PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/.venv/bin/python -m ai.waiting_time.validation --output analysis/waiting_time/prediction_validation_phase4.json

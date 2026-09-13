@@ -28,7 +28,14 @@ REQUIRED_RUNTIME_DEPENDENCIES = (
     ("joblib", "joblib", "1.4.2"),
     ("pandas", "pandas", "2.2.3"),
     ("sklearn", "scikit-learn", "1.9.0"),
+    ("numpy", "numpy", "2.5.2"),
+    ("scipy", "scipy", "1.18.1"),
+    ("threadpoolctl", "threadpoolctl", "3.6.0"),
 )
+EXPECTED_MODEL_ARTIFACT_SIZE_BYTES = 1_480_271_962
+EXPECTED_MODEL_METADATA_MODEL_NAME = "RandomForest Feature Set v2 + vehicle_operation_count_prev_day + weather"
+EXPECTED_MODEL_METADATA_CREATED_AT = "2026-09-13T20:07:44"
+EXPECTED_MODEL_METADATA_REPORTED_TEST_MAE = 11.105367785137439
 
 
 @dataclass(frozen=True)
@@ -50,6 +57,7 @@ class WaitingTimeRuntimeReport:
     python_version: str
     required_python: str
     model_name: str
+    model_alias: str
     model_path: str
     metadata_path: str
     env_vars: dict[str, str]
@@ -65,6 +73,7 @@ class WaitingTimeRuntimeReport:
             "python_version": self.python_version,
             "required_python": self.required_python,
             "model_name": self.model_name,
+            "model_alias": self.model_alias,
             "model_path": self.model_path,
             "metadata_path": self.metadata_path,
             "env_vars": self.env_vars,
@@ -82,14 +91,15 @@ def check_waiting_time_runtime(
     checks = [
         _check_python_version(),
         *_check_runtime_dependencies(),
-        _check_model_artifact(model_path),
-        _check_model_metadata(metadata_path),
+        *_check_model_artifact(model_path),
+        *_check_model_metadata(metadata_path),
     ]
 
     return WaitingTimeRuntimeReport(
         python_version=_python_version_label(),
         required_python=_required_python_label(),
-        model_name=DEFAULT_MODEL_NAME,
+        model_name=EXPECTED_MODEL_METADATA_MODEL_NAME,
+        model_alias=DEFAULT_MODEL_NAME,
         model_path=str(model_path),
         metadata_path=str(metadata_path),
         env_vars={
@@ -154,74 +164,117 @@ def _check_runtime_dependencies() -> tuple[RuntimeCheckItem, ...]:
     return tuple(checks)
 
 
-def _check_model_artifact(model_path: Path) -> RuntimeCheckItem:
+def _check_model_artifact(model_path: Path) -> tuple[RuntimeCheckItem, ...]:
     if not model_path.exists():
-        return RuntimeCheckItem(
-            name="model_artifact",
-            ok=False,
-            message=f"model artifact is missing: {model_path}",
-        )
-    try:
-        if _is_git_lfs_pointer(model_path):
-            return RuntimeCheckItem(
+        return (
+            RuntimeCheckItem(
                 name="model_artifact",
                 ok=False,
-                message=(
-                    "model artifact is a Git LFS pointer; run "
-                    f'git lfs pull --include="{_display_path(model_path)}"'
+                message=f"model artifact is missing: {model_path}",
+            ),
+        )
+
+    checks = [
+        RuntimeCheckItem(
+            name="model_artifact_size",
+            ok=model_path.stat().st_size == EXPECTED_MODEL_ARTIFACT_SIZE_BYTES,
+            message=(
+                f"model artifact size={model_path.stat().st_size}; "
+                f"expected {EXPECTED_MODEL_ARTIFACT_SIZE_BYTES}"
+            ),
+        )
+    ]
+    try:
+        if _is_git_lfs_pointer(model_path):
+            return (
+                *checks,
+                RuntimeCheckItem(
+                    name="model_artifact",
+                    ok=False,
+                    message=(
+                        "model artifact is a Git LFS pointer; run "
+                        f'git lfs pull --include="{_display_path(model_path)}"'
+                    ),
                 ),
             )
     except (OSError, ValueError, WaitingTimeModelUnavailableError) as exc:
-        return RuntimeCheckItem(
-            name="model_artifact",
-            ok=False,
-            message=f"model artifact cannot be read: {exc}",
+        return (
+            *checks,
+            RuntimeCheckItem(
+                name="model_artifact",
+                ok=False,
+                message=f"model artifact cannot be read: {exc}",
+            ),
         )
 
-    return RuntimeCheckItem(
-        name="model_artifact",
-        ok=True,
-        message=f"model artifact is available: {model_path}",
+    return (
+        *checks,
+        RuntimeCheckItem(
+            name="model_artifact",
+            ok=True,
+            message=f"model artifact is available: {model_path}",
+        ),
     )
 
 
-def _check_model_metadata(metadata_path: Path) -> RuntimeCheckItem:
+def _check_model_metadata(metadata_path: Path) -> tuple[RuntimeCheckItem, ...]:
     if not metadata_path.exists():
-        return RuntimeCheckItem(
-            name="model_metadata",
-            ok=False,
-            message=f"model metadata is missing: {metadata_path}",
+        return (
+            RuntimeCheckItem(
+                name="model_metadata",
+                ok=False,
+                message=f"model metadata is missing: {metadata_path}",
+            ),
         )
 
     try:
         metadata = _read_json_object(metadata_path)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        return RuntimeCheckItem(
-            name="model_metadata",
-            ok=False,
-            message=f"model metadata cannot be read: {exc}",
+        return (
+            RuntimeCheckItem(
+                name="model_metadata",
+                ok=False,
+                message=f"model metadata cannot be read: {exc}",
+            ),
         )
 
-    if metadata.get("target_unit") != WAITING_TIME_UNIT:
-        return RuntimeCheckItem(
-            name="model_metadata",
-            ok=False,
-            message=f"metadata target_unit must be {WAITING_TIME_UNIT}",
-        )
-
-    if tuple(metadata.get("features", ())) != MODEL_FEATURE_COLUMNS:
-        return RuntimeCheckItem(
-            name="model_metadata",
-            ok=False,
-            message="metadata feature list does not match adapter feature columns",
-        )
-
-    created_at = metadata.get("created_at", "unknown")
-    return RuntimeCheckItem(
-        name="model_metadata",
-        ok=True,
-        message=f"metadata is valid; created_at={created_at}",
+    checks = (
+        RuntimeCheckItem(
+            name="model_metadata:model_name",
+            ok=metadata.get("model_name") == EXPECTED_MODEL_METADATA_MODEL_NAME,
+            message=(
+                f"metadata model_name={metadata.get('model_name')!r}; "
+                f"expected {EXPECTED_MODEL_METADATA_MODEL_NAME!r}"
+            ),
+        ),
+        RuntimeCheckItem(
+            name="model_metadata:created_at",
+            ok=metadata.get("created_at") == EXPECTED_MODEL_METADATA_CREATED_AT,
+            message=(
+                f"metadata created_at={metadata.get('created_at')!r}; "
+                f"expected {EXPECTED_MODEL_METADATA_CREATED_AT!r}"
+            ),
+        ),
+        RuntimeCheckItem(
+            name="model_metadata:reported_test_MAE",
+            ok=metadata.get("reported_test_MAE") == EXPECTED_MODEL_METADATA_REPORTED_TEST_MAE,
+            message=(
+                f"metadata reported_test_MAE={metadata.get('reported_test_MAE')!r}; "
+                f"expected {EXPECTED_MODEL_METADATA_REPORTED_TEST_MAE!r}"
+            ),
+        ),
+        RuntimeCheckItem(
+            name="model_metadata:target_unit",
+            ok=metadata.get("target_unit") == WAITING_TIME_UNIT,
+            message=f"metadata target_unit={metadata.get('target_unit')!r}; expected {WAITING_TIME_UNIT!r}",
+        ),
+        RuntimeCheckItem(
+            name="model_metadata:features",
+            ok=tuple(metadata.get("features", ())) == MODEL_FEATURE_COLUMNS,
+            message="metadata feature list matches adapter feature columns",
+        ),
     )
+    return checks
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:

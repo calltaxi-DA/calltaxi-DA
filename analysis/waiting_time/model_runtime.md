@@ -13,6 +13,9 @@
 | 모델 artifact | `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib` |
 | 모델 metadata | `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json` |
 | 모델 alias | `rf_wait_time_v2_prev_day_weather_final` |
+| 모델 metadata name | `RandomForest Feature Set v2 + vehicle_operation_count_prev_day + weather` |
+| 모델 metadata created_at | `2026-09-13T20:07:44` |
+| 모델 artifact size | `1480271962` bytes |
 | artifact 저장 방식 | Git LFS |
 | 예측 단위 | minutes |
 
@@ -21,6 +24,9 @@
 - `joblib==1.4.2`
 - `pandas==2.2.3`
 - `scikit-learn==1.9.0`
+- `numpy==2.5.2`
+- `scipy==1.18.1`
+- `threadpoolctl==3.6.0`
 
 ## 환경 변수
 
@@ -45,7 +51,7 @@ git lfs pull --include="analysis/waiting_time/rf_wait_time_v2_prev_day_weather_f
 
 ## 런타임 점검
 
-아래 명령은 Python 버전, 추론 의존성 버전, 모델 artifact 경로, Git LFS pointer 여부, metadata feature drift를 확인한다.
+아래 명령은 Python 버전, 추론 의존성 버전, 모델 artifact 경로, artifact size, Git LFS pointer 여부, metadata model/version, metadata feature drift를 확인한다.
 
 ```bash
 PYTHONPATH=backend:. backend/.venv/bin/python -m ai.waiting_time.runtime
@@ -56,6 +62,8 @@ PYTHONPATH=backend:. backend/.venv/bin/python -m ai.waiting_time.runtime
 - Python 3.12.x
 - `backend/requirements.txt`와 같은 ML 추론 의존성 버전
 - 모델 artifact가 존재하고 Git LFS pointer가 아님
+- 모델 artifact size가 reviewed artifact size와 일치
+- metadata `model_name`, `created_at`, `reported_test_MAE`가 reviewed model 기준과 일치
 - metadata의 `target_unit`이 `minutes`
 - metadata feature 순서가 AI Adapter의 `MODEL_FEATURE_COLUMNS`와 일치
 
@@ -73,6 +81,8 @@ PYTHONPATH=backend:. backend/.venv/bin/python -m ai.waiting_time.validation --ou
 
 - `model artifact is a Git LFS pointer`: `git lfs pull --include="analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib"`를 실행해야 한다.
 - `dependency:* is not installed` 또는 버전 mismatch: `backend/.venv/bin/python -m pip install -r backend/requirements.txt`를 다시 실행한다.
+- `model_artifact_size` mismatch: 같은 경로에 reviewed artifact와 다른 joblib이 들어간 상태이므로 artifact를 교체하지 말고 LFS pull 상태와 export 출처를 확인한다.
+- `model_metadata:*` mismatch: metadata가 reviewed model version과 다르므로 모델 artifact와 metadata를 같은 export bundle로 맞춰야 한다.
 - `metadata feature list does not match adapter feature columns`: 모델 metadata와 `ai/waiting_time/estimator.py`의 feature 계약이 drift된 상태이므로, 임의로 실행하지 말고 artifact/adapter 중 어느 쪽이 최신 계약인지 확인한다.
 - Python version mismatch: CI와 같은 Python 3.12 환경으로 재생성한다.
 
