@@ -68,6 +68,9 @@ function CalltaxiTimeBreakdown({ route }: { route: RouteResult }) {
 }
 
 function RecommendationResults({ result }: { result: RecommendationResponse }) {
+  const hasRecommendations = result.recommendations.length > 0
+  const hasExcludedRoutes = result.excluded_routes.length > 0
+
   return (
     <section className="recommendation-results" aria-labelledby="recommendation-title">
       <header className="recommendation-heading">
@@ -75,7 +78,13 @@ function RecommendationResults({ result }: { result: RecommendationResponse }) {
         <h2 id="recommendation-title">추천 경로 최대 TOP 3</h2>
       </header>
 
-      {result.recommendations.length ? result.recommendations.map(({ rank, route }) => (
+      {hasRecommendations && hasExcludedRoutes ? (
+        <p className="partial-success-message" role="status">
+          일부 이동수단은 제외됐지만 가능한 추천 경로를 표시합니다.
+        </p>
+      ) : null}
+
+      {hasRecommendations ? result.recommendations.map(({ rank, route }) => (
         <article className="route-result-card recommendation-card" key={route.transport_type}>
           <div className="result-heading">
             <strong className="rank-badge">{rank}위</strong>
@@ -91,10 +100,14 @@ function RecommendationResults({ result }: { result: RecommendationResponse }) {
             {route.warnings.length ? <ul>{route.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
           </div>
         </article>
-      )) : <p className="empty-recommendation">현재 추천 가능한 경로가 없습니다.</p>}
+      )) : (
+        <p className="empty-recommendation" role="status">
+          현재 추천 가능한 경로가 없습니다.
+        </p>
+      )}
 
-      {result.excluded_routes.length ? (
-        <div className="excluded-routes">
+      {hasExcludedRoutes ? (
+        <div className="excluded-routes" role="status" aria-label="추천에서 제외된 이동수단">
           <h3>추천에서 제외된 이동수단</h3>
           <ul>{result.excluded_routes.map((item) => (
             <li key={item.transport_type}><strong>{transportLabels[item.transport_type]}</strong>: {item.reason}</li>

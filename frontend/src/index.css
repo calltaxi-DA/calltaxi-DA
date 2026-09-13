@@ -704,7 +704,8 @@ button:disabled {
 
 .accessibility-status,
 .excluded-routes,
-.empty-recommendation {
+.empty-recommendation,
+.partial-success-message {
   padding: 14px;
   border-radius: 16px;
   background: #eef8f2;
@@ -721,6 +722,14 @@ button:disabled {
 .excluded-routes {
   background: #fff1ee;
   color: #803a30;
+}
+
+.partial-success-message {
+  margin: 0;
+  border: 1px solid #bfd3f7;
+  background: #eef4ff;
+  color: #25416f;
+  font-weight: 700;
 }
 
 .accessibility-status ul,

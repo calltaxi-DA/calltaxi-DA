@@ -92,11 +92,29 @@ test('renders Backend monthly totals without recalculating them', async () => {
   mockTransportCostFetch()
   render(<TransportCostTracker result={result} />)
 
+  expect(screen.getByRole('status', { name: '' })).toHaveTextContent('월별 교통비를 불러오는 중입니다.')
   expect((await screen.findAllByText('2,000원')).length).toBeGreaterThan(0)
   expect(screen.getAllByText('600원').length).toBeGreaterThan(0)
   expect(screen.getByRole('grid', { name: '2026-09 교통비 캘린더' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /2026-09-13 교통비 실제 2,000원/ })).toBeInTheDocument()
   expect(screen.getByText(/지하철 실제 2,000원/)).toBeInTheDocument()
+})
+
+test('announces an empty daily detail without treating it as an error', async () => {
+  vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+    const url = String(input)
+    if (url.includes('/transport-cost-records/monthly')) {
+      return jsonResponse({ ...monthlyResponse, daily_summaries: [], totals: { actual_cost_won: 0, recommended_cost_won: 0, potential_savings_won: 0 } })
+    }
+    if (url.includes('/transport-cost-records/daily')) {
+      return jsonResponse({ ...dailyResponse, records: [], totals: { actual_cost_won: 0, recommended_cost_won: 0, potential_savings_won: 0 } })
+    }
+    return jsonResponse({}, 404)
+  })
+  render(<TransportCostTracker result={result} />)
+
+  expect(await screen.findByText('선택한 날짜의 교통비 기록이 없습니다.')).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
 test('submits actual cost and route conditions then refreshes the month', async () => {

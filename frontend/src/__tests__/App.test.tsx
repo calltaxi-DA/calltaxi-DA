@@ -28,6 +28,33 @@ function recommendationResult(): RecommendationResponse {
   }
 }
 
+const monthlyCostResponse = {
+  month: '2026-09',
+  daily_summaries: [{
+    date: '2026-09-14',
+    record_count: 1,
+    actual_cost_won: 2100,
+    recommended_cost_won: 1500,
+    potential_savings_won: 600,
+  }],
+  totals: { actual_cost_won: 2100, recommended_cost_won: 1500, potential_savings_won: 600 },
+}
+
+const dailyCostResponse = {
+  date: '2026-09-14',
+  records: [{
+    id: 7,
+    travel_date: '2026-09-14',
+    actual_cost_won: 2100,
+    recommended_cost_won: 1500,
+    potential_savings_won: 600,
+    selected_transport_type: 'subway',
+    recommended_transport_type: 'low_floor_bus',
+    created_at: '2026-09-14T00:00:00Z',
+  }],
+  totals: { actual_cost_won: 2100, recommended_cost_won: 1500, potential_savings_won: 600 },
+}
+
 function setupKakaoMock(
   keywordSearch = vi.fn((keyword: string, callback: (results: MockPlace[], status: string) => void) => callback([keyword === '강남역' ? destinationPlace : originPlace], 'OK')),
 ) {
@@ -242,5 +269,76 @@ describe('Frontend Phase 7 recommendation UI', () => {
     fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
     expect(screen.getByText('장소검색 서비스가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도하세요.')).toBeInTheDocument()
     expect(screen.queryByText(/검색 결과가 없습니다/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the final user flow usable across partial success and transport cost recording', async () => {
+    setupKakaoMock()
+    const fetchMock = vi.fn((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/routes/recommendations')) {
+        return Promise.resolve({ ok: true, json: async () => recommendationResult() })
+      }
+      if (url.includes('/transport-cost-records/monthly')) {
+        return Promise.resolve({ ok: true, json: async () => monthlyCostResponse })
+      }
+      if (url.includes('/transport-cost-records/daily')) {
+        return Promise.resolve({ ok: true, json: async () => dailyCostResponse })
+      }
+      if (url.endsWith('/transport-cost-records') && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 8,
+            travel_date: '2026-09-14',
+            actual_cost_won: 2100,
+            recommended_cost_won: 1500,
+            potential_savings_won: 600,
+            selected_transport_type: 'subway',
+            recommended_transport_type: 'low_floor_bus',
+            created_at: '2026-09-14T00:00:00Z',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: false, status: 404, json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    await selectRoutePlaces()
+    selectCalltaxiPurpose()
+    fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+
+    expect(await screen.findByRole('heading', { name: '추천 경로 최대 TOP 3' })).toBeInTheDocument()
+    expect(screen.getByText('일부 이동수단은 제외됐지만 가능한 추천 경로를 표시합니다.')).toBeInTheDocument()
+    expect(screen.getByText('1위')).toBeInTheDocument()
+    expect(screen.getByText('2위')).toBeInTheDocument()
+    expect(screen.getByLabelText('선택한 장소가 표시되는 지도')).toBeInTheDocument()
+
+    expect(await screen.findByRole('heading', { name: '교통비 기록' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('이용 날짜'), { target: { value: '2026-09-14' } })
+    fireEvent.change(screen.getByLabelText('실제 이용금액(원)'), { target: { value: '2100' } })
+    fireEvent.click(screen.getByRole('button', { name: '교통비 저장' }))
+
+    expect(await screen.findByText('교통비를 저장했습니다.')).toBeInTheDocument()
+    expect(screen.getByRole('grid', { name: '2026-09 교통비 캘린더' })).toBeInTheDocument()
+    expect(screen.getByText(/지하철 실제 2,100원/)).toBeInTheDocument()
+
+    const recommendationRequest = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/routes/recommendations'))
+    expect(JSON.parse(recommendationRequest?.[1]?.body as string)).toMatchObject({
+      transport_types: ['calltaxi', 'subway', 'low_floor_bus'],
+      calltaxi_purpose: '치료',
+    })
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => (
+      typeof init?.body === 'string' && init.body.includes('"actual_cost_won":2100')
+    ))).toBe(true))
+    const costRequest = fetchMock.mock.calls.find(([, init]) => (
+      typeof init?.body === 'string' && init.body.includes('"actual_cost_won":2100')
+    ))
+    expect(JSON.parse(costRequest?.[1]?.body as string)).toMatchObject({
+      actual_cost_won: 2100,
+      selected_transport_type: 'subway',
+      transport_types: ['calltaxi', 'subway', 'low_floor_bus'],
+    })
   })
 })
