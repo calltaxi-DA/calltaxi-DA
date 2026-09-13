@@ -36,6 +36,20 @@
 
 세 값은 오류나 중복 결과가 아니라 모집단 차이로 발생한다. Backend에서 한 카드 안에 서로 다른 모집단의 수치를 조합할 때는 각 지표의 `population_definition`을 함께 내려야 한다.
 
+### 분석 기간
+
+서비스 제공 대상으로 선정한 네 집계는 모두 `서울시설공단_장애인콜택시 탑승내역_정제_20251231.csv`의 **2025년 접수 건**을 사용한다. 따라서 공통 `source_period`는 다음과 같이 확정한다.
+
+```yaml
+source_period:
+  start_date: 2025-01-01
+  end_date: 2025-12-31
+  basis: 접수일시
+  timezone: Asia/Seoul
+```
+
+기간 경계의 운행은 접수일시로 귀속한다. 2025년 12월 31일에 접수되어 승차·하차가 2026년 1월 1일에 끝난 건이 있을 수 있으므로 `승차일시` 기준 일별 그래프에는 2026년 1월 1일이 나타난다. 이는 2026년 접수 데이터를 포함했다는 뜻이 아니다.
+
 ## 서비스에 제공할 확정 결과
 
 ### 1. 의료목적 목적지 이용량
@@ -119,15 +133,28 @@ Backend나 Frontend에서 이 값을 `병원 이동 차량유형 비교`로 노�
 
 ### Backend 제공 대상으로 선정
 
-| ID | 형태 | 내용 | 상태 |
-|---|---|---|---|
-| `medical_destination_top_regions` | 표 | 자치구·행정동별 의료목적콜 도착 건수 | 제공 가능 |
-| `medical_trip_scope` | 표 | 같은구·다른구 건수와 비율 | 제공 가능 |
-| `medical_trip_distance_coverage` | 표 | 같은구·다른구·전체 5km 이내 비율 | 제공 가능 |
-| `medical_net_flow_by_district` | 표 | 자치구별 유입·유출·순유입 건수 | 제공 가능 |
-| `medical_destination_facility_relation` | 참고 수치 | 의료기관 수와 콜 건수의 Spearman 관계 | 설명용, 추천·점수화 금지 |
+| `analysis_id` | `title` | `aggregation_unit` | `source_period` | 상태 |
+|---|---|---|---|---|
+| `medical_destination_top_regions` | 의료목적콜 도착이 많은 지역 | 목적지 자치구·행정동 | `2025-01-01 ~ 2025-12-31` (접수일시, Asia/Seoul) | 제공 가능 |
+| `medical_trip_scope` | 의료목적콜의 같은구·다른구 이동 | 같은구·다른구 | `2025-01-01 ~ 2025-12-31` (접수일시, Asia/Seoul) | 제공 가능 |
+| `medical_trip_distance_coverage` | 의료목적콜의 5km 이동 범위 | 같은구·다른구·전체 | `2025-01-01 ~ 2025-12-31` (접수일시, Asia/Seoul) | 제공 가능 |
+| `medical_net_flow_by_district` | 자치구별 의료목적콜 순유입·순유출 | 자치구 | `2025-01-01 ~ 2025-12-31` (접수일시, Asia/Seoul) | 제공 가능 |
+
+`medical_destination_facility_relation`은 병원정보 스냅샷의 공식 기준일이 기존 산출물에 별도로 기록되지 않아 Backend 제공 대상으로 확정하지 않는다. 의료기관 수와 콜 건수의 Spearman 관계는 아래 `참고용 분석 결과`에서만 유지한다.
 
 Backend 구현 시 응답에는 최소 `analysis_id`, `title`, `population_definition`, `aggregation_unit`, `values`, `source_period`, `limitations`를 포함한다. 실제 API 경로와 Pydantic 계약은 Backend Phase에서 확정하며 이번 문서가 기존 공통 경로 API 계약을 변경하지 않는다.
+
+Backend 담당자는 위 네 ID에 대해 Notebook을 다시 열지 않고 다음 값을 채울 수 있다.
+
+| 필드 | 확정값/출처 |
+|---|---|
+| `analysis_id` | 위 표의 ID |
+| `title` | 위 표에 확정된 제목 |
+| `population_definition` | `서로 다른 건수의 의미`와 각 결과 절의 모집단 |
+| `aggregation_unit` | 목적지 자치구·행정동 / 이동범위 / 거리범위 / 자치구 |
+| `values` | 각 결과 절에 확정된 표 값 |
+| `source_period` | `2025-01-01 ~ 2025-12-31`, 접수일시 기준, `Asia/Seoul` |
+| `limitations` | `제공 금지와 남은 한계` 중 해당 항목 |
 
 ### Frontend 표·그래프로 선정
 
