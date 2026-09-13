@@ -575,6 +575,48 @@ button:disabled {
   font-weight: 900;
 }
 
+.calltaxi-time-breakdown {
+  display: grid;
+  gap: 10px;
+  margin: -4px 0 18px;
+  padding: 14px;
+  border: 1px solid #cddbf9;
+  border-radius: 18px;
+  background: #f1f5ff;
+}
+
+.calltaxi-time-breakdown h4 {
+  margin: 0;
+  color: #172033;
+  font-size: 0.95rem;
+}
+
+.component-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.component-metric {
+  padding: 10px;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.component-metric dt {
+  color: #61708a;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.component-metric dd {
+  margin: 2px 0 0;
+  color: #3157c7;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 .accessibility-note {
   padding: 14px;
   border-radius: 16px;
@@ -723,5 +765,9 @@ button:disabled {
     height: min(72vh, 760px);
     min-height: 420px;
     margin: -34px auto 20px;
+  }
+
+  .component-metrics {
+    grid-template-columns: 1fr;
   }
 }

@@ -1112,3 +1112,44 @@
 - 다음에 이어받을 것:
   - 콜택시 결과 카드에서 `predicted_waiting_time_seconds`, `vehicle_time_seconds`, `total_time_seconds`를 사용자에게 어떻게 나눠 보여줄지 결정한다.
   - 실제 배포 환경에서는 `VITE_API_BASE_URL`과 Backend `APP_CORS_ALLOW_ORIGINS`를 같은 origin 정책에 맞춰 설정한다.
+
+## Frontend Phase 4 — 장애인 콜택시 결과 UI (2026-09-14)
+
+- 브랜치: `frontend/phase4-calltaxi-result-ui` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
+- 작업 전 확인:
+  - 반드시 읽은 파일: `AGENTS.md`, `docs/architecture.md`, `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md`, `docs/decisions/0006-wait-time-prediction-contract.md`, `docs/development-phases.md`, `frontend/src/components/RecommendationResults.tsx`, `frontend/src/api/recommendation.ts`, `frontend/src/__tests__/App.test.tsx`, `frontend/src/index.css`
+  - 이번 Phase에서 수정한 파일: `frontend/src/components/RecommendationResults.tsx`, `frontend/src/index.css`, `frontend/src/__tests__/App.test.tsx`, `docs/development-phases.md`
+  - 참고만 하고 수정하지 않은 파일: `backend/app/api/contracts.py`, `backend/app/services/route_orchestration.py`, `ai/waiting_time/estimator.py`, `analysis/`, `data/`, `notebooks*/`
+  - 이번 Phase 범위에 포함하지 않은 작업: Backend `RouteResult` 계약 변경, AI Prediction 모델·artifact 수정, 추천 정렬 변경, 외부 경로 API provider 변경, 교통비 캘린더 변경
+- 핵심 목표: Backend가 내려주는 장애인 콜택시 `RouteResult`의 예상 대기시간, 차량 이동시간, 총 예상시간, 이동거리, 예상요금을 추천 결과 카드에서 한눈에 확인할 수 있도록 표시했다.
+- 한 일:
+  - 추천 결과 공통 metric에 `이동거리`를 추가하고 비용 라벨을 `예상요금`으로 명확히 표시했다.
+  - 장애인 콜택시 available 카드에 `장애인 콜택시 시간 구성` 섹션을 추가했다.
+  - 콜택시 시간 구성에서 `predicted_waiting_time_seconds`, `vehicle_time_seconds`, `total_time_seconds`를 각각 예상 대기시간, 차량 이동시간, 총 예상시간으로 표시했다.
+  - 콜택시 도보 지표는 기존 계약대로 `not_available`이면 `비교 불가`로 유지하고, 프론트에서 0이나 임의값으로 보정하지 않았다.
+  - 모바일 화면에서 시간 구성 항목이 1열로 내려가도록 스타일을 추가했다.
+  - 렌더 테스트에 콜택시 available 결과의 예상 대기시간, 차량 이동시간, 총 예상시간, 이동거리, 예상요금 표시 검증을 추가했다.
+- 산출물:
+  - `frontend/src/components/RecommendationResults.tsx`
+  - `frontend/src/index.css`
+  - `frontend/src/__tests__/App.test.tsx`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - Frontend는 Backend `RouteResult`의 콜택시 component field를 그대로 표시하며, 총 예상시간을 재계산하지 않는다.
+  - `predicted_waiting_time_seconds`와 `vehicle_time_seconds`는 콜택시 available 결과에서만 시간 구성 설명으로 노출한다.
+  - `total_distance_meters`와 `total_cost_won`은 이동거리와 예상요금으로 표시한다.
+  - 지하철·저상버스 추천 카드에는 콜택시 전용 시간 구성 섹션을 표시하지 않는다.
+  - `data/`, `notebooks*/`, `analysis/`, `ai/`, Backend provider 로직은 변경하지 않았다.
+- 검증 결과:
+  - 최초 `frontend/`에서 `npm test -- --run`은 별도 worktree에 `node_modules`가 없어 `vitest: command not found`로 실패했다. `npm ci`로 `package-lock.json` 기준 의존성을 설치한 뒤 검증했다.
+  - `frontend/`에서 `npm test -- --run` — 2개 파일, 22개 테스트 통과.
+  - `frontend/`에서 `npm run build` — TypeScript build 및 Vite production build 통과.
+  - `frontend/`에서 `npm run lint` — 통과.
+  - `git diff --check` — 통과. 최초 sandbox 실행은 Git LFS clean filter의 `.git/lfs/tmp` 쓰기 권한 문제로 실패했으나, 권한 승인 후 동일 검증이 통과했다.
+- 자체 리뷰:
+  - 이번 변경은 Frontend 표시 계층만 다루며, Backend 계산식이나 추천 정렬 우선순위를 변경하지 않는다.
+  - 콜택시 component field가 optional이므로 표시 시 `null`/`undefined`를 방어해 `비교 불가`로 처리한다.
+  - 콜택시 총 예상시간은 Backend가 계산한 `total_time_seconds`를 단일 신뢰 소스로 사용한다.
+- 다음에 이어받을 것:
+  - 실제 운영 Backend와 연결한 smoke test에서 콜택시 available 응답이 내려오는 환경을 구성해 카드 표시를 확인한다.
+  - 필요하면 결과 카드의 시각적 강조 순서(총 예상시간 vs 대기시간)를 사용자 테스트 후 조정한다.
