@@ -83,11 +83,12 @@ class FailingBusClient:
 class FakeWaitingEstimate:
     expected_minutes: float
     warnings: tuple[str, ...] = ()
+    unit: str = WAITING_TIME_UNIT
 
     def to_backend_output(self) -> dict[str, object]:
         return {
             "waitingTime": self.expected_minutes,
-            "unit": WAITING_TIME_UNIT,
+            "unit": self.unit,
             "warnings": self.warnings,
         }
 
@@ -96,11 +97,12 @@ class FakeWaitingEstimate:
 class InvalidWaitingEstimate:
     expected_minutes: object
     warnings: tuple[str, ...] = ()
+    unit: str = WAITING_TIME_UNIT
 
     def to_backend_output(self) -> dict[str, object]:
         return {
             "waitingTime": self.expected_minutes,
-            "unit": WAITING_TIME_UNIT,
+            "unit": self.unit,
             "warnings": self.warnings,
         }
 
@@ -185,6 +187,16 @@ def test_provider_builds_three_backend_owned_routes_and_adds_conservative_waitin
     assert "out_of_training_target_range" in calltaxi.warnings
     assert subway.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
     assert bus.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
+
+
+def test_provider_uses_waiting_time_backend_output_contract_for_total_time() -> None:
+    provider = _provider(lambda prediction_input: FakeWaitingEstimate(expected_minutes=12.5))
+
+    route = provider.get_routes(ORIGIN, DESTINATION, [TransportType.CALLTAXI], calltaxi_purpose="치료")[0]
+
+    assert route.predicted_waiting_time_seconds == round(12.5 * 60)
+    assert route.vehicle_time_seconds == 1_800
+    assert route.total_time_seconds == route.predicted_waiting_time_seconds + route.vehicle_time_seconds
 
 
 def test_provider_uses_configured_feature_builder_and_prediction_adapter_contract(tmp_path: Path) -> None:
@@ -329,6 +341,17 @@ def test_provider_rejects_negative_waiting_prediction_without_adding_vehicle_tim
 
     assert routes[0].status == RouteStatus.UNAVAILABLE
     assert routes[0].total_time_seconds is None
+
+
+def test_provider_rejects_non_minutes_waiting_time_unit_without_total_time() -> None:
+    routes = _provider(lambda prediction_input: FakeWaitingEstimate(expected_minutes=30, unit="seconds")).get_routes(
+        ORIGIN, DESTINATION, [TransportType.CALLTAXI], calltaxi_purpose="치료"
+    )
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert routes[0].total_time_seconds is None
+    assert routes[0].predicted_waiting_time_seconds is None
+    assert routes[0].vehicle_time_seconds is None
 
 
 def test_provider_rejects_partial_model_group_prediction_failure_without_fallback_to_success() -> None:

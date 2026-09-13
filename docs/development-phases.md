@@ -1041,6 +1041,40 @@
   - Frontend 표시 Phase에서 콜택시 카드에 대기시간/차량시간/총시간 breakdown을 보여줄지 결정한다.
   - 운영 모니터링 Phase에서 대기시간 component, 차량시간, 모델 warning을 구조화 로그/관측 지표로 남긴다.
 
+## AI Phase 7 — 총 예상시간 계산 연동 검증 (2026-09-14)
+
+- 브랜치: `ai/phase7-total-time-integration-validation` (base: 최신 `origin/dev`, PR #72 conflict 해소를 위해 `fd30b96`까지 반영). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: Prediction 예상 대기시간이 장애인 콜택시의 전체 예상시간 계산에 정확히 반영되는지 검증했다.
+- 한 일:
+  - `BackendRecommendationRouteProvider`가 `WaitingTimeEstimate.expected_minutes`를 직접 읽지 않고 AI Adapter의 `to_backend_output()["waitingTime"]`, `unit="minutes"` 계약을 소비해 초(seconds)로 변환하도록 정리했다.
+  - `waitingTime` minutes를 `predicted_waiting_time_seconds`로 변환하고 TMAP 차량 이동시간 `vehicle_time_seconds`와 합산해 `total_time_seconds`를 만드는 테스트를 추가했다.
+  - `unit`이 `minutes`가 아닌 Prediction output은 콜택시 `unavailable`로 처리하고 총시간·대기시간·차량시간 component를 모두 `null`로 유지하는 테스트를 추가했다.
+  - 추천 API integration test의 fake Prediction estimate도 실제 AI Adapter Backend 출력 계약을 구현하도록 맞췄다.
+- 산출물:
+  - `backend/app/services/route_orchestration.py`
+  - `backend/tests/test_route_orchestration.py`
+  - `backend/tests/test_recommendation_routes.py`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - Backend 총 예상시간 계산식은 `total_time_seconds = predicted_waiting_time_seconds + vehicle_time_seconds`다.
+  - AI Adapter output 단위는 minutes이며, Backend에서만 seconds로 변환한다.
+  - Prediction 결과와 TMAP 차량 이동시간은 콜택시 `RouteResult`의 `predicted_waiting_time_seconds`, `vehicle_time_seconds`, `total_time_seconds`로 함께 검증된다.
+  - 모델 artifact, 분석 export, 추천 정렬 정책, API schema, Frontend UI는 변경하지 않았다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. python3 -m pytest backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py -q` — 30개 통과
+  - `PYTHONPATH=backend:. .venv-ci312/bin/python -m pytest backend/tests ai/tests` — 260개 통과, CI와 같은 Python 3.12 환경에서 확인
+  - `PYTHONPATH=backend:. .venv-ci312/bin/python -m pytest src/tests backend/tests ai/tests` — 281개 통과, CI와 같은 Python 3.12 환경에서 확인
+  - `python3 -m src.data_quality --check-report docs/validation/phase9-audit-2026-09-13.json` — errors 없음
+  - `git diff --check` — 통과
+- 자체 리뷰:
+  - 이번 Phase는 기존 `RouteResult` 구성요소 계약을 바꾸지 않고, AI Adapter 출력 계약을 Backend 계산 경로에서 실제로 소비하도록 좁게 정리했다.
+  - unit mismatch를 invalid prediction으로 처리해 분/초 단위 혼선을 숫자 fallback으로 복구하지 않는다.
+  - production-provider 테스트가 실제 현재 시각에 의존해 새벽 serving window 밖에서 실패하던 문제를 발견해 테스트 시각을 deterministic하게 고정했고, 재발 가능성이 있어 `docs/troubleshooting/phase7-ci-serving-window-flake.md`에 기록했다.
+  - 실제 1.48GB joblib artifact smoke test는 이번 범위가 아니며, 운영 검증 Phase에서 수행한다.
+- 다음에 이어받을 것:
+  - 실제 artifact와 운영 lookup이 준비된 환경에서 Backend provider end-to-end smoke test를 수행한다.
+  - Frontend 표시 Phase에서 총시간 breakdown을 사용자에게 어떻게 보여줄지 결정한다.
+
 ## Frontend Phase 3 — Backend 경로검색 API 연결 보강 (2026-09-14)
 
 - 브랜치: `frontend/phase3-backend-route-search-api` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
