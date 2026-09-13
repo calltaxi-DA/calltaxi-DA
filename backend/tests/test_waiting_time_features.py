@@ -117,6 +117,38 @@ def test_configured_waiting_time_input_builder_uses_configured_lookup_files(tmp_
     assert features["temperature_c"] == 23.5
 
 
+def test_configured_waiting_time_input_builder_normalizes_lookup_time_to_seoul(
+    tmp_path: Path,
+) -> None:
+    operation_lookup = tmp_path / "operation-count.json"
+    weather_lookup = tmp_path / "weather.json"
+    operation_lookup.write_text('{"2026-09-12": 412}', encoding="utf-8")
+    weather_lookup.write_text(
+        '{"2026-09-13T09:00:00+09:00": {'
+        '"temperature_c": 23.5, "precipitation_mm": 0, "wind_speed_ms": 2.1, '
+        '"snow_depth_cm": 0, "new_snow_3h_cm": 0'
+        "}}",
+        encoding="utf-8",
+    )
+    builder = ConfiguredWaitingTimeInputBuilder(
+        operation_count_provider=JsonVehicleOperationCountProvider(operation_lookup),
+        weather_provider=JsonWeatherObservationProvider(weather_lookup),
+    )
+
+    prediction_inputs = builder(
+        Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 명동"),
+        Location(latitude=37.4979, longitude=127.0276, address="서울특별시 강남구 역삼동"),
+        "치료",
+        12_500,
+        datetime(2026, 9, 13, 0, 15, tzinfo=ZoneInfo("UTC")),
+    )
+
+    features = prediction_inputs[0].to_model_features()
+    assert features["hour"] == 9
+    assert features["vehicle_operation_count_prev_day"] == 412.0
+    assert features["temperature_c"] == 23.5
+
+
 def test_extract_district_and_dong_accepts_confirmed_dong_address() -> None:
     location = Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 명동")
 

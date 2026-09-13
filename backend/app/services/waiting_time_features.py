@@ -10,6 +10,7 @@ import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from ai.waiting_time.estimator import SUPPORTED_MODEL_GROUPS, WaitingTimePredictionInput
 from app.api.contracts import Location
@@ -18,6 +19,7 @@ CONSERVATIVE_MODEL_GROUP_WARNING = (
     "실제 배차 차량군을 요청 시점에 확정할 수 없어 임차택시/특장차 바로콜 예측 중 더 긴 값을 사용했습니다."
 )
 SPECIAL_VEHICLE_MODEL_GROUP = "특장차_바로콜"
+SEOUL_TIMEZONE = ZoneInfo("Asia/Seoul")
 
 SEOUL_DISTRICTS = frozenset(
     {
@@ -104,7 +106,7 @@ class JsonWeatherObservationProvider:
 
     def get_observation(self, requested_at: datetime) -> WeatherObservation:
         payload = _read_json_object(self.path)
-        requested_hour = requested_at.replace(minute=0, second=0, microsecond=0)
+        requested_hour = _to_seoul_time(requested_at).replace(minute=0, second=0, microsecond=0)
         key = requested_hour.isoformat()
         if key not in payload:
             raise WaitingTimeFeatureMappingError(f"{key} 서울 시간별 날씨 관측값이 없습니다")
@@ -142,10 +144,11 @@ class ConfiguredWaitingTimeInputBuilder:
     ) -> tuple[WaitingTimePredictionInput, ...]:
         origin_gu, origin_dong = extract_district_and_dong(origin)
         destination_gu, destination_dong = extract_district_and_dong(destination)
-        requested_date = requested_at.date()
-        weather = self.weather_provider.get_observation(requested_at)
+        requested_at_seoul = _to_seoul_time(requested_at)
+        requested_date = requested_at_seoul.date()
+        weather = self.weather_provider.get_observation(requested_at_seoul)
         source = SpecialVehiclePredictionFeatureSource(
-            requested_at=requested_at,
+            requested_at=requested_at_seoul,
             purpose=purpose,
             ride_distance_meters=ride_distance_meters,
             origin_gu=origin_gu,
@@ -321,6 +324,12 @@ def _read_json_object(path: Path) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise WaitingTimeFeatureMappingError(f"Prediction lookup 파일은 JSON object여야 합니다: {path}")
     return payload
+
+
+def _to_seoul_time(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise WaitingTimeFeatureMappingError("requested_at은 timezone-aware datetime이어야 합니다")
+    return value.astimezone(SEOUL_TIMEZONE)
 
 
 def _finite_number(value: object, field_name: str) -> float:
