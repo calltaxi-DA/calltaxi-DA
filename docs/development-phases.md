@@ -929,3 +929,34 @@
 - 다음에 이어받을 것:
   - Backend Phase에서 실제 route orchestration과 연결된 상태로 동일 validation 기준을 smoke test한다.
   - 더 넓은 sample set 또는 reviewed validation dataset export가 준비되면 model_group·시간대·이동유형별 예측 분포 검증을 확장한다.
+
+## AI Phase 5 — Prediction 오류 및 Fallback 처리 (2026-09-14)
+
+- 브랜치: `ai/phase5-prediction-fallback-handling` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: 장애인 콜택시 대기시간 Prediction 실패 시 0분, 평균값, 임의 fallback 숫자를 사용자에게 제공하지 않고 Backend `unavailable` 상태로 전달되도록 오류 경계를 고정했다.
+- 한 일:
+  - `WaitingTimePredictionAdapter.estimate()`에서 모델 호출은 성공했지만 output mapping이 거부한 값을 `WaitingTimeInvalidOutputError`로 감싸 Prediction 계층의 명시적 오류로 분리했다.
+  - AI Adapter 테스트에 `None`, `NaN`, `inf`, 음수, 비숫자 모델 출력이 모두 `WaitingTimeInvalidOutputError` 또는 `ValueError`로 거부되는 경로를 고정했다.
+  - Backend route orchestration 테스트에 feature mapping 실패, Prediction 호출 실패, `None`·`NaN`·`inf`·음수·비숫자 estimate, 한 model_group만 실패한 경우를 추가했다.
+  - 모든 실패 케이스에서 콜택시는 `status=unavailable`, numeric metric은 `null`, metric availability는 `not_available`로 유지되고 지하철·저상버스 경로는 계속 계산되는지 확인했다.
+- 산출물:
+  - `ai/waiting_time/estimator.py`
+  - `ai/tests/test_estimator.py`
+  - `backend/tests/test_route_orchestration.py`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - 모델 미연결, 모델 artifact/의존성 사용 불가, 모델 호출 실패, invalid output은 임의 대기시간으로 대체하지 않는다.
+  - feature source 누락 또는 mapping 실패는 콜택시 경로만 `unavailable`로 만들고, 실패 사유를 `unavailable_reason`에 보존한다.
+  - 임차택시·특장차 바로콜 중 하나라도 Prediction이 실패하면 성공한 한쪽 값만 fallback으로 사용하지 않고 콜택시 전체를 `unavailable` 처리한다.
+  - 기존 API schema, 추천 정렬 정책, 모델 artifact, 분석 export, Frontend UI는 변경하지 않았다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py backend/tests/test_route_orchestration.py -q` — 53개 통과
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 253개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `git diff --check` — 통과. 최초 sandbox 실행은 Git LFS clean filter의 `.git/lfs/tmp` 쓰기 권한 문제로 실패했으나, 권한 승인 후 동일 검증이 통과했다.
+- 자체 리뷰:
+  - `WaitingTimeInvalidOutputError`는 AI Adapter 내부 오류 분류만 추가하며 Backend/FastAPI schema를 import하지 않는다.
+  - Backend는 예측 실패를 숫자로 복구하지 않고 `RouteResult`의 기존 unavailable 계약을 사용한다.
+  - 새 운영 환경 문제나 재현 가능한 설정 장애는 발생하지 않아 별도 troubleshooting 문서는 추가하지 않았다.
+- 다음에 이어받을 것:
+  - 실제 joblib artifact와 운영 lookup이 준비된 환경에서 Backend provider smoke test를 반복한다.
+  - 운영 모니터링 Phase에서 `prediction_unavailable_reason`, 모델 버전, inference latency를 관측 가능하게 남긴다.

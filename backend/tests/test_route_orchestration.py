@@ -2,12 +2,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from ai.waiting_time.estimator import WaitingTimePredictionInput
+import pytest
+
+from ai.waiting_time.estimator import WaitingTimePredictionError, WaitingTimePredictionInput
 from app.api.contracts import AccessibilityStatus, Location, RouteStatus, TransportType
 from app.services.bus import LowFloorBusRouteMetrics, OdsayBusRouteError, SelectedBusLane
 from app.services.calltaxi import TmapRouteError
 from app.services.route_orchestration import BackendRecommendationRouteProvider
 from app.services.subway import OdsayRouteError, StationAccessibility, SubwayRouteMetrics, SubwayStationKey
+from app.services.waiting_time_features import WaitingTimeFeatureMappingError
 
 ORIGIN = Location(latitude=37.5666, longitude=126.9784)
 DESTINATION = Location(latitude=37.4979, longitude=127.0276)
@@ -68,6 +71,12 @@ class FailingBusClient:
 @dataclass(frozen=True)
 class FakeWaitingEstimate:
     expected_minutes: float
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class InvalidWaitingEstimate:
+    expected_minutes: object
     warnings: tuple[str, ...] = ()
 
 
@@ -170,6 +179,87 @@ def test_provider_rejects_invalid_waiting_prediction_without_fake_value() -> Non
 
     assert routes[0].status == RouteStatus.UNAVAILABLE
     assert "유효하지 않습니다" in (routes[0].unavailable_reason or "")
+    assert routes[0].total_time_seconds is None
+
+
+def test_provider_returns_unavailable_without_fake_value_when_feature_mapping_fails() -> None:
+    def missing_feature_builder(
+        origin: Location,
+        destination: Location,
+        purpose: str,
+        ride_distance_meters: int,
+        requested_at: datetime,
+    ) -> tuple[WaitingTimePredictionInput, ...]:
+        raise WaitingTimeFeatureMappingError("weather lookup 값이 없습니다")
+
+    routes = _provider(
+        lambda prediction_input: FakeWaitingEstimate(expected_minutes=30),
+        waiting_time_input_builder=missing_feature_builder,
+    ).get_routes(ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료")
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert routes[0].unavailable_reason == "weather lookup 값이 없습니다"
+    assert routes[0].total_time_seconds is None
+    assert routes[0].metric_availability is not None
+    assert all(value == "not_available" for value in routes[0].metric_availability.model_dump().values())
+    assert routes[1].status == RouteStatus.AVAILABLE
+    assert routes[2].status == RouteStatus.AVAILABLE
+
+
+def test_provider_returns_unavailable_without_fake_value_when_prediction_call_fails() -> None:
+    def failing_estimator(prediction_input: WaitingTimePredictionInput) -> FakeWaitingEstimate:
+        raise WaitingTimePredictionError("model predict failed")
+
+    routes = _provider(failing_estimator).get_routes(
+        ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료"
+    )
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert "모델을 사용할 수 없습니다" in (routes[0].unavailable_reason or "")
+    assert routes[0].total_time_seconds is None
+    assert routes[0].total_distance_meters is None
+    assert routes[0].total_cost_won is None
+    assert routes[1].status == RouteStatus.AVAILABLE
+    assert routes[2].status == RouteStatus.AVAILABLE
+
+
+@pytest.mark.parametrize("invalid_minutes", [None, float("inf"), "30"])
+def test_provider_rejects_invalid_typed_waiting_prediction_without_fake_value(
+    invalid_minutes: object,
+) -> None:
+    routes = _provider(lambda prediction_input: InvalidWaitingEstimate(expected_minutes=invalid_minutes)).get_routes(
+        ORIGIN, DESTINATION, [TransportType.CALLTAXI], calltaxi_purpose="치료"
+    )
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert "유효하지 않습니다" in (routes[0].unavailable_reason or "")
+    assert routes[0].total_time_seconds is None
+
+
+def test_provider_rejects_negative_waiting_prediction_without_adding_vehicle_time() -> None:
+    routes = _provider(lambda prediction_input: FakeWaitingEstimate(expected_minutes=-1)).get_routes(
+        ORIGIN, DESTINATION, [TransportType.CALLTAXI], calltaxi_purpose="치료"
+    )
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert routes[0].total_time_seconds is None
+
+
+def test_provider_rejects_partial_model_group_prediction_failure_without_fallback_to_success() -> None:
+    seen_groups: list[str] = []
+
+    def estimate(prediction_input: WaitingTimePredictionInput) -> FakeWaitingEstimate:
+        seen_groups.append(prediction_input.model_group)
+        if prediction_input.model_group == "특장차_바로콜":
+            raise WaitingTimePredictionError("second model group failed")
+        return FakeWaitingEstimate(expected_minutes=20)
+
+    routes = _provider(estimate).get_routes(
+        ORIGIN, DESTINATION, [TransportType.CALLTAXI], calltaxi_purpose="치료"
+    )
+
+    assert seen_groups == ["임차택시_바로콜", "특장차_바로콜"]
+    assert routes[0].status == RouteStatus.UNAVAILABLE
     assert routes[0].total_time_seconds is None
 
 

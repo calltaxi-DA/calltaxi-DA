@@ -66,6 +66,10 @@ class WaitingTimeModelInferenceError(WaitingTimePredictionError):
     """모델 호출 자체가 실패했을 때 발생한다."""
 
 
+class WaitingTimeInvalidOutputError(WaitingTimePredictionError):
+    """모델 출력이 서비스 대기시간으로 사용할 수 없을 때 발생한다."""
+
+
 @dataclass(frozen=True)
 class WaitingTimeEstimate:
     expected_minutes: float
@@ -113,11 +117,14 @@ class WaitingTimePredictionAdapter:
         except Exception as exc:
             raise WaitingTimeModelInferenceError("대기시간 Prediction 모델 호출에 실패했습니다") from exc
 
-        return map_prediction_output_to_waiting_time(
-            raw_prediction,
-            hour_of_day=int(features["hour"]),
-            model_name=self.model_name,
-        )
+        try:
+            return map_prediction_output_to_waiting_time(
+                raw_prediction,
+                hour_of_day=int(features["hour"]),
+                model_name=self.model_name,
+            )
+        except ValueError as exc:
+            raise WaitingTimeInvalidOutputError("대기시간 Prediction 모델 출력이 유효하지 않습니다") from exc
 
     def _load_model(self) -> Any:
         if self._model is None:
