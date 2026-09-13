@@ -559,3 +559,38 @@
 - 다음 작업:
   - 위 Prediction 선행조건을 충족한 뒤 실제 모델 입력으로 운영 provider smoke test를 수행한다.
   - 실제 콜택시·지하철·저상버스 결과가 준비된 시간·비용 기준에서 최대 TOP 3을 확인한 뒤 Backend Phase 7 전체를 완료 처리한다.
+
+## Analysis Phase 8 — 서비스용 분석 데이터 생성 (2026-09-13)
+
+- 브랜치: `analysis/phase8-service-data-exports` (base: `dev`)
+- 한 일: Phase 3에서 확정한 병원 이동 집계 4개와 기존 그래프 2개를 `analysis/hospital/`의 reviewed JSON·PNG로 수동 export했다. Backend에 병원 분석정보 및 chart API를 추가하고, Frontend가 해당 API를 통해 도착 상위 자치구 표·선정 그래프·분석 한계를 표시하도록 연결했다. 기존 지하철 station accessibility master와 저상버스 route master·ODsay mapping은 이미 Backend provider에 연결되어 있음을 확인하고, 세 도메인의 서비스 export를 단일 manifest와 회귀 테스트로 검증했다.
+- 산출물:
+  - `analysis/service_data_manifest.json` — 병원·지하철·저상버스 reviewed export와 consumer 목록
+  - `analysis/hospital/hospital_analytics.json`, `analysis/hospital/figures/`, `analysis/hospital/README.md` — 병원 정적 집계·선정 그래프·출처 및 갱신 기준
+  - `GET /analytics/hospital`, `GET /analytics/hospital/charts/{chart_id}` — 병원 분석 계약·정적 파일 API
+  - `frontend/src/components/HospitalAnalytics.tsx` — Backend 소유 값으로 상위 자치구 표, 분석 기간·한계와 그래프 표시
+  - `backend/tests/test_hospital_analytics.py`, `backend/tests/test_service_data_exports.py`, `frontend/src/__tests__/HospitalAnalytics.test.tsx` — 응답 계약, 경로 제한, export 연결, 렌더 검증
+  - `docs/troubleshooting.md` — 실행 디렉터리에 따른 상대경로 문제와 해결 기록
+- 확정 범위:
+  - 병원 분석은 개별 병원이 아니라 `의료목적으로 기록된 이동`의 목적지 지역 집계만 제공한다.
+  - 병원 이동 전용 시간대·차량유형 비교, 실시간 진료·병상·무장애 시설 정보는 제공하지 않는다.
+  - Frontend는 `analysis/` 파일을 직접 읽거나 통계를 재계산하지 않고 Backend 응답과 chart URL만 사용한다.
+  - 지하철 접근성은 158행 station master, 저상버스는 364행 route master와 51행 ODsay mapping을 기존 provider가 사용한다. 실시간 고장·차량 도착·혼잡으로 해석하지 않는다.
+  - 서비스 loader/provider는 프로세스 현재 디렉터리가 아니라 저장소 위치 기준으로 `analysis/` export를 읽는다.
+- 검증 결과:
+  - 원격 fetch 후 Phase 브랜치 시작점과 최신 `origin/dev`가 동일한 커밋임을 확인
+  - 병원 JSON 4개 `analysis_id`와 Phase 3 확정 수치·모집단·기간 대조
+  - 선정 PNG 2개가 각각 949×699, 1187×504의 유효 PNG임을 확인
+  - manifest의 모든 export·Frontend asset 경로가 존재하고 세 도메인이 포함되는지 검증
+  - 저장소 밖 임시 작업 디렉터리에서도 병원·지하철·저상버스 reviewed export가 로드되는지 검증
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 154개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건 외 실패 없음
+  - `cd frontend && npm test -- --run` — 19개 통과
+  - `cd frontend && npm run build` — TypeScript 및 Vite production build 통과
+  - `cd frontend && npm run lint` — oxlint 통과
+  - 최초 `.venv/bin/uvicorn app.main:app` 실행은 `No module named 'ai'`로 실패했으며, `PYTHONPATH=..` 누락이 원인임을 확인해 실행 안내와 troubleshooting 문서를 수정
+  - `backend/`에서 `PYTHONPATH=.. .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8013` 기동 후 병원 JSON·PNG endpoint 각각 HTTP 200과 올바른 content type 확인
+  - `git diff --check` 통과
+- 다음 Phase가 이어받을 것:
+  - 검증 완료된 통합 대기시간 Prediction 모델과 inference 계약을 별도 Phase에서 export·연결한다. Phase 8은 모델을 미리 구현하지 않는다.
+  - 지하철 실시간 엘리베이터 상태, 차량 단위 저상버스 도착·혼잡·배차간격은 공식 HTTPS 데이터와 코드 정의가 확보된 뒤 별도 Phase에서 검토한다.
+  - 병원별 통계가 필요하면 병원 식별자·좌표와 탑승 목적지를 검증 가능하게 연결하는 데이터가 선행되어야 한다.

@@ -8,7 +8,7 @@
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 
 class TransportType(StrEnum):
@@ -222,6 +222,37 @@ class RecommendationResponse(BaseModel):
     priorities: list[RecommendationPriority] = Field(min_length=3, max_length=3)
     recommendations: list[RankedRoute] = Field(max_length=3)
     excluded_routes: list[ExcludedRoute] = Field(default_factory=list)
+
+
+class AnalysisSourcePeriod(BaseModel):
+    start_date: str
+    end_date: str
+    basis: str
+    timezone: str
+
+
+class HospitalAnalysisItem(BaseModel):
+    analysis_id: str
+    title: str
+    population_definition: str
+    aggregation_unit: str
+    values: dict[str, JsonValue]
+    limitations: list[str]
+
+
+class HospitalAnalysisChart(BaseModel):
+    chart_id: str
+    title: str
+    alt_text: str
+    asset_url: str
+    analysis_ids: list[str]
+
+
+class HospitalAnalyticsResponse(BaseModel):
+    schema_version: str
+    source_period: AnalysisSourcePeriod
+    analyses: list[HospitalAnalysisItem]
+    charts: list[HospitalAnalysisChart]
 
 
 class CalltaxiRouteResponse(BaseModel):

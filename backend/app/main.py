@@ -1,6 +1,6 @@
 """FastAPI 애플리케이션 진입점.
 
-로컬 실행: uvicorn app.main:app --reload --port 8000 (backend/ 디렉터리에서)
+로컬 실행: PYTHONPATH=.. uvicorn app.main:app --reload --port 8000 (backend/ 디렉터리에서)
 """
 
 import logging
@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.bus import router as bus_router
 from app.api.calltaxi import router as calltaxi_router
 from app.api.health import router as health_router
+from app.api.hospital_analytics import router as hospital_analytics_router
 from app.api.recommendation import router as recommendation_router
 from app.api.routes import router as routes_router
 from app.api.subway import router as subway_router
@@ -41,6 +42,7 @@ def create_app(include_sample_routes: bool | None = None) -> FastAPI:
     )
     app.add_exception_handler(Exception, internal_server_error_handler)
     app.include_router(health_router)
+    app.include_router(hospital_analytics_router)
     app.include_router(calltaxi_router)
     app.include_router(subway_router)
     app.include_router(bus_router)

@@ -15,7 +15,8 @@ import httpx
 from app.api.contracts import AccessibilityStatus, Location
 
 ODSAY_SUBWAY_ROUTE_URL = "https://api.odsay.com/v1/api/searchPubTransPathT"
-DEFAULT_SUBWAY_ACCESSIBILITY_MASTER_PATH = Path("analysis/subway/station_accessibility_master.csv")
+ANALYSIS_DIR = Path(__file__).resolve().parents[3] / "analysis"
+DEFAULT_SUBWAY_ACCESSIBILITY_MASTER_PATH = ANALYSIS_DIR / "subway/station_accessibility_master.csv"
 WALKING_TRAFFIC_TYPE = 3
 SUBWAY_TRAFFIC_TYPE = 1
 SUBWAY_PATH_TYPE = 1

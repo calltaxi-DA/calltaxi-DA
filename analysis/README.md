@@ -28,4 +28,6 @@
 
 기존 병원·의료목적 이동 분석을 서비스에서 활용하는 기준은 [`hospital/hospital_destination_insights.md`](hospital/hospital_destination_insights.md)에 정리했다. 개별 병원 방문량이 아니라 의료목적으로 기록된 이동의 목적지 지역별 건수, 같은구·다른구 이동, 거리 커버리지와 자치구 순유입·순유출만 제공 대상으로 확정했다. 병원 이동의 시간대별·특장차/임차택시별 비교는 기존 결과가 없으므로 미확정이며, 전체 이용패턴 값을 병원 이동 결과로 대체하지 않는다.
 
-요금/시간/도보 우선순위 추천 로직은 이 폴더·`ai/`가 아니라 `backend/`가 담당한다(Backend Phase 7 예정).
+Phase 8에서 서비스가 사용하는 검토 완료 export 목록은 [`service_data_manifest.json`](service_data_manifest.json)에 정리했다. 병원 분석은 [`hospital/hospital_analytics.json`](hospital/hospital_analytics.json)과 선정 이미지 2개를 Backend의 `GET /analytics/hospital` 및 chart API로 제공하며, Frontend는 이 API만 사용한다. 지하철과 저상버스는 기존 `station_accessibility_master.csv`, `low_floor_bus_route_master.csv`, `odsay_seoul_bus_route_mapping.csv`를 각각 Backend provider가 직접 읽는다. 출처·갱신 방법과 병원 분석의 제공 한계는 [`hospital/README.md`](hospital/README.md)에 기록했다.
+
+요금/시간/도보 우선순위 추천 로직은 이 폴더·`ai/`가 아니라 `backend/`가 담당한다(Backend Phase 7-1·7-2 참고).
