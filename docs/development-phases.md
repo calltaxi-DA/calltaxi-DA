@@ -840,36 +840,44 @@
 
 ## Backend Phase 3 — 대기시간 Prediction Adapter 통합 연결 (2026-09-14)
 
-- 브랜치: `backend/phase3-wait-time-backend-integration` (base: `origin/ai/phase3-prediction-adapter`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다. GitHub 최신 상태가 아니므로 push와 PR 생성은 수행하지 않았다.
+- 브랜치: `backend/phase3-wait-time-backend-integration` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
 - 핵심 목표: Backend 추천 orchestration이 통합 장애인 콜택시 대기시간 Prediction Adapter 입력/출력 계약을 호출할 수 있게 연결했다.
 - 한 일:
-  - `RecommendationRequest`에 optional `calltaxi_purpose`를 추가했다. 이용목적이 없으면 임의 기본값을 만들지 않고 콜택시만 `unavailable` 처리한다.
+  - `RecommendationRequest`에 optional `calltaxi_purpose`를 추가하고, API 계약을 지원 목적 6개 enum으로 제한했다. 이용목적이 없으면 임의 기본값을 만들지 않고 콜택시만 `unavailable` 처리한다.
   - `BackendRecommendationRouteProvider`의 콜택시 계산 순서를 TMAP 차량거리/차량시간 산출 후 대기시간 Prediction 호출로 변경했다. 모델 feature `승차거리`는 TMAP 거리(m)를 그대로 사용한다.
-  - Backend orchestration이 `estimate_waiting_minutes_for_input()` 계약을 호출하도록 바꾸고, Prediction feature source builder를 주입 경계로 분리했다.
-  - 임차택시·특장차 바로콜 양쪽 `model_group` 입력을 받을 수 있게 `build_waiting_time_inputs()`를 추가하고, 두 예측 중 더 긴 대기시간을 사용하는 보수적 max 정책과 warning을 `RouteResult.warnings`에 연결했다.
+  - Backend orchestration이 `estimate_waiting_minutes_for_input()` 계약을 호출하도록 바꾸고, 실제 DI에는 설정 기반 `ConfiguredWaitingTimeInputBuilder`를 연결했다.
+  - `ConfiguredWaitingTimeInputBuilder`는 `Location.address`의 확정 주소 metadata에서 구/동을 추출하고, 설정된 JSON lookup에서 D-1 차량운행대수와 시간별 서울 관측 날씨를 읽는다. source가 없거나 값이 누락되면 Prediction unavailable로 fail-close한다.
+  - 임차택시·특장차 바로콜 양쪽 `model_group` 입력을 반드시 각각 1회 생성·검증하게 하고, 두 예측 중 더 긴 대기시간을 사용하는 보수적 max 정책과 warning을 `RouteResult.warnings`에 연결했다. 한 그룹 누락·중복·추가 group은 estimator 호출 전 unavailable 처리한다.
   - Adapter warning(`out_of_training_target_range` 등)을 콜택시 route warning에 전달한다.
-  - 이용목적 누락, feature source 미연결, feature mapping 실패, 모델 미연결/사용 불가, invalid output을 각각 콜택시 `unavailable`로 격리하고 지하철·저상버스 추천 흐름은 유지한다.
+  - 이용목적 누락, lookup 설정 누락, feature mapping 실패, 모델 미연결/사용 불가, invalid output을 각각 콜택시 `unavailable`로 격리하고 지하철·저상버스 추천 흐름은 유지한다.
 - 산출물:
   - `backend/app/api/contracts.py`
   - `backend/app/api/recommendation.py`
   - `backend/app/services/recommendation.py`
   - `backend/app/services/route_orchestration.py`
   - `backend/app/services/waiting_time_features.py`
+  - `.env.example`
+  - `backend/tests/test_config.py`
   - `backend/tests/test_route_orchestration.py`
   - `backend/tests/test_recommendation_routes.py`
+  - `backend/tests/test_waiting_time_features.py`
   - `docs/development-phases.md`
 - 확정 동작:
   - Backend는 대기시간 숫자를 만들지 않고 AI Adapter 결과만 사용한다.
-  - 실제 운영 feature source(주소 정규화/reverse geocoding, 전일 차량운행 lookup, 시간별 서울 날씨 관측)는 아직 연결하지 않는다. source가 없으면 콜택시는 unavailable이다.
+  - 실제 DI는 `APP_CALLTAXI_OPERATION_COUNT_LOOKUP_PATH`, `APP_SEOUL_WEATHER_OBSERVATION_LOOKUP_PATH`가 모두 설정된 경우 Prediction input builder를 연결한다. source가 없으면 콜택시는 unavailable이다.
+  - 주소 정규화는 현재 `Location.address`에 들어온 Kakao metadata 또는 reverse geocoding 결과를 사용한다. 별도 reverse geocoding HTTP client는 아직 구현하지 않는다.
+  - 한 model_group prediction만 실패하면 콜택시 전체를 unavailable 처리한다. 한쪽 성공값만 사용하는 fallback은 MVP serving 정책에 포함하지 않는다.
   - 추천 정렬 정책, 지하철/저상버스 provider, 분석 artifact, `data/`, `notebooks*/`, Frontend UI는 변경하지 않았다.
 - 검증 결과:
-  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py backend/tests/test_waiting_time_features.py ai/tests/test_estimator.py -q` — 77개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
-  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 221개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests/test_waiting_time_features.py backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py backend/tests/test_config.py -q` — 61개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 232개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - 실제 `get_recommendation_route_provider()`를 사용하는 TestClient integration test에서 HTTP 요청 → TMAP fake → 설정 기반 `ConfiguredWaitingTimeInputBuilder` → `estimate_waiting_minutes_for_input()` fake → 콜택시 `RouteResult.total_time_seconds` 합산 경로를 확인했다.
 - 자체 리뷰:
   - `calltaxi_purpose`는 optional로 추가해 기존 호출을 깨지 않되, 값이 없을 때 예측 불가를 명시한다.
-  - 실제 reverse geocoding/weather/operation-count 값을 임의 생성하지 않았다. 운영 source 연결 전까지 실운영 콜택시 route는 unavailable일 수 있다.
+  - weather/operation-count 값을 임의 생성하지 않았다. 운영 lookup path와 해당 시각 값이 없으면 실운영 콜택시 route는 unavailable일 수 있다.
   - 별도 worktree의 `git status`가 Git LFS clean filter `.git/lfs/tmp` 권한 문제로 실패할 수 있음을 확인했다. 이는 기존 Phase 3 troubleshooting의 Git LFS artifact 한계와 같은 계열이며, 현재 코드 검증은 pytest 기준으로 완료했다.
 - 다음에 이어받을 것:
-  - Backend 운영 feature source를 연결한다: Kakao metadata 또는 reverse geocoding으로 구/동 정규화, 전일 차량운행 lookup, 공식 시간별 서울 날씨 관측.
+  - 주소 metadata가 없는 요청을 위해 Kakao REST reverse geocoding provider를 연결한다.
+  - 운영 환경에서 D-1 차량운행 lookup과 공식 시간별 서울 날씨 관측 lookup을 갱신하는 배치/운영 절차를 확정한다.
   - Frontend/API 연동 Phase에서 `calltaxi_purpose` 입력 UI와 요청 payload를 연결한다.
   - `git lfs pull`로 실제 1.48GB joblib artifact를 받은 환경에서 운영 provider smoke test를 수행한다.

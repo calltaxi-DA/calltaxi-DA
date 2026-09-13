@@ -1,7 +1,13 @@
+from datetime import datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
 from fastapi.testclient import TestClient
 
+import app.api.recommendation as recommendation_module
 from app.api.contracts import Location, RecommendationResponse, RouteResult
 from app.api.recommendation import get_recommendation_route_provider
+from app.core.config import get_settings
 from app.main import create_app
 
 client = TestClient(create_app())
@@ -112,6 +118,72 @@ def test_recommendations_forwards_calltaxi_purpose_to_backend_provider() -> None
 
     assert response.status_code == 200
     assert provider.calls[0][3] == "치료"
+
+
+def test_recommendations_rejects_unsupported_calltaxi_purpose() -> None:
+    override_client, _ = _client_with_provider()
+    request_payload = _payload(["time", "cost", "walk"])
+    request_payload["calltaxi_purpose"] = "예약치료"
+
+    response = override_client.post("/routes/recommendations", json=request_payload)
+
+    assert response.status_code == 422
+
+
+def test_recommendations_production_provider_calls_waiting_prediction_when_sources_are_configured(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    requested_at = datetime.now(ZoneInfo("Asia/Seoul")).replace(minute=15, second=0, microsecond=0)
+    operation_lookup = tmp_path / "operation-count.json"
+    weather_lookup = tmp_path / "weather.json"
+    operation_lookup.write_text(
+        f'{{"{(requested_at.date() - timedelta(days=1)).isoformat()}": 412}}',
+        encoding="utf-8",
+    )
+    weather_lookup.write_text(
+        '{"%s": {"temperature_c": 23.5, "precipitation_mm": 0, '
+        '"wind_speed_ms": 2.1, "snow_depth_cm": 0, "new_snow_3h_cm": 0}}'
+        % requested_at.replace(minute=0).isoformat(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("APP_TMAP_APP_KEY", "test-tmap-key")
+    monkeypatch.setenv("APP_CALLTAXI_OPERATION_COUNT_LOOKUP_PATH", str(operation_lookup))
+    monkeypatch.setenv("APP_SEOUL_WEATHER_OBSERVATION_LOOKUP_PATH", str(weather_lookup))
+    monkeypatch.setenv("APP_ODSAY_API_KEY", "")
+    monkeypatch.setenv("ODSAY_API_KEY", "")
+    get_settings.cache_clear()
+
+    class FakeTmapRouteClient:
+        def __init__(self, app_key: str) -> None:
+            assert app_key == "test-tmap-key"
+
+        def get_vehicle_route(self, origin: Location, destination: Location) -> tuple[int, int]:
+            return 12_500, 1_800
+
+    seen_model_groups: list[str] = []
+
+    def fake_estimator(prediction_input) -> object:
+        seen_model_groups.append(prediction_input.model_group)
+        expected_minutes = 20 if prediction_input.model_group == "임차택시_바로콜" else 30
+        return type("FakeEstimate", (), {"expected_minutes": expected_minutes, "warnings": ()})()
+
+    monkeypatch.setattr(recommendation_module, "TmapRouteClient", FakeTmapRouteClient)
+    monkeypatch.setattr(recommendation_module, "estimate_waiting_minutes_for_input", fake_estimator)
+    request_payload = _payload(["time", "cost", "walk"])
+    request_payload["transport_types"] = ["calltaxi"]
+    request_payload["calltaxi_purpose"] = "치료"
+    request_payload["origin"]["address"] = "서울특별시 중구 명동"
+    request_payload["destination"]["address"] = "서울특별시 강남구 역삼동"
+
+    response = TestClient(create_app()).post("/routes/recommendations", json=request_payload)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert seen_model_groups == ["임차택시_바로콜", "특장차_바로콜"]
+    assert payload["recommendations"][0]["route"]["total_time_seconds"] == 30 * 60 + 1_800
+    assert payload["excluded_routes"] == []
+    get_settings.cache_clear()
 
 
 def test_recommendations_only_calls_and_returns_selected_transport_types() -> None:

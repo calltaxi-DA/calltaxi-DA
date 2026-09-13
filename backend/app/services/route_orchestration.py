@@ -5,7 +5,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Protocol
 
-from ai.waiting_time.estimator import WaitingTimePredictionError, WaitingTimePredictionInput
+from ai.waiting_time.estimator import SUPPORTED_MODEL_GROUPS, WaitingTimePredictionError, WaitingTimePredictionInput
 from app.api.contracts import (
     AccessibilityStatus,
     Location,
@@ -125,6 +125,7 @@ class BackendRecommendationRouteProvider:
                 distance_meters,
                 self.current_time_provider(),
             )
+            _validate_prediction_input_groups(prediction_inputs)
             estimate = _select_conservative_waiting_estimate(
                 [self.waiting_time_estimator(prediction_input) for prediction_input in prediction_inputs]
             )
@@ -236,6 +237,13 @@ def _select_conservative_waiting_estimate(
     if not estimates:
         raise ValueError("waiting time estimates must not be empty")
     return max(estimates, key=lambda estimate: _waiting_seconds(estimate))
+
+
+def _validate_prediction_input_groups(prediction_inputs: tuple[WaitingTimePredictionInput, ...]) -> None:
+    expected_groups = set(SUPPORTED_MODEL_GROUPS)
+    actual_groups = [prediction_input.model_group for prediction_input in prediction_inputs]
+    if len(actual_groups) != len(expected_groups) or set(actual_groups) != expected_groups:
+        raise WaitingTimeFeatureMappingError("임차택시_바로콜과 특장차_바로콜을 각각 1회 예측해야 합니다")
 
 
 def _unavailable(

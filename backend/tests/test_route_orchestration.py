@@ -220,3 +220,28 @@ def test_provider_returns_calltaxi_unavailable_when_feature_source_is_not_connec
 
     assert routes[0].status == RouteStatus.UNAVAILABLE
     assert "feature source" in (routes[0].unavailable_reason or "")
+
+
+def test_provider_requires_both_calltaxi_model_groups_before_prediction() -> None:
+    seen_inputs: list[WaitingTimePredictionInput] = []
+
+    def one_group_builder(
+        origin: Location,
+        destination: Location,
+        purpose: str,
+        ride_distance_meters: int,
+        requested_at: datetime,
+    ) -> tuple[WaitingTimePredictionInput, ...]:
+        return (_prediction_input("특장차_바로콜", ride_distance_meters),)
+
+    def estimate(prediction_input: WaitingTimePredictionInput) -> FakeWaitingEstimate:
+        seen_inputs.append(prediction_input)
+        return FakeWaitingEstimate(expected_minutes=30)
+
+    provider = _provider(estimate, waiting_time_input_builder=one_group_builder)
+
+    routes = provider.get_routes(ORIGIN, DESTINATION, [TransportType.CALLTAXI], calltaxi_purpose="치료")
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert "각각 1회" in (routes[0].unavailable_reason or "")
+    assert seen_inputs == []
