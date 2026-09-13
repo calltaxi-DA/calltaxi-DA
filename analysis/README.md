@@ -18,6 +18,8 @@
 
 서비스 Adapter는 `ai/waiting_time/estimator.py`에서 이 artifact를 lazy-load해 호출한다. 모델 파일은 Git LFS로 관리되므로 실행 환경에서는 `git lfs pull --include="analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib"`로 실제 joblib 파일을 내려받아야 한다. 파일이 LFS pointer 상태이거나 모델 추론 의존성이 설치되지 않은 경우 Adapter는 가짜 대기시간을 반환하지 않고 명시적 unavailable error를 발생시킨다. 다만 Backend route orchestration은 아직 기존 `hour_of_day` placeholder 호출부를 완전히 대체하지 않았으므로, 실제 경로 추천 연결은 후속 Phase에서 진행한다.
 
+Prediction 결과 검증은 [`waiting_time/prediction_validation_phase4.md`](waiting_time/prediction_validation_phase4.md)에 정리했다. 실제 joblib artifact를 로딩해 representative sample을 실행했고, 임차택시/특장차 바로콜 model group 출력이 모두 finite numeric minutes이며 기존 metadata의 학습 target 상한 130분 이내인지 확인했다. machine-readable 결과는 [`waiting_time/prediction_validation_phase4.json`](waiting_time/prediction_validation_phase4.json)에 둔다.
+
 다만 통합 대기시간 Prediction 모델과 서비스 개발에서 사용할 데이터 기준은 [`waiting_time/data_criteria.md`](waiting_time/data_criteria.md)에 정리했다. 이 문서는 기존 전처리 Notebook을 재실행하지 않고, 임차택시·특장차 대기시간 전처리 기준, 당일/전일 접수 구분, 서비스 목표값(`접수_승차_분`)과 운영 KPI(`접수_배차_분`)의 차이를 확정하기 위한 기준 문서다. 실제 모델 파일이나 분석 산출물을 export할 때는 이 기준을 따른다.
 
 기존 이용패턴 분석 결과 중 통합 대기시간 Prediction 모델의 입력 해석과 결과 검증에 활용할 근거는 [`waiting_time/usage_pattern_evidence.md`](waiting_time/usage_pattern_evidence.md)에 정리했다. 이 문서는 시간대·요일·차량유형·이동유형별 대기시간 분포, 수요 proxy, 장시간 대기율 proxy, leakage 방지 기준을 기존 Notebook output 기준으로 확인한 문서다. 단, 실시간 접수 stream/API/DB가 필요한 rolling 수요량 feature는 현재 1차 production feature에서 제외하고 offline 실험 근거로만 유지한다.

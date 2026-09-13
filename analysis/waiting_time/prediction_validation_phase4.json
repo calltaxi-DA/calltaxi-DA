@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0",
+  "validated_at": "2026-09-14T00:44:37.941696+09:00",
+  "model_name": "rf_wait_time_v2_prev_day_weather_final",
+  "target": "target_min",
+  "unit": "minutes",
+  "sample_input": {
+    "hour": 9,
+    "이용목적": "치료",
+    "승차거리": 12500,
+    "출발동": "명동",
+    "목적동": "역삼동",
+    "출발구": "중구",
+    "목적구": "강남구",
+    "month": 9,
+    "세부이동유형": "구 간 이동",
+    "dayofweek": 0,
+    "model_group": "임차택시_바로콜",
+    "vehicle_operation_count_prev_day": 412,
+    "temperature_c": 23.5,
+    "precipitation_mm": 0,
+    "wind_speed_ms": 2.1,
+    "snow_depth_cm": 0,
+    "is_bad_weather": 0,
+    "model_group_policy": "predict_both_and_use_max"
+  },
+  "results": [
+    {
+      "model_group": "임차택시_바로콜",
+      "expected_minutes": 41.21341000519471,
+      "unit": "minutes",
+      "warnings": [],
+      "valid": true,
+      "issues": []
+    },
+    {
+      "model_group": "특장차_바로콜",
+      "expected_minutes": 40.50492956696943,
+      "unit": "minutes",
+      "warnings": [],
+      "valid": true,
+      "issues": []
+    }
+  ],
+  "conservative_expected_minutes": 41.21341000519471,
+  "conservative_expected_seconds": 2473,
+  "all_outputs_valid": true,
+  "comparison_to_existing_analysis": {
+    "baseline_source": "analysis/waiting_time/usage_pattern_evidence.md",
+    "baseline_target": "접수→승차",
+    "baseline_comparisons": {
+      "임차택시_바로콜": {
+        "baseline": {
+          "model_group": "임차택시_바로콜",
+          "target": "접수→승차",
+          "count": 305729,
+          "mean_minutes": 42.45,
+          "median_minutes": 28.51,
+          "p75_minutes": 50.28,
+          "p90_minutes": 87.34,
+          "p95_minutes": 145.05,
+          "source": "analysis/waiting_time/usage_pattern_evidence.md"
+        },
+        "comparison": {
+          "status": "within_median_to_p90_range",
+          "delta_from_median_minutes": 12.703410005194709,
+          "delta_from_mean_minutes": -1.2365899948052927,
+          "position": {
+            "median_minutes": 28.51,
+            "p75_minutes": 50.28,
+            "p90_minutes": 87.34,
+            "p95_minutes": 145.05
+          }
+        }
+      },
+      "특장차_바로콜": {
+        "baseline": {
+          "model_group": "특장차_바로콜",
+          "target": "접수→승차",
+          "count": 1099084,
+          "mean_minutes": 46.27,
+          "median_minutes": 33.42,
+          "p75_minutes": 57.33,
+          "p90_minutes": 95.13,
+          "p95_minutes": 133.94,
+          "source": "analysis/waiting_time/usage_pattern_evidence.md"
+        },
+        "comparison": {
+          "status": "within_median_to_p90_range",
+          "delta_from_median_minutes": 7.0849295669694285,
+          "delta_from_mean_minutes": -5.765070433030573,
+          "position": {
+            "median_minutes": 33.42,
+            "p75_minutes": 57.33,
+            "p90_minutes": 95.13,
+            "p95_minutes": 133.94
+          }
+        }
+      }
+    },
+    "reported_test_MAE": 11.105367785137439,
+    "reported_test_RMSE": 15.332262378232757,
+    "reported_test_R2": 0.6010887068297474,
+    "training_target_max_minutes": 130.0,
+    "prediction_over_130_policy": "return_prediction_with_out_of_training_target_range_warning",
+    "sample_status": "valid_within_training_target_range"
+  }
+}

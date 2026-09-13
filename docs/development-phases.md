@@ -882,3 +882,50 @@
   - 운영 환경에서 D-1 차량운행 lookup과 공식 시간별 서울 날씨 관측 lookup을 갱신하는 배치/운영 절차를 확정한다.
   - Frontend/API 연동 Phase에서 `calltaxi_purpose` 입력 UI와 요청 payload를 연결한다.
   - `git lfs pull`로 실제 1.48GB joblib artifact를 받은 환경에서 운영 provider smoke test를 수행한다.
+
+## AI Phase 4 — Prediction 결과 검증 (2026-09-14)
+
+- 브랜치: `ai/phase4-prediction-result-validation` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: 통합 장애인 콜택시 대기시간 Prediction 모델이 정상 입력에서 서비스가 사용할 수 있는 유효한 minutes 단위 예상 대기시간을 반환하는지 검증했다.
+- 한 일:
+  - `ai/waiting_time/validation.py`를 추가해 sample prediction 실행, output type/unit/finite/non-negative 검증, 130분 초과 warning 정책 확인, 기존 대기시간 분석 baseline과의 비교 report 생성을 구현했다.
+  - representative sample input은 `2026-09-14 09:00 Asia/Seoul`, 치료 목적, 중구 명동→강남구 역삼동, TMAP 거리 12,500m, 전일 차량운행 412대, 맑은 날씨 feature로 고정했다.
+  - `임차택시_바로콜`, `특장차_바로콜` 두 model group을 모두 실제 joblib artifact로 예측하고 conservative max minutes/seconds를 산출했다.
+  - `analysis/waiting_time/usage_pattern_evidence.md`의 reviewed `접수→승차` 평균·중앙값·75분위·90분위 baseline과 sample prediction의 차이를 비교했다.
+  - `Null`, `NaN`, `inf`, 음수, 비숫자 output, 130분 초과 warning 누락을 validation issue로 잡는 단위 테스트를 추가했다.
+  - 실제 검증 결과를 `analysis/waiting_time/prediction_validation_phase4.json`와 `analysis/waiting_time/prediction_validation_phase4.md`에 기록했다.
+  - backend venv에 ML 추론 의존성이 설치되지 않아 실제 sample 실행이 막히는 문제를 재확인하고 `docs/troubleshooting/phase3-wait-time-prediction-adapter.md`에 Phase 4 추가 메모로 남겼다.
+- 산출물:
+  - `ai/waiting_time/validation.py`
+  - `ai/tests/test_prediction_validation.py`
+  - `analysis/waiting_time/prediction_validation_phase4.json`
+  - `analysis/waiting_time/prediction_validation_phase4.md`
+  - `analysis/README.md`
+  - `docs/troubleshooting/phase3-wait-time-prediction-adapter.md`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - 검증 모듈은 AI Adapter의 순수 Python 계약만 사용하고 FastAPI/HTTP를 import하지 않는다.
+  - 모델 artifact, metadata, serving feature mapping은 참조만 하고 수정하지 않는다.
+  - `data/raw`, `data/processed`, `notebooks*/`를 직접 읽지 않는다.
+  - 실제 artifact smoke validation은 대용량 LFS 파일과 ML 의존성이 준비된 로컬/운영 검증이며, 일반 단위 테스트는 fake adapter 기반으로 유지한다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m ai.waiting_time.validation --output analysis/waiting_time/prediction_validation_phase4.json`
+    - `임차택시_바로콜`: `41.21341000519471` minutes
+    - `특장차_바로콜`: `40.50492956696943` minutes
+    - conservative max: `41.21341000519471` minutes, `2473` seconds
+    - Null/NaN/음수 없음, output type finite numeric, unit `minutes`, 130분 초과 warning 불필요
+  - 기존 분석 baseline과 비교:
+    - `임차택시_바로콜` prediction `41.21분`: 기존 평균 `42.45분`, 중앙값 `28.51분`, 90분위 `87.34분` 기준 중앙값~90분위 범위
+    - `특장차_바로콜` prediction `40.50분`: 기존 평균 `46.27분`, 중앙값 `33.42분`, 90분위 `95.13분` 기준 중앙값~90분위 범위
+    - reviewed 기존 분석 분포와 비교해 이 sample에서 즉시 이상으로 볼 근거가 없음을 확인했다.
+  - 모델 metadata 기준 `reported_test_MAE=11.105367785137439`, `reported_test_RMSE=15.332262378232757`, `reported_test_R2=0.6010887068297474`, `training_target_max_minutes=130`도 함께 기록했다.
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest ai/tests/test_estimator.py ai/tests/test_prediction_validation.py -q` — 39개 통과
+  - `PYTHONPATH=backend:. /Users/pakrchansik/Desktop/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 241개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건
+  - `git diff --check` — 통과
+- 자체 리뷰:
+  - sample 1건 검증이므로 전체 운영 입력 공간의 품질 보증으로 해석하지 않는다.
+  - 실제 joblib artifact를 수정하지 않았고, 모델 재학습·feature set 변경·fallback prediction 추가를 하지 않았다.
+  - generated report의 `validated_at`은 실행 시각을 기록하므로 재실행 시 값이 바뀔 수 있다.
+- 다음에 이어받을 것:
+  - Backend Phase에서 실제 route orchestration과 연결된 상태로 동일 validation 기준을 smoke test한다.
+  - 더 넓은 sample set 또는 reviewed validation dataset export가 준비되면 model_group·시간대·이동유형별 예측 분포 검증을 확장한다.
