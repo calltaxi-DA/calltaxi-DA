@@ -960,3 +960,42 @@
 - 다음에 이어받을 것:
   - 실제 joblib artifact와 운영 lookup이 준비된 환경에서 Backend provider smoke test를 반복한다.
   - 운영 모니터링 Phase에서 `prediction_unavailable_reason`, 모델 버전, inference latency를 관측 가능하게 남긴다.
+
+## Backend Phase 4 — 장애인 콜택시 결과 통합 (2026-09-14)
+
+- 브랜치: `backend/phase4-calltaxi-result-integration` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
+- 핵심 목표: 차량 이동시간과 Prediction 예상 대기시간을 결합해 장애인 콜택시의 최종 비교 결과를 하나의 `RouteResult`로 반환하도록 계약과 검증을 고정했다.
+- 한 일:
+  - `RouteResult`에 콜택시 전용 구성요소인 `predicted_waiting_time_seconds`, `vehicle_time_seconds`를 추가했다.
+  - 콜택시 `available` 결과는 `total_time_seconds = predicted_waiting_time_seconds + vehicle_time_seconds`를 만족해야 하며, 지하철·저상버스는 콜택시 전용 구성요소를 포함할 수 없도록 검증했다.
+  - `BackendRecommendationRouteProvider`가 AI Adapter의 minutes 결과를 seconds로 변환해 `predicted_waiting_time_seconds`에 보존하고, TMAP 차량시간을 `vehicle_time_seconds`에 보존한 뒤 총 예상시간·거리·요금을 함께 반환하도록 했다.
+  - 추천 API integration 테스트에서 HTTP 요청 → TMAP fake → Prediction fake → 콜택시 `RouteResult` 응답까지 `예상 대기시간`, `차량 이동시간`, `총 예상시간`, `이동거리`, `예상요금`이 함께 반환되는지 확인했다.
+  - `frontend/src/api/recommendation.ts`의 `RouteResult` 타입에 새 optional component 필드를 반영했다. 화면 표시 로직은 변경하지 않았다.
+- 산출물:
+  - `backend/app/api/contracts.py`
+  - `backend/app/services/route_orchestration.py`
+  - `backend/app/api/routes.py`
+  - `backend/tests/test_route_contracts.py`
+  - `backend/tests/test_route_orchestration.py`
+  - `backend/tests/test_recommendation_routes.py`
+  - `frontend/src/api/recommendation.ts`
+  - `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md`
+  - `docs/decisions/0006-wait-time-prediction-contract.md`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - `predicted_waiting_time_seconds`와 `vehicle_time_seconds`는 콜택시 총시간 산출 근거이며, `metric_availability`나 추천 정렬 지표로 사용하지 않는다.
+  - 콜택시 도보 지표는 계속 `null/not_available`, 접근성은 `not_verified`로 유지한다.
+  - Prediction 실패, feature source 누락, TMAP 실패는 기존처럼 콜택시 `unavailable`로 격리하고 임의 숫자로 대체하지 않는다.
+  - 모델 artifact, 분석 export, 원본 `data/`, `notebooks*/`, 추천 정렬 정책, Frontend 화면 UI는 변경하지 않았다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests/test_route_contracts.py backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py -q` — 54개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건.
+  - `PYTHONPATH=backend:. /Users/blaumonde/calltaxi-DA/backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 256개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건.
+  - `frontend/`에서 `npm test -- --run` — 실패. 별도 worktree에 `node_modules`가 없어 `vitest: command not found`가 발생했다. 새 Frontend 변경은 API 타입의 optional field 추가뿐이며 UI 로직은 변경하지 않았다.
+  - `git diff --check` — 통과.
+- 자체 리뷰:
+  - 새 component 필드는 공통 정렬 metric이 아니므로 `RouteMetricAvailability`에는 추가하지 않았다.
+  - API 응답에 새 optional 필드가 추가되는 additive 변경이며, 기존 unavailable 경로는 component 값도 `null`로 유지한다.
+  - 실제 joblib artifact smoke test와 운영 lookup 신선도 검증은 이번 Phase의 결과 통합 계약 범위가 아니므로 새로 수행하지 않았다.
+- 다음에 이어받을 것:
+  - Frontend 표시 Phase에서 콜택시 카드에 대기시간/차량시간/총시간 breakdown을 보여줄지 결정한다.
+  - 운영 모니터링 Phase에서 대기시간 component, 차량시간, 모델 warning을 구조화 로그/관측 지표로 남긴다.

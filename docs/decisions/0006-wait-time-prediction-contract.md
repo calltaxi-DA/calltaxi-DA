@@ -43,7 +43,8 @@ RouteRequest 수신
 → 주소 정규화로 출발/목적 구·동 확보
 → 요청 시각, 이용목적, 세부이동유형, 전일 차량운행, 날씨 feature 생성
 → ai.waiting_time.estimate_waiting_minutes_for_input(...)
-→ expected_minutes * 60을 차량 이동시간에 더해 calltaxi total_time_seconds 생성
+→ expected_minutes * 60을 predicted_waiting_time_seconds로 변환
+→ predicted_waiting_time_seconds + vehicle_time_seconds로 calltaxi total_time_seconds 생성
 ```
 
 현재 `BackendRecommendationRouteProvider`는 아직 기존 `hour_of_day` 기반 placeholder를 호출한다. 이는 모델 미연결 상태를 명시적으로 유지하기 위한 임시 경계이며, 실제 artifact 호출 Phase에서 위 순서로 변경한다.
@@ -52,6 +53,7 @@ RouteRequest 수신
 
 - `ai/waiting_time/estimator.py`에 Prediction 입력 dataclass와 학습 feature 변환 규칙이 추가된다.
 - 기존 `estimate_waiting_minutes(hour_of_day)`는 Backend placeholder 호환을 위해 유지하되, 계속 `NotImplementedError`를 발생시킨다.
+- Backend `RouteResult`는 콜택시 결과에서 `predicted_waiting_time_seconds`, `vehicle_time_seconds`, `total_time_seconds`, `total_distance_meters`, `total_cost_won`을 함께 반환한다. 대기시간 component는 정렬 지표가 아니라 총 예상시간 산출 근거다.
 - `frontend/`는 이 계약을 직접 사용하지 않는다. 필요한 입력 UI(예: 이용목적 선택)는 후속 Frontend Phase에서 Backend API 계약 변경과 함께 진행한다.
 - `analysis/`의 joblib·metadata·serving feature mapping은 참조 대상이며, Phase 0에서는 모델 파일을 수정하지 않는다.
 

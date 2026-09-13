@@ -21,6 +21,8 @@ def _routes() -> list[dict[str, object]]:
             "total_time_seconds": 1800,
             "total_distance_meters": 12000,
             "total_cost_won": 2500,
+            "predicted_waiting_time_seconds": 600,
+            "vehicle_time_seconds": 1200,
             "walking_distance_meters": None,
             "walking_time_seconds": None,
             "metric_availability": {
@@ -181,7 +183,12 @@ def test_recommendations_production_provider_calls_waiting_prediction_when_sourc
     assert response.status_code == 200
     payload = response.json()
     assert seen_model_groups == ["임차택시_바로콜", "특장차_바로콜"]
-    assert payload["recommendations"][0]["route"]["total_time_seconds"] == 30 * 60 + 1_800
+    calltaxi_route = payload["recommendations"][0]["route"]
+    assert calltaxi_route["predicted_waiting_time_seconds"] == 30 * 60
+    assert calltaxi_route["vehicle_time_seconds"] == 1_800
+    assert calltaxi_route["total_time_seconds"] == 30 * 60 + 1_800
+    assert calltaxi_route["total_distance_meters"] == 12_500
+    assert calltaxi_route["total_cost_won"] == 3_000
     assert payload["excluded_routes"] == []
     get_settings.cache_clear()
 

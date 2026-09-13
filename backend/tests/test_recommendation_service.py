@@ -22,12 +22,17 @@ def _route(
     accessibility: AccessibilityStatus = AccessibilityStatus.VERIFIED_AVAILABLE,
 ) -> RouteResult:
     walking_available = walk_distance is not None and walk_time is not None
+    route_kwargs = {}
+    if transport_type == TransportType.CALLTAXI:
+        route_kwargs["predicted_waiting_time_seconds"] = min(600, time)
+        route_kwargs["vehicle_time_seconds"] = time - route_kwargs["predicted_waiting_time_seconds"]
     return RouteResult(
         transport_type=transport_type,
         status=RouteStatus.AVAILABLE,
         total_time_seconds=time,
         total_distance_meters=10_000,
         total_cost_won=cost,
+        **route_kwargs,
         walking_distance_meters=walk_distance,
         walking_time_seconds=walk_time,
         metric_availability=RouteMetricAvailability(

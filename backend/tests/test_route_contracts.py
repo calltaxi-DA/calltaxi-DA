@@ -40,6 +40,8 @@ def test_route_result_contract_rejects_negative_units() -> None:
             total_time_seconds=1000,
             total_distance_meters=3000,
             total_cost_won=0,
+            predicted_waiting_time_seconds=400,
+            vehicle_time_seconds=600,
             walking_distance_meters=-1,
             walking_time_seconds=0,
         )
@@ -90,6 +92,8 @@ def test_available_route_requires_values_for_available_metrics() -> None:
             total_time_seconds=1000,
             total_distance_meters=3000,
             total_cost_won=0,
+            predicted_waiting_time_seconds=400,
+            vehicle_time_seconds=600,
             walking_distance_meters=100,
         )
 
@@ -101,6 +105,8 @@ def test_calltaxi_available_route_can_express_unknown_walking_metrics() -> None:
         total_time_seconds=4200,
         total_distance_meters=12_500,
         total_cost_won=2300,
+        predicted_waiting_time_seconds=1800,
+        vehicle_time_seconds=2400,
         walking_distance_meters=None,
         walking_time_seconds=None,
         metric_availability=RouteMetricAvailability(
@@ -125,6 +131,8 @@ def test_not_available_metric_rejects_numeric_value() -> None:
             total_time_seconds=4200,
             total_distance_meters=12_500,
             total_cost_won=2300,
+            predicted_waiting_time_seconds=1800,
+            vehicle_time_seconds=2400,
             walking_distance_meters=0,
             walking_time_seconds=None,
             metric_availability=RouteMetricAvailability(
@@ -200,16 +208,69 @@ def test_location_rejects_invalid_coordinates(latitude: float, longitude: float)
 
 
 def _available_route(transport_type: TransportType) -> RouteResult:
+    route_kwargs = {
+        "transport_type": transport_type,
+        "status": RouteStatus.AVAILABLE,
+        "total_time_seconds": 1000,
+        "total_distance_meters": 3000,
+        "total_cost_won": 0,
+        "walking_distance_meters": 100,
+        "walking_time_seconds": 100,
+    }
+    if transport_type == TransportType.CALLTAXI:
+        route_kwargs["predicted_waiting_time_seconds"] = 400
+        route_kwargs["vehicle_time_seconds"] = 600
     return RouteResult(
-        transport_type=transport_type,
+        **route_kwargs,
+    )
+
+
+def test_available_calltaxi_route_exposes_waiting_and_vehicle_time_components() -> None:
+    route = RouteResult(
+        transport_type=TransportType.CALLTAXI,
         status=RouteStatus.AVAILABLE,
         total_time_seconds=1000,
         total_distance_meters=3000,
         total_cost_won=0,
+        predicted_waiting_time_seconds=400,
+        vehicle_time_seconds=600,
         walking_distance_meters=100,
         walking_time_seconds=100,
     )
 
+    assert route.predicted_waiting_time_seconds == 400
+    assert route.vehicle_time_seconds == 600
+    assert route.total_time_seconds == 1000
+
+
+def test_available_calltaxi_route_rejects_total_time_that_does_not_match_components() -> None:
+    with pytest.raises(ValidationError):
+        RouteResult(
+            transport_type=TransportType.CALLTAXI,
+            status=RouteStatus.AVAILABLE,
+            total_time_seconds=999,
+            total_distance_meters=3000,
+            total_cost_won=0,
+            predicted_waiting_time_seconds=400,
+            vehicle_time_seconds=600,
+            walking_distance_meters=100,
+            walking_time_seconds=100,
+        )
+
+
+def test_non_calltaxi_route_rejects_calltaxi_time_components() -> None:
+    with pytest.raises(ValidationError):
+        RouteResult(
+            transport_type=TransportType.SUBWAY,
+            status=RouteStatus.AVAILABLE,
+            total_time_seconds=1000,
+            total_distance_meters=3000,
+            total_cost_won=0,
+            predicted_waiting_time_seconds=400,
+            vehicle_time_seconds=600,
+            walking_distance_meters=100,
+            walking_time_seconds=100,
+        )
 
 def _comparison_response(routes: list[RouteResult]) -> RouteComparisonResponse:
     return RouteComparisonResponse(
@@ -287,6 +348,8 @@ def test_sample_routes_return_three_transport_types_with_same_shape() -> None:
             "total_time_seconds",
             "total_distance_meters",
             "total_cost_won",
+            "predicted_waiting_time_seconds",
+            "vehicle_time_seconds",
             "walking_distance_meters",
             "walking_time_seconds",
             "metric_availability",

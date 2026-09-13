@@ -38,6 +38,8 @@ def get_sample_routes() -> RouteComparisonResponse:
                 total_time_seconds=1800,
                 total_distance_meters=3200,
                 total_cost_won=0,
+                predicted_waiting_time_seconds=600,
+                vehicle_time_seconds=1200,
                 walking_distance_meters=0,
                 walking_time_seconds=0,
                 summary="장애인 콜택시 샘플 경로",
