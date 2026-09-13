@@ -1,5 +1,6 @@
 """Backend-owned 이동수단 경로 생성과 추천 입력 통합."""
 
+import logging
 import math
 from collections.abc import Callable
 from datetime import datetime
@@ -43,6 +44,23 @@ BUS_WALKING_WARNING = (
     "walking_time_seconds와 walking_distance_meters는 ODsay가 제공한 모든 도보 subPath의 합계이며 "
     "실제 보행로 실측값은 아닙니다."
 )
+logger = logging.getLogger("app.route_orchestration")
+
+
+class RouteGenerationError(RuntimeError):
+    """다른 이동수단 추천을 계속할 수 있는 route generation 실패."""
+
+    def __init__(
+        self,
+        transport_type: TransportType,
+        reason: str,
+        *,
+        accessibility_status: AccessibilityStatus = AccessibilityStatus.NOT_VERIFIED,
+    ) -> None:
+        super().__init__(reason)
+        self.transport_type = transport_type
+        self.reason = reason
+        self.accessibility_status = accessibility_status
 
 
 class WaitingTimeEstimateResult(Protocol):
@@ -95,12 +113,21 @@ class BackendRecommendationRouteProvider:
             TransportType.SUBWAY: self._get_subway_route,
             TransportType.LOW_FLOOR_BUS: self._get_bus_route,
         }
-        return [
-            route_factories[transport_type](origin, destination, calltaxi_purpose)
-            if transport_type == TransportType.CALLTAXI
-            else route_factories[transport_type](origin, destination)
-            for transport_type in transport_types
-        ]
+        routes: list[RouteResult] = []
+        for transport_type in transport_types:
+            try:
+                if transport_type == TransportType.CALLTAXI:
+                    routes.append(route_factories[transport_type](origin, destination, calltaxi_purpose))
+                else:
+                    routes.append(route_factories[transport_type](origin, destination))
+            except RouteGenerationError as exc:
+                logger.info(
+                    "route_generation_unavailable transport_type=%s reason=%s",
+                    exc.transport_type.value,
+                    exc.reason,
+                )
+                routes.append(_unavailable(exc.transport_type, exc.reason, exc.accessibility_status))
+        return routes
 
     def _get_calltaxi_route(
         self,
@@ -109,16 +136,25 @@ class BackendRecommendationRouteProvider:
         calltaxi_purpose: str | None,
     ) -> RouteResult:
         if self.tmap_client is None:
-            return _unavailable(TransportType.CALLTAXI, "TMAP app key is not configured")
+            raise RouteGenerationError(TransportType.CALLTAXI, "TMAP app key is not configured")
         if calltaxi_purpose is None:
-            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 이용목적이 없어 대기시간을 예측할 수 없습니다.")
+            raise RouteGenerationError(
+                TransportType.CALLTAXI,
+                "장애인 콜택시 이용목적이 없어 대기시간을 예측할 수 없습니다.",
+            )
         if self.waiting_time_input_builder is None:
-            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 Prediction feature source가 연결되지 않았습니다.")
+            raise RouteGenerationError(
+                TransportType.CALLTAXI,
+                "장애인 콜택시 대기시간 Prediction feature source가 연결되지 않았습니다.",
+            )
 
         try:
             distance_meters, vehicle_time_seconds = self.tmap_client.get_vehicle_route(origin, destination)
         except TmapRouteError:
-            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 차량 경로를 계산할 수 없습니다.")
+            raise RouteGenerationError(
+                TransportType.CALLTAXI,
+                "장애인 콜택시 차량 경로를 계산할 수 없습니다.",
+            ) from None
 
         try:
             prediction_inputs = self.waiting_time_input_builder(
@@ -134,13 +170,22 @@ class BackendRecommendationRouteProvider:
             )
             waiting_seconds = _waiting_seconds(estimate)
         except NotImplementedError:
-            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 예측 모델이 연결되지 않았습니다.")
+            raise RouteGenerationError(
+                TransportType.CALLTAXI,
+                "장애인 콜택시 대기시간 예측 모델이 연결되지 않았습니다.",
+            ) from None
         except WaitingTimeFeatureMappingError as exc:
-            return _unavailable(TransportType.CALLTAXI, str(exc))
+            raise RouteGenerationError(TransportType.CALLTAXI, str(exc)) from exc
         except WaitingTimePredictionError:
-            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 예측 모델을 사용할 수 없습니다.")
+            raise RouteGenerationError(
+                TransportType.CALLTAXI,
+                "장애인 콜택시 대기시간 예측 모델을 사용할 수 없습니다.",
+            ) from None
         except (TypeError, ValueError):
-            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 예측 결과가 유효하지 않습니다.")
+            raise RouteGenerationError(
+                TransportType.CALLTAXI,
+                "장애인 콜택시 대기시간 예측 결과가 유효하지 않습니다.",
+            ) from None
 
         warnings = [
             f"예측 대기시간 {waiting_seconds}초가 총 이동시간에 포함되었습니다.",
@@ -170,11 +215,11 @@ class BackendRecommendationRouteProvider:
 
     def _get_subway_route(self, origin: Location, destination: Location) -> RouteResult:
         if self.subway_client is None:
-            return _unavailable(TransportType.SUBWAY, "ODsay API key is not configured")
+            raise RouteGenerationError(TransportType.SUBWAY, "ODsay API key is not configured")
         try:
             route = self.subway_client.get_subway_route(origin, destination)
         except OdsayRouteError:
-            return _unavailable(TransportType.SUBWAY, "지하철 경로를 계산할 수 없습니다.")
+            raise RouteGenerationError(TransportType.SUBWAY, "지하철 경로를 계산할 수 없습니다.") from None
 
         if self.subway_accessibility_provider is None:
             accessibility_status = AccessibilityStatus.NOT_VERIFIED
@@ -201,17 +246,23 @@ class BackendRecommendationRouteProvider:
 
     def _get_bus_route(self, origin: Location, destination: Location) -> RouteResult:
         if self.bus_client is None:
-            return _unavailable(TransportType.LOW_FLOOR_BUS, "ODsay bus route provider is not configured")
+            raise RouteGenerationError(
+                TransportType.LOW_FLOOR_BUS,
+                "ODsay bus route provider is not configured",
+            )
         try:
             route = self.bus_client.get_low_floor_bus_route(origin, destination)
         except LowFloorBusRouteUnavailableError:
-            return _unavailable(
+            raise RouteGenerationError(
                 TransportType.LOW_FLOOR_BUS,
                 "운행 가능한 저상버스 경로를 확인할 수 없습니다.",
                 accessibility_status=AccessibilityStatus.VERIFIED_UNAVAILABLE,
-            )
+            ) from None
         except OdsayBusRouteError:
-            return _unavailable(TransportType.LOW_FLOOR_BUS, "저상버스 경로를 계산할 수 없습니다.")
+            raise RouteGenerationError(
+                TransportType.LOW_FLOOR_BUS,
+                "저상버스 경로를 계산할 수 없습니다.",
+            ) from None
 
         return RouteResult(
             transport_type=TransportType.LOW_FLOOR_BUS,

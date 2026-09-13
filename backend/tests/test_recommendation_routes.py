@@ -213,6 +213,78 @@ def test_recommendations_production_provider_calls_waiting_prediction_when_sourc
     get_settings.cache_clear()
 
 
+def test_recommendations_production_provider_excludes_calltaxi_when_prediction_output_is_invalid(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    requested_at = datetime(2026, 9, 13, 9, 15, tzinfo=ZoneInfo("Asia/Seoul"))
+    operation_lookup = tmp_path / "operation-count.json"
+    weather_lookup = tmp_path / "weather.json"
+    operation_lookup.write_text(
+        f'{{"{(requested_at.date() - timedelta(days=1)).isoformat()}": 412}}',
+        encoding="utf-8",
+    )
+    weather_lookup.write_text(
+        '{"%s": {"temperature_c": 23.5, "precipitation_mm": 0, '
+        '"wind_speed_ms": 2.1, "snow_depth_cm": 0, "new_snow_3h_cm": 0}}'
+        % requested_at.replace(minute=0).isoformat(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("APP_TMAP_APP_KEY", "test-tmap-key")
+    monkeypatch.setenv("APP_CALLTAXI_OPERATION_COUNT_LOOKUP_PATH", str(operation_lookup))
+    monkeypatch.setenv("APP_SEOUL_WEATHER_OBSERVATION_LOOKUP_PATH", str(weather_lookup))
+    monkeypatch.setenv("APP_ODSAY_API_KEY", "")
+    monkeypatch.setenv("ODSAY_API_KEY", "")
+    get_settings.cache_clear()
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return requested_at.replace(tzinfo=None)
+            return requested_at.astimezone(tz)
+
+    class FakeTmapRouteClient:
+        def __init__(self, app_key: str) -> None:
+            assert app_key == "test-tmap-key"
+
+        def get_vehicle_route(self, origin: Location, destination: Location) -> tuple[int, int]:
+            return 12_500, 1_800
+
+    class InvalidEstimate:
+        expected_minutes = None
+        warnings = ()
+
+        def to_backend_output(self) -> dict[str, object]:
+            return {"waitingTime": None, "unit": "minutes", "warnings": self.warnings}
+
+    monkeypatch.setattr(recommendation_module, "TmapRouteClient", FakeTmapRouteClient)
+    monkeypatch.setattr(
+        recommendation_module,
+        "estimate_waiting_minutes_for_input",
+        lambda prediction_input: InvalidEstimate(),
+    )
+    monkeypatch.setattr(recommendation_module, "datetime", FixedDateTime)
+    request_payload = _payload(["time", "cost", "walk"])
+    request_payload["transport_types"] = ["calltaxi"]
+    request_payload["calltaxi_purpose"] = "치료"
+    request_payload["origin"]["address"] = "서울특별시 중구 명동"
+    request_payload["destination"]["address"] = "서울특별시 강남구 역삼동"
+
+    response = TestClient(create_app()).post("/routes/recommendations", json=request_payload)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["recommendations"] == []
+    assert payload["excluded_routes"] == [
+        {
+            "transport_type": "calltaxi",
+            "reason": "장애인 콜택시 대기시간 예측 결과가 유효하지 않습니다.",
+        }
+    ]
+    get_settings.cache_clear()
+
+
 def test_recommendations_only_calls_and_returns_selected_transport_types() -> None:
     override_client, provider = _client_with_provider()
     payload = _payload(["time", "cost", "walk"])

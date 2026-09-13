@@ -79,6 +79,11 @@ class FailingBusClient:
         raise OdsayBusRouteError("failed", reason="test_failure")
 
 
+class UnexpectedSubwayClient:
+    def get_subway_route(self, origin: Location, destination: Location) -> SubwayRouteMetrics:
+        raise RuntimeError("unexpected odsay subway failure")
+
+
 @dataclass(frozen=True)
 class FakeWaitingEstimate:
     expected_minutes: float
@@ -390,6 +395,55 @@ def test_provider_isolates_each_external_route_failure() -> None:
 
     assert [route.status for route in routes] == [RouteStatus.UNAVAILABLE] * 3
     assert all(route.total_time_seconds is None for route in routes)
+
+
+def test_provider_keeps_partial_success_for_recoverable_transport_failures() -> None:
+    provider = BackendRecommendationRouteProvider(
+        tmap_client=FailingTmapClient(),
+        subway_client=FakeSubwayClient(),
+        subway_accessibility_provider=FakeAccessibilityProvider(),
+        bus_client=FailingBusClient(),
+        waiting_time_estimator=lambda prediction_input: FakeWaitingEstimate(expected_minutes=30),
+        waiting_time_input_builder=_input_builder,
+        current_time_provider=lambda: REQUESTED_AT,
+    )
+
+    routes = provider.get_routes(ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료")
+
+    assert [route.transport_type for route in routes] == list(TransportType)
+    assert [route.status for route in routes] == [
+        RouteStatus.UNAVAILABLE,
+        RouteStatus.AVAILABLE,
+        RouteStatus.UNAVAILABLE,
+    ]
+    assert routes[0].unavailable_reason == "장애인 콜택시 차량 경로를 계산할 수 없습니다."
+    assert routes[1].total_time_seconds == 2_400
+    assert routes[2].unavailable_reason == "저상버스 경로를 계산할 수 없습니다."
+
+
+def test_provider_does_not_hide_unexpected_transport_programming_error() -> None:
+    provider = BackendRecommendationRouteProvider(
+        tmap_client=FakeTmapClient(),
+        subway_client=UnexpectedSubwayClient(),
+        subway_accessibility_provider=FakeAccessibilityProvider(),
+        bus_client=FakeBusClient(),
+        waiting_time_estimator=lambda prediction_input: FakeWaitingEstimate(expected_minutes=30),
+        waiting_time_input_builder=_input_builder,
+        current_time_provider=lambda: REQUESTED_AT,
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected odsay subway failure"):
+        provider.get_routes(ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료")
+
+
+def test_provider_does_not_hide_unexpected_prediction_programming_error() -> None:
+    def unexpected_estimator(prediction_input: WaitingTimePredictionInput) -> FakeWaitingEstimate:
+        raise RuntimeError("unexpected prediction failure")
+
+    with pytest.raises(RuntimeError, match="unexpected prediction failure"):
+        _provider(unexpected_estimator).get_routes(
+            ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료"
+        )
 
 
 def test_provider_only_calls_selected_transport_services() -> None:
