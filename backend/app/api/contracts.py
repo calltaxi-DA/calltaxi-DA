@@ -190,6 +190,10 @@ class RecommendationRequest(BaseModel):
     destination: Location
     transport_types: list[TransportType] = Field(min_length=1, max_length=3)
     priorities: list[RecommendationPriority] = Field(min_length=3, max_length=3)
+    calltaxi_purpose: str | None = Field(
+        default=None,
+        description="장애인 콜택시 대기시간 Prediction에 사용할 이용목적. 미제공 시 콜택시 예측은 unavailable.",
+    )
 
     @model_validator(mode="after")
     def validate_unique_priorities(self) -> "RecommendationRequest":

@@ -20,7 +20,11 @@ class RecommendationRouteProvider(Protocol):
     """Backend 소유 데이터로 세 이동수단 경로를 생성하는 provider."""
 
     def get_routes(
-        self, origin: Location, destination: Location, transport_types: list[TransportType]
+        self,
+        origin: Location,
+        destination: Location,
+        transport_types: list[TransportType],
+        calltaxi_purpose: str | None = None,
     ) -> list[RouteResult]:
         ...
 

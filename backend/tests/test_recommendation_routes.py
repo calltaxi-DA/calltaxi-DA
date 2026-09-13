@@ -50,10 +50,16 @@ def _routes() -> list[dict[str, object]]:
 class FakeRecommendationRouteProvider:
     def __init__(self, routes: list[dict[str, object]] | None = None) -> None:
         self.routes = [RouteResult.model_validate(route) for route in (routes or _routes())]
-        self.calls: list[tuple[Location, Location, list[str]]] = []
+        self.calls: list[tuple[Location, Location, list[str], str | None]] = []
 
-    def get_routes(self, origin: Location, destination: Location, transport_types) -> list[RouteResult]:
-        self.calls.append((origin, destination, [item.value for item in transport_types]))
+    def get_routes(
+        self,
+        origin: Location,
+        destination: Location,
+        transport_types,
+        calltaxi_purpose: str | None = None,
+    ) -> list[RouteResult]:
+        self.calls.append((origin, destination, [item.value for item in transport_types], calltaxi_purpose))
         return [route for route in self.routes if route.transport_type in transport_types]
 
 
@@ -94,6 +100,18 @@ def test_recommendations_returns_top_three_for_time_priority() -> None:
     assert parsed.excluded_routes == []
     assert len(provider.calls) == 1
     assert provider.calls[0][0].latitude == 37.5666
+    assert provider.calls[0][3] is None
+
+
+def test_recommendations_forwards_calltaxi_purpose_to_backend_provider() -> None:
+    override_client, provider = _client_with_provider()
+    request_payload = _payload(["time", "cost", "walk"])
+    request_payload["calltaxi_purpose"] = "치료"
+
+    response = override_client.post("/routes/recommendations", json=request_payload)
+
+    assert response.status_code == 200
+    assert provider.calls[0][3] == "치료"
 
 
 def test_recommendations_only_calls_and_returns_selected_transport_types() -> None:

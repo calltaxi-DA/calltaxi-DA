@@ -9,8 +9,11 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 
-from ai.waiting_time.estimator import WaitingTimePredictionInput
+from ai.waiting_time.estimator import SUPPORTED_MODEL_GROUPS, WaitingTimePredictionInput
 
+CONSERVATIVE_MODEL_GROUP_WARNING = (
+    "실제 배차 차량군을 요청 시점에 확정할 수 없어 임차택시/특장차 바로콜 예측 중 더 긴 값을 사용했습니다."
+)
 SPECIAL_VEHICLE_MODEL_GROUP = "특장차_바로콜"
 
 SEOUL_DISTRICTS = frozenset(
@@ -72,32 +75,44 @@ def build_special_vehicle_waiting_time_input(
 ) -> WaitingTimePredictionInput:
     """특장차 Backend 입력값을 AI Adapter 입력 계약으로 변환한다."""
 
+    return build_waiting_time_inputs(source, model_groups=(SPECIAL_VEHICLE_MODEL_GROUP,))[0]
+
+
+def build_waiting_time_inputs(
+    source: SpecialVehiclePredictionFeatureSource,
+    model_groups: tuple[str, ...] = SUPPORTED_MODEL_GROUPS,
+) -> tuple[WaitingTimePredictionInput, ...]:
+    """Backend 입력값을 지정된 model_group별 AI Adapter 입력 계약으로 변환한다."""
+
     origin_gu = _required_text(source.origin_gu, "origin_gu")
     destination_gu = _required_text(source.destination_gu, "destination_gu")
 
     try:
-        return WaitingTimePredictionInput(
-            requested_at=source.requested_at,
-            purpose=source.purpose,
-            ride_distance_meters=source.ride_distance_meters,
-            origin_gu=origin_gu,
-            origin_dong=_required_text(source.origin_dong, "origin_dong"),
-            destination_gu=destination_gu,
-            destination_dong=_required_text(source.destination_dong, "destination_dong"),
-            movement_type=derive_movement_type(origin_gu, destination_gu),
-            model_group=SPECIAL_VEHICLE_MODEL_GROUP,
-            vehicle_operation_count_prev_day=source.vehicle_operation_count_prev_day,
-            temperature_c=source.temperature_c,
-            precipitation_mm=source.precipitation_mm,
-            wind_speed_ms=source.wind_speed_ms,
-            snow_depth_cm=source.snow_depth_cm,
-            is_bad_weather=derive_is_bad_weather(
+        return tuple(
+            WaitingTimePredictionInput(
+                requested_at=source.requested_at,
+                purpose=source.purpose,
+                ride_distance_meters=source.ride_distance_meters,
+                origin_gu=origin_gu,
+                origin_dong=_required_text(source.origin_dong, "origin_dong"),
+                destination_gu=destination_gu,
+                destination_dong=_required_text(source.destination_dong, "destination_dong"),
+                movement_type=derive_movement_type(origin_gu, destination_gu),
+                model_group=model_group,
+                vehicle_operation_count_prev_day=source.vehicle_operation_count_prev_day,
                 temperature_c=source.temperature_c,
                 precipitation_mm=source.precipitation_mm,
                 wind_speed_ms=source.wind_speed_ms,
                 snow_depth_cm=source.snow_depth_cm,
-                new_snow_3h_cm=source.new_snow_3h_cm,
-            ),
+                is_bad_weather=derive_is_bad_weather(
+                    temperature_c=source.temperature_c,
+                    precipitation_mm=source.precipitation_mm,
+                    wind_speed_ms=source.wind_speed_ms,
+                    snow_depth_cm=source.snow_depth_cm,
+                    new_snow_3h_cm=source.new_snow_3h_cm,
+                ),
+            )
+            for model_group in model_groups
         )
     except ValueError as exc:
         raise WaitingTimeFeatureMappingError(str(exc)) from exc
