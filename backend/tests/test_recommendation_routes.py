@@ -165,10 +165,22 @@ def test_recommendations_production_provider_calls_waiting_prediction_when_sourc
 
     seen_model_groups: list[str] = []
 
+    class FakeEstimate:
+        def __init__(self, expected_minutes: int) -> None:
+            self.expected_minutes = expected_minutes
+            self.warnings = ()
+
+        def to_backend_output(self) -> dict[str, object]:
+            return {
+                "waitingTime": self.expected_minutes,
+                "unit": "minutes",
+                "warnings": self.warnings,
+            }
+
     def fake_estimator(prediction_input) -> object:
         seen_model_groups.append(prediction_input.model_group)
         expected_minutes = 20 if prediction_input.model_group == "임차택시_바로콜" else 30
-        return type("FakeEstimate", (), {"expected_minutes": expected_minutes, "warnings": ()})()
+        return FakeEstimate(expected_minutes)
 
     monkeypatch.setattr(recommendation_module, "TmapRouteClient", FakeTmapRouteClient)
     monkeypatch.setattr(recommendation_module, "estimate_waiting_minutes_for_input", fake_estimator)

@@ -51,6 +51,9 @@ class WaitingTimeEstimateResult(Protocol):
     expected_minutes: float
     warnings: tuple[str, ...]
 
+    def to_backend_output(self) -> dict[str, object]:
+        """Backend가 소비하는 AI Adapter 출력 계약."""
+
 
 WaitingTimeInputBuilder = Callable[
     [Location, Location, str, int, datetime],
@@ -225,12 +228,15 @@ class BackendRecommendationRouteProvider:
 
 
 def _waiting_seconds(estimate: WaitingTimeEstimateResult) -> int:
-    expected_minutes = getattr(estimate, "expected_minutes", None)
-    if isinstance(expected_minutes, bool) or not isinstance(expected_minutes, (int, float)):
-        raise TypeError("waiting time estimate expected_minutes must be numeric")
-    if not math.isfinite(expected_minutes) or expected_minutes < 0:
+    backend_output = estimate.to_backend_output()
+    if backend_output.get("unit") != "minutes":
+        raise ValueError("waiting time estimate unit must be minutes")
+    waiting_time = backend_output.get("waitingTime")
+    if isinstance(waiting_time, bool) or not isinstance(waiting_time, (int, float)):
+        raise TypeError("waiting time estimate waitingTime must be numeric")
+    if not math.isfinite(waiting_time) or waiting_time < 0:
         raise ValueError("waiting time estimate must be finite and non-negative")
-    return round(expected_minutes * 60)
+    return round(waiting_time * 60)
 
 
 def _select_conservative_waiting_estimate(

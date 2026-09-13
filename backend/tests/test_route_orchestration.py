@@ -1,16 +1,27 @@
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from ai.waiting_time.estimator import WaitingTimePredictionError, WaitingTimePredictionInput
+from ai.waiting_time.estimator import (
+    WAITING_TIME_UNIT,
+    WaitingTimePredictionAdapter,
+    WaitingTimePredictionError,
+    WaitingTimePredictionInput,
+)
 from app.api.contracts import AccessibilityStatus, Location, RouteStatus, TransportType
 from app.services.bus import LowFloorBusRouteMetrics, OdsayBusRouteError, SelectedBusLane
 from app.services.calltaxi import TmapRouteError
 from app.services.route_orchestration import BackendRecommendationRouteProvider
 from app.services.subway import OdsayRouteError, StationAccessibility, SubwayRouteMetrics, SubwayStationKey
 from app.services.waiting_time_features import WaitingTimeFeatureMappingError
+from app.services.waiting_time_features import (
+    ConfiguredWaitingTimeInputBuilder,
+    JsonVehicleOperationCountProvider,
+    JsonWeatherObservationProvider,
+)
 
 ORIGIN = Location(latitude=37.5666, longitude=126.9784)
 DESTINATION = Location(latitude=37.4979, longitude=127.0276)
@@ -73,11 +84,25 @@ class FakeWaitingEstimate:
     expected_minutes: float
     warnings: tuple[str, ...] = ()
 
+    def to_backend_output(self) -> dict[str, object]:
+        return {
+            "waitingTime": self.expected_minutes,
+            "unit": WAITING_TIME_UNIT,
+            "warnings": self.warnings,
+        }
+
 
 @dataclass(frozen=True)
 class InvalidWaitingEstimate:
     expected_minutes: object
     warnings: tuple[str, ...] = ()
+
+    def to_backend_output(self) -> dict[str, object]:
+        return {
+            "waitingTime": self.expected_minutes,
+            "unit": WAITING_TIME_UNIT,
+            "warnings": self.warnings,
+        }
 
 
 def _prediction_input(model_group: str, ride_distance_meters: float = 12_500) -> WaitingTimePredictionInput:
@@ -160,6 +185,63 @@ def test_provider_builds_three_backend_owned_routes_and_adds_conservative_waitin
     assert "out_of_training_target_range" in calltaxi.warnings
     assert subway.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
     assert bus.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
+
+
+def test_provider_uses_configured_feature_builder_and_prediction_adapter_contract(tmp_path: Path) -> None:
+    operation_lookup = tmp_path / "operation-count.json"
+    weather_lookup = tmp_path / "weather.json"
+    operation_lookup.write_text('{"2026-09-12": 412}', encoding="utf-8")
+    weather_lookup.write_text(
+        '{"2026-09-13T09:00:00+09:00": {'
+        '"temperature_c": 23.5, "precipitation_mm": 0, "wind_speed_ms": 2.1, '
+        '"snow_depth_cm": 0, "new_snow_3h_cm": 0'
+        "}}",
+        encoding="utf-8",
+    )
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"real joblib placeholder")
+    seen_groups: list[str] = []
+
+    class FakePredictionModel:
+        def predict(self, model_input) -> list[float]:
+            model_group = model_input.iloc[0]["model_group"]
+            seen_groups.append(model_group)
+            if model_group == "임차택시_바로콜":
+                return [18.0]
+            return [32.0]
+
+    adapter = WaitingTimePredictionAdapter(
+        model_path=model_path,
+        model_name="test_rf_model",
+        model_loader=lambda path: FakePredictionModel(),
+    )
+    builder = ConfiguredWaitingTimeInputBuilder(
+        operation_count_provider=JsonVehicleOperationCountProvider(operation_lookup),
+        weather_provider=JsonWeatherObservationProvider(weather_lookup),
+    )
+    provider = BackendRecommendationRouteProvider(
+        tmap_client=FakeTmapClient(),
+        subway_client=None,
+        subway_accessibility_provider=None,
+        bus_client=None,
+        waiting_time_estimator=adapter.estimate,
+        waiting_time_input_builder=builder,
+        current_time_provider=lambda: datetime(2026, 9, 13, 0, 15, tzinfo=ZoneInfo("UTC")),
+    )
+
+    route = provider.get_routes(
+        Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 명동"),
+        Location(latitude=37.4979, longitude=127.0276, address="서울특별시 강남구 역삼동"),
+        [TransportType.CALLTAXI],
+        calltaxi_purpose="치료",
+    )[0]
+
+    assert seen_groups == ["임차택시_바로콜", "특장차_바로콜"]
+    assert route.predicted_waiting_time_seconds == 32 * 60
+    assert route.vehicle_time_seconds == 1_800
+    assert route.total_time_seconds == 32 * 60 + 1_800
+    assert route.total_distance_meters == 12_500
+    assert route.total_cost_won == 3_000
 
 
 def test_provider_keeps_other_routes_when_waiting_model_is_not_connected() -> None:
