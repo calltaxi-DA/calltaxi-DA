@@ -30,6 +30,7 @@ export type RouteResult = {
 export type RecommendationResponse = {
   origin: RouteLocation
   destination: RouteLocation
+  transport_types: TransportType[]
   priorities: RecommendationPriority[]
   recommendations: Array<{ rank: number; route: RouteResult }>
   excluded_routes: Array<{ transport_type: TransportType; reason: string }>
@@ -38,6 +39,7 @@ export type RecommendationResponse = {
 type RecommendationRequest = {
   origin: RouteLocation
   destination: RouteLocation
+  transport_types: TransportType[]
   priorities: RecommendationPriority[]
 }
 

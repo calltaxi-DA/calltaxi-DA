@@ -68,12 +68,15 @@ class BackendRecommendationRouteProvider:
         self.waiting_time_estimator = waiting_time_estimator
         self.current_hour_provider = current_hour_provider
 
-    def get_routes(self, origin: Location, destination: Location) -> list[RouteResult]:
-        return [
-            self._get_calltaxi_route(origin, destination),
-            self._get_subway_route(origin, destination),
-            self._get_bus_route(origin, destination),
-        ]
+    def get_routes(
+        self, origin: Location, destination: Location, transport_types: list[TransportType]
+    ) -> list[RouteResult]:
+        route_factories = {
+            TransportType.CALLTAXI: self._get_calltaxi_route,
+            TransportType.SUBWAY: self._get_subway_route,
+            TransportType.LOW_FLOOR_BUS: self._get_bus_route,
+        }
+        return [route_factories[transport_type](origin, destination) for transport_type in transport_types]
 
     def _get_calltaxi_route(self, origin: Location, destination: Location) -> RouteResult:
         if self.tmap_client is None:

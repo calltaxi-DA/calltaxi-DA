@@ -26,7 +26,7 @@ notebooks*/ (모델 학습·검증) → analysis/ (장애인 콜택시 통합 �
 
 출발지·목적지를 입력하면 지하철·저상버스·장애인콜택시의 이동시간/비용/도보거리를 비교하고, 장애인콜택시는 분석으로 산출한 예상 대기시간을 총 이동시간에 반영해 추천한다(핵심 지표: `총 이동시간 = 예상 대기시간 + 차량 이동시간`). 추천은 복잡한 ML 모델이 아니라 Rule-based(요금/시간/도보 우선순위 정렬)로 계산한다. 부가 기능으로 월별 교통비 지원 현황을 보여주는 캘린더가 있다.
 
-> 화면 구성(MAP/경로비교/캘린더)의 전체 스펙은 아직 확정되지 않았다. 이동수단 경로 비교의 공통 응답 계약(`Location`, `TransportType`, `RouteStatus`, `RouteResult`, `RouteComparisonResponse`)과 추천 요청·응답 계약은 확정했다. `RouteResult`는 경로 상태와 별도로 numeric field별 가용 상태 및 접근성 확인 상태를 표현한다. 공개 추천 요청은 출발지·목적지·우선순위만 받고 경로 결과는 Backend provider가 생성한다(ADR 0004).
+> 화면 구성(MAP/경로비교/캘린더)의 전체 스펙은 아직 확정되지 않았다. 이동수단 경로 비교의 공통 응답 계약(`Location`, `TransportType`, `RouteStatus`, `RouteResult`, `RouteComparisonResponse`)과 추천 요청·응답 계약은 확정했다. `RouteResult`는 경로 상태와 별도로 numeric field별 가용 상태 및 접근성 확인 상태를 표현한다. 공개 추천 요청은 출발지·목적지·선택 이동수단·우선순위만 받고 경로 결과는 Backend provider가 생성한다(ADR 0004).
 
 ## 폴더 책임
 

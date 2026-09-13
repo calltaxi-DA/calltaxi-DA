@@ -19,7 +19,9 @@ from app.api.contracts import (
 class RecommendationRouteProvider(Protocol):
     """Backend 소유 데이터로 세 이동수단 경로를 생성하는 provider."""
 
-    def get_routes(self, origin: Location, destination: Location) -> list[RouteResult]:
+    def get_routes(
+        self, origin: Location, destination: Location, transport_types: list[TransportType]
+    ) -> list[RouteResult]:
         ...
 
 
@@ -46,8 +48,9 @@ def rank_routes(
 
 
 def _validate_inputs(routes: list[RouteResult], priorities: list[RecommendationPriority]) -> None:
-    if len(routes) != len(TransportType) or {route.transport_type for route in routes} != set(TransportType):
-        raise ValueError("routes must contain each TransportType exactly once")
+    route_types = [route.transport_type for route in routes]
+    if not routes or len(routes) > len(TransportType) or len(route_types) != len(set(route_types)):
+        raise ValueError("routes must contain one or more unique TransportType values")
     if len(priorities) != len(RecommendationPriority) or set(priorities) != set(RecommendationPriority):
         raise ValueError("priorities must contain each RecommendationPriority exactly once")
 

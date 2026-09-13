@@ -143,6 +143,11 @@ def test_rank_routes_rejects_empty_priorities() -> None:
         rank_routes(_three_routes(), [])
 
 
-def test_rank_routes_rejects_missing_transport_type() -> None:
-    with pytest.raises(ValueError, match="routes"):
-        rank_routes(_three_routes()[:2], list(RecommendationPriority))
+def test_rank_routes_accepts_selected_transport_subset() -> None:
+    recommendations, excluded = rank_routes(_three_routes()[1:], list(RecommendationPriority))
+
+    assert [item.route.transport_type for item in recommendations] == [
+        TransportType.SUBWAY,
+        TransportType.LOW_FLOOR_BUS,
+    ]
+    assert excluded == []

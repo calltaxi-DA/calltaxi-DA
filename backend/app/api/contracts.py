@@ -187,10 +187,13 @@ class RecommendationRequest(BaseModel):
 
     origin: Location
     destination: Location
+    transport_types: list[TransportType] = Field(min_length=1, max_length=3)
     priorities: list[RecommendationPriority] = Field(min_length=3, max_length=3)
 
     @model_validator(mode="after")
     def validate_unique_priorities(self) -> "RecommendationRequest":
+        if len(self.transport_types) != len(set(self.transport_types)):
+            raise ValueError("transport_types must not contain duplicates")
         if set(self.priorities) != set(RecommendationPriority):
             raise ValueError("priorities must contain each RecommendationPriority exactly once")
         return self
@@ -215,6 +218,7 @@ class RecommendationResponse(BaseModel):
 
     origin: Location
     destination: Location
+    transport_types: list[TransportType] = Field(min_length=1, max_length=3)
     priorities: list[RecommendationPriority] = Field(min_length=3, max_length=3)
     recommendations: list[RankedRoute] = Field(max_length=3)
     excluded_routes: list[ExcludedRoute] = Field(default_factory=list)

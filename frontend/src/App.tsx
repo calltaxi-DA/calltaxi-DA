@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { fetchRecommendations } from './api/recommendation'
-import type { RecommendationPriority, RecommendationResponse } from './api/recommendation'
+import type { RecommendationPriority, RecommendationResponse, TransportType } from './api/recommendation'
 import type { RouteLocation } from './api/subway'
 import RecommendationResults from './components/RecommendationResults'
 
@@ -66,7 +66,7 @@ const transportOptions = [
   { value: 'calltaxi', label: '장애인 콜택시' },
   { value: 'subway', label: '지하철' },
   { value: 'low_floor_bus', label: '저상버스' },
-]
+] as const
 
 const priorityOptions = [
   { value: 'time', label: '시간 우선' },
@@ -162,14 +162,18 @@ function App() {
     kakaoMapAppKey ? '지도를 불러오는 중입니다.' : 'Kakao Maps 앱 키를 설정하면 지도와 장소검색을 사용할 수 있습니다.',
   )
   const [isMapReady, setIsMapReady] = useState(false)
+  const [selectedTransportTypes, setSelectedTransportTypes] = useState<TransportType[]>(
+    transportOptions.map((option) => option.value),
+  )
   const [priorityOrder, setPriorityOrder] = useState(defaultPriorityOrder)
+  const [draggedPriorityIndex, setDraggedPriorityIndex] = useState<number | null>(null)
   const [submittedSummary, setSubmittedSummary] = useState<string | null>(null)
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null)
   const [recommendationStatus, setRecommendationStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const recommendationRequestRef = useRef(0)
   const recommendationAbortControllerRef = useRef<AbortController | null>(null)
 
-  const canSearch = selectedPlaces.origin !== null && selectedPlaces.destination !== null
+  const canSearch = selectedPlaces.origin !== null && selectedPlaces.destination !== null && selectedTransportTypes.length > 0
 
   useEffect(() => {
     let ignore = false
@@ -231,17 +235,20 @@ function App() {
     setPlaceSearchMessage((current) => ({ ...current, [role]: '' }))
   }
 
-  const handlePriorityChange = (rankIndex: number, nextPriority: string) => {
+  const handleTransportToggle = (transportType: TransportType) => {
+    invalidateRecommendation()
+    setSelectedTransportTypes((current) => current.includes(transportType)
+      ? current.filter((item) => item !== transportType)
+      : [...current, transportType])
+  }
+
+  const movePriority = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || toIndex < 0 || toIndex >= priorityOrder.length) return
     invalidateRecommendation()
     setPriorityOrder((current) => {
       const updated = [...current]
-      const previousIndex = updated.indexOf(nextPriority)
-      const currentPriority = updated[rankIndex]
-
-      updated[rankIndex] = nextPriority
-      if (previousIndex >= 0 && previousIndex !== rankIndex) {
-        updated[previousIndex] = currentPriority
-      }
+      const [moved] = updated.splice(fromIndex, 1)
+      updated.splice(toIndex, 0, moved)
       return updated
     })
   }
@@ -364,6 +371,7 @@ function App() {
       const result = await fetchRecommendations({
         origin: toRouteLocation(originPlace),
         destination: toRouteLocation(destinationPlace),
+        transport_types: selectedTransportTypes,
         priorities: priorityOrder as RecommendationPriority[],
       }, abortController.signal)
       if (recommendationRequestRef.current === requestId) {
@@ -397,7 +405,9 @@ function App() {
       : destination.trim()
 
     setSubmittedSummary(
-      `${originLabel}에서 ${destinationLabel}까지 장애인 콜택시, 지하철, 저상버스를 ${priorityLabels
+      `${originLabel}에서 ${destinationLabel}까지 ${transportOptions
+        .filter((option) => selectedTransportTypes.includes(option.value))
+        .map((option) => option.label).join(', ')}를 ${priorityLabels
         .map((label, index) => `${index + 1}순위 ${label}`)
         .join(', ')} 경로를 검색합니다.`,
     )
@@ -475,31 +485,51 @@ function App() {
 
           <details className="condition-drawer">
             <summary>이동 조건 설정</summary>
-            <div className="compared-transports" aria-label="비교 이동수단">
-              <strong>비교 이동수단</strong>
-              <p>{transportOptions.map((option) => option.label).join(' · ')}</p>
-            </div>
-
             <fieldset>
-              <legend>우선순위 선택</legend>
-              <p className="field-hint">시간·비용·도보 기준을 1순위부터 3순위까지 정해주세요.</p>
-              <div className="priority-grid">
-                {priorityOrder.map((selectedPriority, index) => (
-                  <label key={`${index + 1}-priority`}>
-                    <span>{index + 1}순위</span>
-                    <select
-                      value={selectedPriority}
-                      onChange={(event) => handlePriorityChange(index, event.target.value)}
-                    >
-                      {priorityOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+              <legend>이동수단 선택</legend>
+              <div className="option-row">
+                {transportOptions.map((option) => (
+                  <label className="check-card" key={option.value}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTransportTypes.includes(option.value)}
+                      onChange={() => handleTransportToggle(option.value)}
+                    />
+                    <span>{option.label}</span>
                   </label>
                 ))}
               </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>우선순위 선택</legend>
+              <p className="field-hint">항목을 드래그하거나 버튼으로 이동해 순서를 정해주세요.</p>
+              <ol className="priority-list">
+                {priorityOrder.map((selectedPriority, index) => (
+                  <li
+                    draggable
+                    key={selectedPriority}
+                    onDragStart={() => setDraggedPriorityIndex(index)}
+                    onDragEnd={() => setDraggedPriorityIndex(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (draggedPriorityIndex !== null) movePriority(draggedPriorityIndex, index)
+                      setDraggedPriorityIndex(null)
+                    }}
+                  >
+                    <span className="drag-handle" aria-hidden="true">☰</span>
+                    <strong>{index + 1}순위 {priorityOptions.find((option) => option.value === selectedPriority)?.label}</strong>
+                    <span className="priority-actions">
+                      <button type="button" aria-label={`${index + 1}순위 위로 이동`} disabled={index === 0} onClick={() => movePriority(index, index - 1)}>
+                        ↑
+                      </button>
+                      <button type="button" aria-label={`${index + 1}순위 아래로 이동`} disabled={index === priorityOrder.length - 1} onClick={() => movePriority(index, index + 1)}>
+                        ↓
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ol>
             </fieldset>
           </details>
 
