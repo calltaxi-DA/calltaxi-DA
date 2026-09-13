@@ -50,17 +50,22 @@ def _routes() -> list[dict[str, object]]:
 class FakeRecommendationRouteProvider:
     def __init__(self, routes: list[dict[str, object]] | None = None) -> None:
         self.routes = [RouteResult.model_validate(route) for route in (routes or _routes())]
-        self.calls: list[tuple[Location, Location]] = []
+        self.calls: list[tuple[Location, Location, list[str]]] = []
 
-    def get_routes(self, origin: Location, destination: Location) -> list[RouteResult]:
-        self.calls.append((origin, destination))
-        return self.routes
+    def get_routes(self, origin: Location, destination: Location, transport_types) -> list[RouteResult]:
+        self.calls.append((origin, destination, [item.value for item in transport_types]))
+        return [route for route in self.routes if route.transport_type in transport_types]
 
 
 def _payload(priorities: list[str]) -> dict[str, object]:
     origin = {"name": "서울시청", "latitude": 37.5666, "longitude": 126.9784}
     destination = {"name": "강남역", "latitude": 37.4979, "longitude": 127.0276}
-    return {"origin": origin, "destination": destination, "priorities": priorities}
+    return {
+        "origin": origin,
+        "destination": destination,
+        "transport_types": ["calltaxi", "subway", "low_floor_bus"],
+        "priorities": priorities,
+    }
 
 
 def _client_with_provider(
@@ -89,6 +94,30 @@ def test_recommendations_returns_top_three_for_time_priority() -> None:
     assert parsed.excluded_routes == []
     assert len(provider.calls) == 1
     assert provider.calls[0][0].latitude == 37.5666
+
+
+def test_recommendations_only_calls_and_returns_selected_transport_types() -> None:
+    override_client, provider = _client_with_provider()
+    payload = _payload(["time", "cost", "walk"])
+    payload["transport_types"] = ["subway", "low_floor_bus"]
+
+    response = override_client.post("/routes/recommendations", json=payload)
+
+    assert response.status_code == 200
+    assert provider.calls[0][2] == ["subway", "low_floor_bus"]
+    assert [item["route"]["transport_type"] for item in response.json()["recommendations"]] == [
+        "subway",
+        "low_floor_bus",
+    ]
+    assert response.json()["excluded_routes"] == []
+
+
+def test_recommendations_rejects_empty_or_duplicate_transport_types() -> None:
+    override_client, _ = _client_with_provider()
+    for transport_types in ([], ["subway", "subway"]):
+        payload = _payload(["time", "cost", "walk"])
+        payload["transport_types"] = transport_types
+        assert override_client.post("/routes/recommendations", json=payload).status_code == 422
 
 
 def test_recommendations_returns_top_three_for_cost_priority() -> None:

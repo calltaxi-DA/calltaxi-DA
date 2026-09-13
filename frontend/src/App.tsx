@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
-import { fetchLowFloorBusRoute } from './api/bus'
-import type { LowFloorBusRouteResult } from './api/bus'
-import { fetchSubwayRoute } from './api/subway'
-import type { RouteLocation, SubwayRouteResult } from './api/subway'
-import LowFloorBusRouteCard from './components/LowFloorBusRouteCard'
-import SubwayRouteCard from './components/SubwayRouteCard'
+import { fetchRecommendations } from './api/recommendation'
+import type { RecommendationPriority, RecommendationResponse, TransportType } from './api/recommendation'
+import type { RouteLocation } from './api/subway'
+import RecommendationResults from './components/RecommendationResults'
 
 type LocationRole = 'origin' | 'destination'
 
@@ -68,12 +66,12 @@ const transportOptions = [
   { value: 'calltaxi', label: '장애인 콜택시' },
   { value: 'subway', label: '지하철' },
   { value: 'low_floor_bus', label: '저상버스' },
-]
+] as const
 
 const priorityOptions = [
-  { value: 'time', label: '시간 최소' },
-  { value: 'cost', label: '비용 최소' },
-  { value: 'walk', label: '도보 최소' },
+  { value: 'time', label: '시간 우선' },
+  { value: 'cost', label: '금액 우선' },
+  { value: 'walk', label: '최소 도보' },
 ]
 
 const defaultPriorityOrder = priorityOptions.map((option) => option.value)
@@ -164,30 +162,18 @@ function App() {
     kakaoMapAppKey ? '지도를 불러오는 중입니다.' : 'Kakao Maps 앱 키를 설정하면 지도와 장소검색을 사용할 수 있습니다.',
   )
   const [isMapReady, setIsMapReady] = useState(false)
-  const [selectedTransportTypes, setSelectedTransportTypes] = useState<string[]>(
+  const [selectedTransportTypes, setSelectedTransportTypes] = useState<TransportType[]>(
     transportOptions.map((option) => option.value),
   )
   const [priorityOrder, setPriorityOrder] = useState(defaultPriorityOrder)
+  const [draggedPriorityIndex, setDraggedPriorityIndex] = useState<number | null>(null)
   const [submittedSummary, setSubmittedSummary] = useState<string | null>(null)
-  const [subwayRoute, setSubwayRoute] = useState<SubwayRouteResult | null>(null)
-  const [subwayRouteStatus, setSubwayRouteStatus] = useState<'idle' | 'loading' | 'error'>('idle')
-  const subwayRequestRef = useRef(0)
-  const subwayAbortControllerRef = useRef<AbortController | null>(null)
-  const [busRoute, setBusRoute] = useState<LowFloorBusRouteResult | null>(null)
-  const [busRouteStatus, setBusRouteStatus] = useState<'idle' | 'loading' | 'error'>('idle')
-  const busRequestRef = useRef(0)
-  const busAbortControllerRef = useRef<AbortController | null>(null)
+  const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null)
+  const [recommendationStatus, setRecommendationStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const recommendationRequestRef = useRef(0)
+  const recommendationAbortControllerRef = useRef<AbortController | null>(null)
 
-  const selectedTransportLabels = useMemo(
-    () =>
-      transportOptions
-        .filter((option) => selectedTransportTypes.includes(option.value))
-        .map((option) => option.label),
-    [selectedTransportTypes],
-  )
-
-  const canSearch =
-    selectedPlaces.origin !== null && selectedPlaces.destination !== null && selectedTransportTypes.length > 0
+  const canSearch = selectedPlaces.origin !== null && selectedPlaces.destination !== null && selectedTransportTypes.length > 0
 
   useEffect(() => {
     let ignore = false
@@ -222,35 +208,19 @@ function App() {
     }
   }, [kakaoMapAppKey])
 
-  useEffect(() => () => {
-    subwayAbortControllerRef.current?.abort()
-    busAbortControllerRef.current?.abort()
-  }, [])
+  useEffect(() => () => recommendationAbortControllerRef.current?.abort(), [])
 
-  const invalidateSubwayRoute = () => {
-    subwayRequestRef.current += 1
-    subwayAbortControllerRef.current?.abort()
-    subwayAbortControllerRef.current = null
-    setSubwayRoute(null)
-    setSubwayRouteStatus('idle')
-  }
-
-  const invalidateBusRoute = () => {
-    busRequestRef.current += 1
-    busAbortControllerRef.current?.abort()
-    busAbortControllerRef.current = null
-    setBusRoute(null)
-    setBusRouteStatus('idle')
-  }
-
-  const invalidateRouteResults = () => {
-    invalidateSubwayRoute()
-    invalidateBusRoute()
+  const invalidateRecommendation = () => {
+    recommendationRequestRef.current += 1
+    recommendationAbortControllerRef.current?.abort()
+    recommendationAbortControllerRef.current = null
+    setRecommendation(null)
+    setRecommendationStatus('idle')
   }
 
   const updatePlaceQuery = (role: LocationRole, nextValue: string) => {
     placeSearchRequestRef.current[role] += 1
-    invalidateRouteResults()
+    invalidateRecommendation()
     markersRef.current[role]?.setMap(null)
     markersRef.current[role] = null
 
@@ -265,30 +235,20 @@ function App() {
     setPlaceSearchMessage((current) => ({ ...current, [role]: '' }))
   }
 
-  const handleTransportToggle = (transportType: string) => {
-    if (transportType === 'subway') {
-      invalidateSubwayRoute()
-    }
-    if (transportType === 'low_floor_bus') {
-      invalidateBusRoute()
-    }
-    setSelectedTransportTypes((current) =>
-      current.includes(transportType)
-        ? current.filter((item) => item !== transportType)
-        : [...current, transportType],
-    )
+  const handleTransportToggle = (transportType: TransportType) => {
+    invalidateRecommendation()
+    setSelectedTransportTypes((current) => current.includes(transportType)
+      ? current.filter((item) => item !== transportType)
+      : [...current, transportType])
   }
 
-  const handlePriorityChange = (rankIndex: number, nextPriority: string) => {
+  const movePriority = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || toIndex < 0 || toIndex >= priorityOrder.length) return
+    invalidateRecommendation()
     setPriorityOrder((current) => {
       const updated = [...current]
-      const previousIndex = updated.indexOf(nextPriority)
-      const currentPriority = updated[rankIndex]
-
-      updated[rankIndex] = nextPriority
-      if (previousIndex >= 0 && previousIndex !== rankIndex) {
-        updated[previousIndex] = currentPriority
-      }
+      const [moved] = updated.splice(fromIndex, 1)
+      updated.splice(toIndex, 0, moved)
       return updated
     })
   }
@@ -374,7 +334,7 @@ function App() {
 
   const selectPlace = (role: LocationRole, place: PlaceSelection) => {
     placeSearchRequestRef.current[role] += 1
-    invalidateRouteResults()
+    invalidateRecommendation()
 
     if (role === 'origin') {
       setOrigin(place.name)
@@ -398,58 +358,32 @@ function App() {
     address: place.address,
   })
 
-  const loadSubwayRoute = async (originPlace: PlaceSelection, destinationPlace: PlaceSelection) => {
-    const requestId = subwayRequestRef.current + 1
-    subwayRequestRef.current = requestId
-    setSubwayRoute(null)
-    setSubwayRouteStatus('loading')
-    subwayAbortControllerRef.current?.abort()
+  const loadRecommendations = async (originPlace: PlaceSelection, destinationPlace: PlaceSelection) => {
+    const requestId = recommendationRequestRef.current + 1
+    recommendationRequestRef.current = requestId
+    setRecommendation(null)
+    setRecommendationStatus('loading')
+    recommendationAbortControllerRef.current?.abort()
     const abortController = new AbortController()
-    subwayAbortControllerRef.current = abortController
+    recommendationAbortControllerRef.current = abortController
 
     try {
-      const route = await fetchSubwayRoute({
+      const result = await fetchRecommendations({
         origin: toRouteLocation(originPlace),
         destination: toRouteLocation(destinationPlace),
+        transport_types: selectedTransportTypes,
+        priorities: priorityOrder as RecommendationPriority[],
       }, abortController.signal)
-      if (subwayRequestRef.current === requestId) {
-        subwayAbortControllerRef.current = null
-        setSubwayRoute(route)
-        setSubwayRouteStatus('idle')
+      if (recommendationRequestRef.current === requestId) {
+        recommendationAbortControllerRef.current = null
+        setRecommendation(result)
+        setRecommendationStatus('idle')
       }
     } catch {
-      if (subwayRequestRef.current === requestId) {
-        subwayAbortControllerRef.current = null
-        setSubwayRoute(null)
-        setSubwayRouteStatus('error')
-      }
-    }
-  }
-
-  const loadBusRoute = async (originPlace: PlaceSelection, destinationPlace: PlaceSelection) => {
-    const requestId = busRequestRef.current + 1
-    busRequestRef.current = requestId
-    setBusRoute(null)
-    setBusRouteStatus('loading')
-    busAbortControllerRef.current?.abort()
-    const abortController = new AbortController()
-    busAbortControllerRef.current = abortController
-
-    try {
-      const route = await fetchLowFloorBusRoute({
-        origin: toRouteLocation(originPlace),
-        destination: toRouteLocation(destinationPlace),
-      }, abortController.signal)
-      if (busRequestRef.current === requestId) {
-        busAbortControllerRef.current = null
-        setBusRoute(route)
-        setBusRouteStatus('idle')
-      }
-    } catch {
-      if (busRequestRef.current === requestId) {
-        busAbortControllerRef.current = null
-        setBusRoute(null)
-        setBusRouteStatus('error')
+      if (recommendationRequestRef.current === requestId) {
+        recommendationAbortControllerRef.current = null
+        setRecommendation(null)
+        setRecommendationStatus('error')
       }
     }
   }
@@ -471,9 +405,9 @@ function App() {
       : destination.trim()
 
     setSubmittedSummary(
-      `${originLabel}에서 ${destinationLabel}까지 ${selectedTransportLabels.join(
-        ', ',
-      )} 기준으로 ${priorityLabels
+      `${originLabel}에서 ${destinationLabel}까지 ${transportOptions
+        .filter((option) => selectedTransportTypes.includes(option.value))
+        .map((option) => option.label).join(', ')}를 ${priorityLabels
         .map((label, index) => `${index + 1}순위 ${label}`)
         .join(', ')} 경로를 검색합니다.`,
     )
@@ -482,11 +416,7 @@ function App() {
     const destinationPlace = selectedPlaces.destination
     if (!originPlace || !destinationPlace) return
 
-    if (selectedTransportTypes.includes('subway')) void loadSubwayRoute(originPlace, destinationPlace)
-    else invalidateSubwayRoute()
-
-    if (selectedTransportTypes.includes('low_floor_bus')) void loadBusRoute(originPlace, destinationPlace)
-    else invalidateBusRoute()
+    void loadRecommendations(originPlace, destinationPlace)
   }
 
   return (
@@ -573,24 +503,33 @@ function App() {
 
             <fieldset>
               <legend>우선순위 선택</legend>
-              <p className="field-hint">시간·비용·도보 기준을 1순위부터 3순위까지 정해주세요.</p>
-              <div className="priority-grid">
+              <p className="field-hint">항목을 드래그하거나 버튼으로 이동해 순서를 정해주세요.</p>
+              <ol className="priority-list">
                 {priorityOrder.map((selectedPriority, index) => (
-                  <label key={`${index + 1}-priority`}>
-                    <span>{index + 1}순위</span>
-                    <select
-                      value={selectedPriority}
-                      onChange={(event) => handlePriorityChange(index, event.target.value)}
-                    >
-                      {priorityOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <li
+                    draggable
+                    key={selectedPriority}
+                    onDragStart={() => setDraggedPriorityIndex(index)}
+                    onDragEnd={() => setDraggedPriorityIndex(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (draggedPriorityIndex !== null) movePriority(draggedPriorityIndex, index)
+                      setDraggedPriorityIndex(null)
+                    }}
+                  >
+                    <span className="drag-handle" aria-hidden="true">☰</span>
+                    <strong>{index + 1}순위 {priorityOptions.find((option) => option.value === selectedPriority)?.label}</strong>
+                    <span className="priority-actions">
+                      <button type="button" aria-label={`${index + 1}순위 위로 이동`} disabled={index === 0} onClick={() => movePriority(index, index - 1)}>
+                        ↑
+                      </button>
+                      <button type="button" aria-label={`${index + 1}순위 아래로 이동`} disabled={index === priorityOrder.length - 1} onClick={() => movePriority(index, index + 1)}>
+                        ↓
+                      </button>
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ol>
             </fieldset>
           </details>
 
@@ -611,32 +550,20 @@ function App() {
         <div
           className="route-result-region"
           aria-live="polite"
-          aria-busy={subwayRouteStatus === 'loading' || busRouteStatus === 'loading'}
+          aria-busy={recommendationStatus === 'loading'}
         >
-          {subwayRouteStatus === 'loading' ? (
-            <section className="route-result-card subway-result-card loading-state">
-              <p>지하철 경로와 접근성 정보를 확인하고 있습니다.</p>
+          {recommendationStatus === 'loading' ? (
+            <section className="route-result-card loading-state">
+              <p>선택한 이동수단의 경로와 추천 순위를 계산하고 있습니다.</p>
             </section>
           ) : null}
-          {subwayRouteStatus === 'error' ? (
-            <section className="route-result-card subway-result-card error-state" role="alert">
-              <h2>지하철 경로를 불러오지 못했어요</h2>
-              <p>백엔드 실행 상태와 ODsay 설정을 확인한 뒤 다시 검색해주세요.</p>
+          {recommendationStatus === 'error' ? (
+            <section className="route-result-card error-state" role="alert">
+              <h2>추천 경로를 불러오지 못했어요</h2>
+              <p>Backend와 외부 경로 API 설정을 확인한 뒤 다시 검색해주세요.</p>
             </section>
           ) : null}
-          {subwayRoute ? <SubwayRouteCard route={subwayRoute} /> : null}
-          {busRouteStatus === 'loading' ? (
-            <section className="route-result-card bus-result-card loading-state">
-              <p>저상버스 경로와 접근성 정보를 확인하고 있습니다.</p>
-            </section>
-          ) : null}
-          {busRouteStatus === 'error' ? (
-            <section className="route-result-card bus-result-card error-state" role="alert">
-              <h2>저상버스 경로를 불러오지 못했어요</h2>
-              <p>백엔드 실행 상태와 ODsay 설정을 확인한 뒤 다시 검색해주세요.</p>
-            </section>
-          ) : null}
-          {busRoute ? <LowFloorBusRouteCard route={busRoute} /> : null}
+          {recommendation ? <RecommendationResults result={recommendation} /> : null}
         </div>
       </aside>
     </main>

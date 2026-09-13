@@ -80,7 +80,7 @@ def _provider(waiting_time_estimator) -> BackendRecommendationRouteProvider:
 def test_provider_builds_three_backend_owned_routes_and_adds_waiting_time() -> None:
     provider = _provider(lambda hour: FakeWaitingEstimate(expected_minutes=30))
 
-    routes = provider.get_routes(ORIGIN, DESTINATION)
+    routes = provider.get_routes(ORIGIN, DESTINATION, list(TransportType))
 
     assert [route.transport_type for route in routes] == list(TransportType)
     calltaxi, subway, bus = routes
@@ -96,7 +96,7 @@ def test_provider_keeps_other_routes_when_waiting_model_is_not_connected() -> No
     def unavailable_estimator(hour: int) -> object:
         raise NotImplementedError
 
-    routes = _provider(unavailable_estimator).get_routes(ORIGIN, DESTINATION)
+    routes = _provider(unavailable_estimator).get_routes(ORIGIN, DESTINATION, list(TransportType))
 
     assert routes[0].status == RouteStatus.UNAVAILABLE
     assert "대기시간 예측 모델" in (routes[0].unavailable_reason or "")
@@ -106,7 +106,7 @@ def test_provider_keeps_other_routes_when_waiting_model_is_not_connected() -> No
 
 def test_provider_rejects_invalid_waiting_prediction_without_fake_value() -> None:
     routes = _provider(lambda hour: FakeWaitingEstimate(expected_minutes=float("nan"))).get_routes(
-        ORIGIN, DESTINATION
+        ORIGIN, DESTINATION, list(TransportType)
     )
 
     assert routes[0].status == RouteStatus.UNAVAILABLE
@@ -127,7 +127,15 @@ def test_provider_isolates_each_external_route_failure() -> None:
         current_hour_provider=lambda: 9,
     )
 
-    routes = provider.get_routes(ORIGIN, DESTINATION)
+    routes = provider.get_routes(ORIGIN, DESTINATION, list(TransportType))
 
     assert [route.status for route in routes] == [RouteStatus.UNAVAILABLE] * 3
     assert all(route.total_time_seconds is None for route in routes)
+
+
+def test_provider_only_calls_selected_transport_services() -> None:
+    provider = _provider(lambda hour: FakeWaitingEstimate(expected_minutes=30))
+
+    routes = provider.get_routes(ORIGIN, DESTINATION, [TransportType.SUBWAY])
+
+    assert [route.transport_type for route in routes] == [TransportType.SUBWAY]

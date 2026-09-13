@@ -17,8 +17,13 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "INFO"
     enable_sample_routes: bool = False
+    cors_allow_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     tmap_app_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_TMAP_APP_KEY", "TMAP_APP_KEY"))
     odsay_api_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_ODSAY_API_KEY", "ODSAY_API_KEY"))
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
 
 
 @lru_cache

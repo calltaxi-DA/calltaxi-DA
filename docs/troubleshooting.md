@@ -18,12 +18,12 @@
   3. 브라우저에서 `POST /routes/subway`를 요청해 서로 다른 origin 요청과 CORS 차단을 확인한다.
 - **원인**: 프론트 API client가 Backend 절대 URL을 사용했지만 동일 출처 개발 프록시나 Backend CORS allowlist가 없었다.
 - **검토한 대안**:
-  - FastAPI CORS middleware 추가: 배포 origin과 보안 정책을 Backend 범위에서 확정해야 하므로 이번 Frontend Phase에서는 제외했다.
+  - FastAPI CORS middleware와 명시적 Backend URL: Vite proxy가 없는 preview·분리 배포에서도 같은 계약을 사용할 수 있어 최종 채택했다.
   - 브라우저 CORS 보안 비활성화: 안전하지 않고 실제 배포 문제를 숨기므로 제외했다.
-  - Vite 개발 프록시: Backend 계약 변경 없이 로컬 요청을 동일 출처로 유지할 수 있어 채택했다.
-- **해결 방법**: 로컬에서는 `VITE_API_BASE_URL`을 비워 `/routes/subway` 상대 경로를 사용하고, Vite가 `/routes`를 `http://127.0.0.1:8000`으로 전달하도록 설정했다. 분리 배포 시에만 API base URL과 Backend CORS allowlist를 함께 설정한다.
-- **검증 결과**: 실제 최신 Backend의 cross-origin preflight는 `405`로 CORS header 없이 거부되고, 같은 Backend에 대한 직접 `POST /routes/subway`는 `200`으로 정상 응답함을 확인했다. Vite 프록시는 `/routes/subway` 요청을 Backend까지 전달했다. 프론트 테스트에서 상대 경로와 요청 body를 검증했고 Vite build·lint가 통과했다. Backend 지하철 route/service 테스트 14개도 통과했다. 검증 중 `8000` 포트의 기존 프로세스가 이전 코드를 실행해 `404`를 반환했으며 최신 Backend 재시작이 필요함도 확인했다.
-- **남은 한계**: 분리 배포 환경에는 Vite 개발 프록시가 적용되지 않는다. 배포 구조가 확정되면 reverse proxy로 같은 origin을 제공하거나 Backend CORS allowlist를 별도 설계해야 한다.
+  - Vite 개발 프록시만 사용: preview·분리 배포에는 적용되지 않아 보조 개발 경로로만 유지했다.
+- **해결 방법**: `VITE_API_BASE_URL=http://127.0.0.1:8000`을 로컬 기본값으로 명시하고 추천 client도 설정 누락 시 같은 주소를 사용한다. Backend에는 `CORSMiddleware`를 추가하고 `APP_CORS_ALLOW_ORIGINS`의 쉼표 구분 allowlist만 허용한다. 배포 시 두 값을 실제 Backend URL과 Frontend origin으로 교체한다.
+- **검증 결과**: 허용된 `http://127.0.0.1:5173`의 추천 API preflight가 `200`과 `access-control-allow-origin`을 반환하고, 미등록 origin에는 해당 header가 없음을 테스트했다. 실제 로컬 절대 URL `POST http://127.0.0.1:8000/routes/recommendations`가 Backend에 도달해 HTTP 200 `RecommendationResponse`를 반환함을 확인했다. Frontend 테스트·build·lint와 전체 Backend/AI 테스트가 통과했다.
+- **남은 한계**: 배포 환경의 Frontend/Backend URL은 환경별로 지정해야 한다. CORS가 정상이어도 ODsay 일일 쿼터 초과 또는 AI 모델 미연결이면 추천 후보가 없을 수 있으며, 이는 연결 실패와 구분해 Backend 제외 사유로 표시한다.
 
 ### 2026-09-12 — ODsay query API 키가 HTTP client INFO 로그에 노출
 

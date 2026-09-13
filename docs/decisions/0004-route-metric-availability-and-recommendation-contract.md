@@ -15,8 +15,8 @@ Backend Phase 7은 세 이동수단을 사용자 우선순위로 정렬해야 �
 2. `available` metric은 값이 필수이고, `not_available` metric은 반드시 `null`이어야 한다.
 3. 경로 자체가 `unavailable`이면 모든 numeric metric은 `null/not_available`이며 기존처럼 `unavailable_reason`이 필수다.
 4. 접근성은 경로 상태와 분리해 `verified_available`, `verified_unavailable`, `not_verified`로 표현한다.
-5. 공개 추천 요청은 출발지·목적지와 `time`, `cost`, `walk`의 중복 없는 우선순위만 받는다. 클라이언트가 제출한 `RouteResult`는 추천 입력으로 받지 않는다.
-6. 추천 라우터는 Backend 소유 `RecommendationRouteProvider`에서 세 이동수단 결과를 생성한 뒤 정렬 서비스에 전달한다. 통합 provider가 준비되지 않은 운영 상태에서는 가짜 경로를 만들지 않고 `503`으로 fail-closed한다.
+5. 공개 추천 요청은 출발지·목적지, 중복 없는 1~3개의 `transport_types`, `time`, `cost`, `walk`의 중복 없는 우선순위만 받는다. 클라이언트가 제출한 `RouteResult`는 추천 입력으로 받지 않는다.
+6. 추천 라우터는 Backend 소유 `RecommendationRouteProvider`에서 사용자가 선택한 이동수단 결과만 생성한 뒤 정렬 서비스에 전달한다. 통합 provider가 준비되지 않은 운영 상태에서는 가짜 경로를 만들지 않고 `503`으로 fail-closed한다.
 7. 1순위 metric이 `not_available`인 경로와 `verified_unavailable` 경로는 추천 후보에서 제외하고 사유를 반환한다.
 8. 2·3순위 metric이 없는 후보는 앞선 지표가 동률일 때 해당 metric이 있는 후보보다 뒤에 둔다. 수치 대체값은 만들지 않는다.
 9. 모든 우선순위 값이 같으면 `calltaxi`, `subway`, `low_floor_bus` 순서의 고정 tie-breaker를 사용해 응답 재현성을 보장한다. 이 순서는 선호 점수가 아니라 완전 동률 해소 규칙이다.
@@ -29,6 +29,7 @@ Backend Phase 7은 세 이동수단을 사용자 우선순위로 정렬해야 �
 - 기존 지하철·저상버스 API는 numeric metric을 모두 제공하므로 생략된 `metric_availability`가 모두 `available`로 해석된다.
 - 기존 응답에는 `metric_availability`, `accessibility_status` 필드가 추가된다. 필드 추가를 반영하는 Frontend 연동은 별도 Phase에서 진행한다.
 - `POST /routes/recommendations` 요청에는 `routes`가 존재하지 않으며 추가 필드도 거부한다. 서로 다른 출발지·목적지의 결과를 클라이언트가 조합하거나 지표를 조작할 수 없다.
+- `transport_types`에 없는 이동수단은 외부 provider를 호출하거나 `excluded_routes`에 넣지 않는다. 선택된 후보의 계산·제외·정렬만 Backend가 수행한다.
 - Backend Phase 7-2에서 TMAP 콜택시, ODsay 지하철·저상버스와 AI Adapter를 조합하는 운영 provider를 연결했다. 한 이동수단의 설정·외부 호출·예측이 불가능하면 해당 경로만 `unavailable`로 만들고 나머지 후보는 계속 추천한다.
 - 현재 대기시간 모델이 없어 콜택시는 실제 요청에서 `unavailable`이다. 모델 연결 테스트에서는 예측 대기시간과 차량 이동시간의 합산 및 세 이동수단 생성을 검증했다.
 - 따라서 Backend Phase 7 전체의 실제 TOP 3 완료 조건은 아직 충족하지 못했다. 검증된 Prediction 산출물과 inference 계약을 `analysis/`에 export하고 AI Adapter를 연결해야 한다.

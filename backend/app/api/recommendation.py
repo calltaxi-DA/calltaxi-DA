@@ -58,11 +58,12 @@ def recommend_routes(
 ) -> RecommendationResponse:
     """세 이동수단 결과를 사용자 우선순위에 따라 최대 3개까지 정렬한다."""
 
-    routes = route_provider.get_routes(request.origin, request.destination)
+    routes = route_provider.get_routes(request.origin, request.destination, request.transport_types)
     recommendations, excluded_routes = rank_routes(routes, request.priorities)
     return RecommendationResponse(
         origin=request.origin,
         destination=request.destination,
+        transport_types=request.transport_types,
         priorities=request.priorities,
         recommendations=recommendations,
         excluded_routes=excluded_routes,

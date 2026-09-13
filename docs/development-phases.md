@@ -400,6 +400,35 @@
   - 장애인 콜택시 결과 UI와 세 이동수단 추천 결과 UI는 각각 계약과 데이터가 준비된 전용 Frontend Phase에서 연결한다.
   - 실제 차량 단위 저상 여부는 검증 가능한 Backend 데이터가 확보된 뒤 다룬다.
 
+## Frontend Phase 7 — 교통수단 비교 및 추천 UI (2026-09-13)
+
+- 브랜치: `frontend/phase7-transport-recommendation-ui` (base: `dev`)
+- 한 일: 경로검색 시 공개 `POST /routes/recommendations`에 출발지·목적지, 사용자가 선택한 이동수단과 드래그·키보드 버튼으로 정한 시간·금액·도보 우선순위를 전송하고, Backend가 선택 후보 안에서 계산한 최대 TOP 3 순위를 그대로 표시한다. 추천 카드마다 총시간·비용·도보거리·도보시간·접근성 상태와 warning을 함께 보여주며, 지표가 `not_available`이면 0으로 보정하지 않고 `비교 불가`로 표시한다. Backend에서 제외한 이동수단은 추천 카드로 승격하지 않고 제외 사유를 별도 영역에 유지한다. 입력 장소·이동수단·우선순위가 변경되면 진행 중 요청을 취소하고 이전 결과를 무효화한다. 검색 조건과 추천 결과는 지도 위 하나의 세로 스크롤 패널에 통합했다.
+- 산출물:
+  - `frontend/src/api/recommendation.ts` — 추천 요청·응답, 공통 지표 가용성·접근성 타입과 API client
+  - `frontend/src/components/RecommendationResults.tsx` — 순위, 이동수단별 네 지표, 접근성 상태·warning, 제외 사유 UI
+  - `frontend/src/App.tsx`, `frontend/src/index.css` — Backend-owned 추천 요청과 통합 결과 영역·상태 스타일 연결
+  - `frontend/src/__tests__/App.test.tsx` — 이동수단 선택, 드래그·키보드 우선순위, 요청 계약, TOP 3, 지표 누락, 접근성, 제외·오류·stale 응답, 장소검색·지도 회귀 검증
+- 검증 결과:
+  - `npm test -- --run` — 18개 통과
+  - `npm run lint` — oxlint 통과
+  - `npm run build` — TypeScript 및 Vite production build 통과
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests` — 147개 통과(기존 Starlette deprecation warning 1건)
+  - 명시적 로컬 Backend URL `http://127.0.0.1:8000/routes/recommendations`과 허용 Frontend origin CORS preflight 연결 검증
+  - 로컬 Frontend proxy 실호출(서울시청→강남역, 시간 우선): HTTP 200, 저상버스 1위·지하철 2위와 각 경로 지표 반환 확인
+  - 지하철만 선택한 로컬 Frontend proxy 실호출: HTTP 200, `transport_types=[subway]`, 지하철 1위만 반환되고 선택하지 않은 이동수단은 `excluded_routes`에도 포함되지 않음
+  - 실제 콜택시는 Prediction 모델 미연결로 제외 사유가 반환됨을 확인하고, 검증된 세 경로 응답 fixture로 1~3위 및 콜택시 도보 `비교 불가` 표시를 검증
+- 확정 기준:
+  - 추천 순위와 제외 여부는 Frontend에서 재계산하지 않고 Backend 응답을 단일 신뢰 소스로 사용한다.
+  - 사용자가 선택한 1~3개 이동수단만 Backend 추천 대상으로 전달하며, 선택하지 않은 이동수단은 provider를 호출하거나 제외 사유에 넣지 않는다. Frontend는 임의 경로 수치를 만들거나 추천 결과를 사후 필터링하지 않는다.
+  - `not_verified`는 접근성 확인됨으로 승격하지 않고, `verified_unavailable` 및 `not_available`도 정상값이나 0으로 대체하지 않는다.
+  - TOP 3은 조건을 만족하는 후보 중 최대 3개다. 모델·외부 API·접근성 조건으로 제외된 경로가 있으면 3개보다 적을 수 있다.
+- 남은 한계와 다음 작업:
+  - 실제 콜택시 포함 시간·금액 TOP 3은 검증된 대기시간 Prediction 모델을 AI Adapter에 연결한 뒤 운영 환경에서 재검증한다.
+  - 콜택시 승하차 접근 도보 데이터가 없는 동안 최소 도보 1순위에서는 콜택시가 제외된다.
+  - ODsay Server Key는 등록된 출구 IP에서만 실호출할 수 있으므로 배포 환경에서는 고정 egress IP가 필요하다.
+  - 로컬은 `VITE_API_BASE_URL=http://127.0.0.1:8000`, 배포는 실제 Backend URL과 `APP_CORS_ALLOW_ORIGINS`의 실제 Frontend origin을 함께 설정한다.
+
 ## Analysis Phase 7 — 이동수단 비교 분석 (2026-09-12)
 
 - 브랜치: `analysis/phase7-transport-comparison` (base: `dev`)
@@ -431,7 +460,7 @@
 
 - 브랜치: `backend/phase7-transport-recommendation` (base: `dev`)
 - 범위 조정: Backend Phase 7의 완료 조건은 Backend가 세 이동수단 결과를 직접 생성해 통합하고 최대 TOP 3을 반환하는 것이다. 현재 콜택시 대기시간 Prediction 모델이 없어 신뢰 가능한 콜택시 총 이동시간을 만들 수 없으므로 전체 Phase를 완료 처리하지 않는다. 이번 작업은 공개 요청에서 클라이언트 경로 결과를 받지 않는 Backend-owned orchestration 경계, 추천 계약과 정렬 엔진까지를 **Phase 7-1**로 완료한다.
-- 한 일: 공개 `POST /routes/recommendations`가 출발지·목적지와 시간·비용·도보 우선순위만 받도록 하고, Backend 소유 `RecommendationRouteProvider`가 생성한 세 `RouteResult`를 최대 3개까지 사전식 정렬하도록 구성했다. 운영 통합 provider는 모델 연결 전까지 `503`으로 fail-closed하며, dependency override로 provider→통합→정렬 흐름을 검증했다. Analysis Phase 7의 콜택시 도보 미확정 문제를 해소하기 위해 경로 상태와 별도로 numeric field별 `available`/`not_available` 및 접근성 `verified_available`/`verified_unavailable`/`not_verified`를 표현하도록 공통 계약을 확장했다.
+- 한 일: 공개 `POST /routes/recommendations`가 출발지·목적지, 선택 이동수단과 시간·비용·도보 우선순위만 받고, Backend 소유 `RecommendationRouteProvider`가 선택된 `RouteResult`를 최대 3개까지 사전식 정렬하도록 구성했다. 운영 통합 provider는 가짜 값을 만들지 않고 이동수단별로 fail-closed하며, dependency override로 provider→통합→정렬 흐름을 검증했다. Analysis Phase 7의 콜택시 도보 미확정 문제를 해소하기 위해 경로 상태와 별도로 numeric field별 `available`/`not_available` 및 접근성 `verified_available`/`verified_unavailable`/`not_verified`를 표현하도록 공통 계약을 확장했다.
 - 산출물:
   - `backend/app/api/contracts.py` — 지표 가용성, 접근성, 추천 우선순위 및 추천 요청·응답 계약
   - `backend/app/services/recommendation.py` — Backend route provider Protocol, Rule-based 우선순위 정렬, 입력 방어, 제외 및 안정적 동률 처리

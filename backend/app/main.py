@@ -7,6 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.bus import router as bus_router
 from app.api.calltaxi import router as calltaxi_router
@@ -31,6 +32,13 @@ async def lifespan(_: FastAPI):
 
 def create_app(include_sample_routes: bool | None = None) -> FastAPI:
     app = FastAPI(title="calltaxi-service", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.add_exception_handler(Exception, internal_server_error_handler)
     app.include_router(health_router)
     app.include_router(calltaxi_router)

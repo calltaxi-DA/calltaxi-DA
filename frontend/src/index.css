@@ -92,14 +92,14 @@ button {
   display: grid;
   gap: 14px;
   width: min(430px, calc(100% - 32px));
-  min-height: calc(100vh - 32px);
+  height: calc(100vh - 32px);
   margin: 16px;
   align-content: start;
+  overflow-y: auto;
+  border-radius: 28px;
 }
 
-.panel-header,
-.search-panel,
-.summary-card,
+.route-panel,
 .route-result-card {
   border: 1px solid rgba(219, 228, 240, 0.92);
   background: rgba(255, 255, 255, 0.94);
@@ -109,7 +109,6 @@ button {
 
 .panel-header {
   padding: 20px 22px;
-  border-radius: 26px;
 }
 
 .panel-header h1 {
@@ -131,7 +130,7 @@ button {
 
 .search-panel {
   padding: 18px;
-  border-radius: 28px;
+  border-top: 1px solid #e2e9f3;
 }
 
 .place-stack {
@@ -299,11 +298,49 @@ fieldset {
   margin-top: 10px;
 }
 
-.priority-grid {
+.priority-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-top: 10px;
+  margin-bottom: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.priority-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #c9d4e4;
+  border-radius: 14px;
+  background: #ffffff;
+  cursor: grab;
+}
+
+.drag-handle {
+  color: #61708a;
+}
+
+.priority-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.priority-actions button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #c9d4e4;
+  border-radius: 9px;
+  background: #f8faff;
+  color: #172033;
+}
+
+.priority-actions button:disabled {
+  color: #9aa6b9;
+  background: #eef1f5;
 }
 
 .check-card {
@@ -342,7 +379,7 @@ button:disabled {
 
 .summary-card {
   padding: 16px 18px;
-  border-radius: 22px;
+  border-top: 1px solid #e2e9f3;
 }
 
 .summary-card h2 {
@@ -478,6 +515,7 @@ button:disabled {
 .route-result-region {
   display: grid;
   gap: 14px;
+  padding: 0 18px 18px;
 }
 
 .transport-badge.bus {
@@ -487,6 +525,66 @@ button:disabled {
 .error-state h2 {
   margin: 0;
   font-size: 1rem;
+}
+
+.recommendation-results {
+  display: grid;
+  gap: 14px;
+}
+
+.recommendation-heading {
+  padding: 4px 4px 0;
+}
+
+.recommendation-heading h2,
+.recommendation-card h3,
+.excluded-routes h3 {
+  margin: 0;
+}
+
+.rank-badge {
+  display: grid;
+  min-width: 58px;
+  min-height: 58px;
+  place-items: center;
+  border-radius: 18px;
+  color: #ffffff;
+  background: #172033;
+}
+
+.accessibility-status,
+.excluded-routes,
+.empty-recommendation {
+  padding: 14px;
+  border-radius: 16px;
+  background: #eef8f2;
+  color: #355849;
+  font-size: 0.86rem;
+}
+
+.accessibility-status.not_verified {
+  background: #fff7e8;
+  color: #765318;
+}
+
+.accessibility-status.verified_unavailable,
+.excluded-routes {
+  background: #fff1ee;
+  color: #803a30;
+}
+
+.accessibility-status ul,
+.excluded-routes ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.empty-recommendation {
+  margin: 0;
+  background: #fff7e8;
+  color: #765318;
 }
 
 @media (max-width: 760px) {
@@ -514,11 +612,8 @@ button:disabled {
 
   .route-panel {
     width: min(100% - 20px, 430px);
-    min-height: auto;
+    height: min(72vh, 760px);
+    min-height: 420px;
     margin: -34px auto 20px;
-  }
-
-  .priority-grid {
-    grid-template-columns: 1fr;
   }
 }
