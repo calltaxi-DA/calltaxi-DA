@@ -73,5 +73,6 @@ def calculate_subway_route(
         walking_time_seconds=route.walking_time_seconds,
         accessibility_status=accessibility_status,
         summary=route.summary,
+        route_map_segments=list(route.route_map_segments) or None,
         warnings=warnings,
     )

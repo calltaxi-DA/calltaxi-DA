@@ -1,6 +1,14 @@
 from fastapi.testclient import TestClient
 
-from app.api.contracts import AccessibilityStatus, RouteResult, RouteStatus, TransportType
+from app.api.contracts import (
+    AccessibilityStatus,
+    RouteMapPoint,
+    RouteMapSegment,
+    RouteMapSegmentType,
+    RouteResult,
+    RouteStatus,
+    TransportType,
+)
 from app.api.subway import get_odsay_subway_route_client, get_subway_accessibility_provider
 from app.core.config import get_settings
 from app.main import create_app
@@ -27,6 +35,16 @@ class FakeOdsaySubwayRouteClient:
                 SubwayStationKey("2호선", "강남"),
             ),
             summary="서울역 → 강남역 지하철 경로",
+            route_map_segments=(
+                RouteMapSegment(
+                    segment_type=RouteMapSegmentType.SUBWAY,
+                    label="1호선",
+                    points=[
+                        RouteMapPoint(latitude=37.554648, longitude=126.972559, name="서울역"),
+                        RouteMapPoint(latitude=37.565715, longitude=126.977108, name="시청"),
+                    ],
+                ),
+            ),
         )
 
 
@@ -78,6 +96,9 @@ def test_subway_route_returns_route_result_with_total_walking_distance_and_time(
     assert route.walking_time_seconds == 660
     assert route.summary == "서울역 → 강남역 지하철 경로"
     assert route.accessibility_status == AccessibilityStatus.VERIFIED_UNAVAILABLE
+    assert route.route_map_segments is not None
+    assert route.route_map_segments[0].segment_type == RouteMapSegmentType.SUBWAY
+    assert route.route_map_segments[0].points[0].name == "서울역"
     assert any("2호선 시청" in warning for warning in route.warnings)
     assert any("총 도보값으로 단정하지 않습니다" in warning for warning in route.warnings)
 

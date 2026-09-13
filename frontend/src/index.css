@@ -337,13 +337,14 @@ summary:focus-visible {
   font-size: 0.92rem;
 }
 
-.selected-place {
-  margin: 0;
-  padding: 11px 13px;
+.service-area-warning {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #f0c2ba;
   border-radius: 14px;
-  color: #25416f;
-  background: #eef4ff;
-  font-size: 0.9rem;
+  background: #fff1ee;
+  color: #803a30;
+  font-weight: 700;
 }
 
 .place-results {
@@ -483,22 +484,6 @@ fieldset {
 button:disabled {
   background: #aeb9ce;
   cursor: not-allowed;
-}
-
-.summary-card {
-  padding: 16px 18px;
-  border-top: 1px solid #e2e9f3;
-}
-
-.summary-card h2 {
-  margin: 0 0 6px;
-  font-size: 1rem;
-}
-
-.summary-card p {
-  margin: 0;
-  color: #536079;
-  font-size: 0.94rem;
 }
 
 .route-result-region:empty {

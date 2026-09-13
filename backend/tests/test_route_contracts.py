@@ -7,6 +7,9 @@ from app.api.contracts import (
     Location,
     MetricAvailability,
     RouteComparisonResponse,
+    RouteMapPoint,
+    RouteMapSegment,
+    RouteMapSegmentType,
     RouteMetricAvailability,
     RouteResult,
     RouteStatus,
@@ -74,6 +77,51 @@ def test_unavailable_route_rejects_fake_zero_metrics() -> None:
             walking_time_seconds=0,
             unavailable_reason="지하철 경로 없음",
         )
+
+
+def test_unavailable_route_rejects_map_geometry() -> None:
+    with pytest.raises(ValidationError):
+        RouteResult(
+            transport_type=TransportType.SUBWAY,
+            status=RouteStatus.UNAVAILABLE,
+            unavailable_reason="지하철 경로 없음",
+            route_map_segments=[
+                RouteMapSegment(
+                    segment_type=RouteMapSegmentType.SUBWAY,
+                    label="1호선",
+                    points=[
+                        RouteMapPoint(latitude=37.554648, longitude=126.972559),
+                        RouteMapPoint(latitude=37.565715, longitude=126.977108),
+                    ],
+                )
+            ],
+        )
+
+
+def test_route_result_accepts_map_segments_for_available_route() -> None:
+    route = RouteResult(
+        transport_type=TransportType.SUBWAY,
+        status=RouteStatus.AVAILABLE,
+        total_time_seconds=1200,
+        total_distance_meters=5000,
+        total_cost_won=1400,
+        walking_distance_meters=350,
+        walking_time_seconds=300,
+        route_map_segments=[
+            RouteMapSegment(
+                segment_type=RouteMapSegmentType.SUBWAY,
+                label="1호선",
+                points=[
+                    RouteMapPoint(latitude=37.554648, longitude=126.972559, name="서울역"),
+                    RouteMapPoint(latitude=37.565715, longitude=126.977108, name="시청"),
+                ],
+            )
+        ],
+    )
+
+    assert route.route_map_segments is not None
+    assert route.route_map_segments[0].segment_type == RouteMapSegmentType.SUBWAY
+    assert route.route_map_segments[0].points[0].name == "서울역"
 
 
 def test_unavailable_route_requires_reason() -> None:
@@ -356,6 +404,7 @@ def test_sample_routes_return_three_transport_types_with_same_shape() -> None:
             "accessibility_status",
             "unavailable_reason",
             "summary",
+            "route_map_segments",
             "warnings",
         }
         assert route.status == RouteStatus.AVAILABLE

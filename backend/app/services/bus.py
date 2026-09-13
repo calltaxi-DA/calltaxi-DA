@@ -1,13 +1,14 @@
 """ODsay 버스 경로와 검토 완료된 저상버스 route master를 결합한다."""
 
 import csv
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
 
-from app.api.contracts import Location
+from app.api.contracts import Location, RouteMapPoint, RouteMapSegment, RouteMapSegmentType
 
 ODSAY_BUS_ROUTE_URL = "https://api.odsay.com/v1/api/searchPubTransPathT"
 ANALYSIS_DIR = Path(__file__).resolve().parents[3] / "analysis"
@@ -56,6 +57,7 @@ class LowFloorBusRouteMetrics:
     fare_won: int
     selected_lanes: tuple[SelectedBusLane, ...]
     summary: str
+    route_map_segments: tuple[RouteMapSegment, ...]
 
 
 class LowFloorBusRouteProvider(Protocol):
@@ -300,7 +302,101 @@ def _build_metrics(
         fare_won=fare_won,
         selected_lanes=selected_lanes,
         summary=f"{route_label} 저상버스 경로",
+        route_map_segments=tuple(_extract_route_map_segments(sub_paths, selected_lanes)),
     )
+
+
+def _extract_route_map_segments(
+    sub_paths: list[Any],
+    selected_lanes: tuple[SelectedBusLane, ...],
+) -> list[RouteMapSegment]:
+    segments: list[RouteMapSegment] = []
+    bus_section_index = 0
+    for section in sub_paths:
+        if not isinstance(section, dict):
+            continue
+        traffic_type = section.get("trafficType")
+        points = _extract_section_points(section)
+        if len(points) < 2:
+            if traffic_type == BUS_TRAFFIC_TYPE:
+                bus_section_index += 1
+            continue
+        if traffic_type == WALKING_TRAFFIC_TYPE:
+            segments.append(RouteMapSegment(segment_type=RouteMapSegmentType.WALK, label="도보", points=points))
+        elif traffic_type == BUS_TRAFFIC_TYPE and bus_section_index < len(selected_lanes):
+            segments.append(
+                RouteMapSegment(
+                    segment_type=RouteMapSegmentType.BUS,
+                    label=selected_lanes[bus_section_index].route_number,
+                    points=points,
+                )
+            )
+            bus_section_index += 1
+    return segments
+
+
+def _extract_section_points(section: dict[str, Any]) -> list[RouteMapPoint]:
+    graph_points = _parse_graph_points(section.get("graph"))
+    if len(graph_points) >= 2:
+        return graph_points
+
+    stop_points = _extract_pass_stop_points(section)
+    if len(stop_points) >= 2:
+        return stop_points
+
+    endpoint_points = [
+        _coerce_point(section.get("startY"), section.get("startX"), _optional_text(section.get("startName"))),
+        _coerce_point(section.get("endY"), section.get("endX"), _optional_text(section.get("endName"))),
+    ]
+    return [point for point in endpoint_points if point is not None]
+
+
+def _parse_graph_points(value: Any) -> list[RouteMapPoint]:
+    if not isinstance(value, str):
+        return []
+    points: list[RouteMapPoint] = []
+    for raw_point in value.split("|"):
+        coordinates = raw_point.strip().split()
+        if len(coordinates) != 2:
+            return []
+        point = _coerce_point(coordinates[1], coordinates[0])
+        if point is None:
+            return []
+        points.append(point)
+    return points
+
+
+def _extract_pass_stop_points(section: dict[str, Any]) -> list[RouteMapPoint]:
+    pass_stop_list = section.get("passStopList")
+    if not isinstance(pass_stop_list, dict):
+        return []
+    stations = pass_stop_list.get("stations")
+    if not isinstance(stations, list):
+        return []
+    points: list[RouteMapPoint] = []
+    for station in stations:
+        if not isinstance(station, dict):
+            return []
+        point = _coerce_point(station.get("y"), station.get("x"), _optional_text(station.get("stationName")))
+        if point is None:
+            return []
+        points.append(point)
+    return points
+
+
+def _coerce_point(latitude: Any, longitude: Any, name: str | None = None) -> RouteMapPoint | None:
+    if isinstance(latitude, bool) or isinstance(longitude, bool):
+        return None
+    try:
+        lat = float(latitude)
+        lng = float(longitude)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(lat) or not math.isfinite(lng):
+        return None
+    if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        return None
+    return RouteMapPoint(latitude=lat, longitude=lng, name=name)
 
 
 def _sum_section_values(sub_paths: list[Any], traffic_type: int, field_name: str) -> int:

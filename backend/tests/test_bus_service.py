@@ -43,7 +43,17 @@ def _odsay_bus_payload() -> dict:
                     "pathType": 2,
                     "info": {"totalTime": 42, "totalDistance": 11_400, "payment": 1_500},
                     "subPath": [
-                        {"trafficType": 3, "distance": 310, "sectionTime": 5},
+                        {
+                            "trafficType": 3,
+                            "distance": 310,
+                            "sectionTime": 5,
+                            "startX": 126.9706,
+                            "startY": 37.5547,
+                            "endX": 126.9728,
+                            "endY": 37.5558,
+                            "startName": "서울역",
+                            "endName": "서울역버스환승센터",
+                        },
                         {
                             "trafficType": 2,
                             "distance": 4_700,
@@ -54,6 +64,12 @@ def _odsay_bus_payload() -> dict:
                                 {"busNo": "999", "busID": 1, "type": 11},
                                 {"busNo": " 7016 ", "busID": 2, "type": 12},
                             ],
+                            "passStopList": {
+                                "stations": [
+                                    {"stationName": "서울역버스환승센터", "x": "126.9728", "y": "37.5558"},
+                                    {"stationName": "광화문", "x": "126.9769", "y": "37.5714"},
+                                ]
+                            },
                         },
                         {"trafficType": 3, "distance": 140, "sectionTime": 3},
                         {
@@ -63,6 +79,7 @@ def _odsay_bus_payload() -> dict:
                             "startName": "광화문",
                             "endName": "강남역",
                             "lane": [{"busNo": "N31", "busID": 3, "type": 11}],
+                            "graph": "126.9769 37.5714|127.0276 37.4979",
                         },
                         {"trafficType": 3, "distance": 330, "sectionTime": 4},
                     ],
@@ -84,6 +101,65 @@ def test_parse_bus_route_matches_each_bus_section_and_sums_all_walking_sections(
     assert route.fare_won == 1_500
     assert [lane.route_number_normalized for lane in route.selected_lanes] == ["7016", "N31"]
     assert route.summary == "7016 → N31 저상버스 경로"
+    assert route.route_map_segments is not None
+    assert [segment.segment_type.value for segment in route.route_map_segments] == ["walk", "bus", "bus"]
+    assert route.route_map_segments[0].points[0].name == "서울역"
+    assert route.route_map_segments[1].label == "7016"
+    assert route.route_map_segments[1].points[-1].name == "광화문"
+    assert route.route_map_segments[2].label == "N31"
+
+
+def test_parse_bus_route_ignores_malformed_graph_and_uses_endpoint_fallback() -> None:
+    payload = _odsay_bus_payload()
+    bus_section = payload["result"]["path"][0]["subPath"][3]
+    bus_section["graph"] = "126.9769 NaN|127.0276 37.4979"
+    bus_section["startX"] = 126.9769
+    bus_section["startY"] = 37.5714
+    bus_section["endX"] = 127.0276
+    bus_section["endY"] = 37.4979
+
+    route = parse_odsay_low_floor_bus_route(
+        payload,
+        DictRouteProvider({"7016": "available", "N31": "available"}),
+    )
+
+    assert route.total_time_seconds == 42 * 60
+    assert route.total_distance_meters == 11_400
+    assert route.route_map_segments is not None
+    assert route.route_map_segments[2].label == "N31"
+    assert [point.name for point in route.route_map_segments[2].points] == ["광화문", "강남역"]
+
+
+def test_parse_bus_route_drops_malformed_pass_stop_geometry_without_dropping_route() -> None:
+    payload = _odsay_bus_payload()
+    bus_section = payload["result"]["path"][0]["subPath"][1]
+    bus_section["passStopList"]["stations"][0]["y"] = "NaN"
+
+    route = parse_odsay_low_floor_bus_route(
+        payload,
+        DictRouteProvider({"7016": "available", "N31": "available"}),
+    )
+
+    assert route.total_time_seconds == 42 * 60
+    assert route.walking_distance_meters == 310 + 140 + 330
+    assert route.route_map_segments is not None
+    assert [segment.label for segment in route.route_map_segments] == ["도보", "N31"]
+
+
+def test_parse_bus_route_drops_malformed_endpoint_geometry_without_dropping_route() -> None:
+    payload = _odsay_bus_payload()
+    walking_section = payload["result"]["path"][0]["subPath"][0]
+    walking_section["startY"] = "NaN"
+
+    route = parse_odsay_low_floor_bus_route(
+        payload,
+        DictRouteProvider({"7016": "available", "N31": "available"}),
+    )
+
+    assert route.total_time_seconds == 42 * 60
+    assert route.walking_time_seconds == (5 + 3 + 4) * 60
+    assert route.route_map_segments is not None
+    assert [segment.segment_type.value for segment in route.route_map_segments] == ["bus", "bus"]
 
 
 def test_parse_bus_route_uses_later_path_when_first_path_has_no_accessible_lane() -> None:

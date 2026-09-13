@@ -105,6 +105,11 @@ function getLocationLabel(role: LocationRole) {
   return role === 'origin' ? '출발지' : '목적지'
 }
 
+function isInSupportedServiceArea(place: PlaceSelection | null) {
+  if (!place) return true
+  return place.address.startsWith('서울 ') || place.address.startsWith('서울특별시 ')
+}
+
 function resolveKakaoMaps(resolve: () => void, reject: (reason: Error) => void) {
   if (!window.kakao?.maps) {
     reject(new Error('Kakao Maps SDK loaded without maps namespace'))
@@ -178,15 +183,17 @@ function App() {
   const [calltaxiPurpose, setCalltaxiPurpose] = useState<CalltaxiPurpose | ''>('')
   const [priorityOrder, setPriorityOrder] = useState(defaultPriorityOrder)
   const [draggedPriorityIndex, setDraggedPriorityIndex] = useState<number | null>(null)
-  const [submittedSummary, setSubmittedSummary] = useState<string | null>(null)
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null)
   const [recommendationStatus, setRecommendationStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const recommendationRequestRef = useRef(0)
   const recommendationAbortControllerRef = useRef<AbortController | null>(null)
 
   const isCalltaxiSelected = selectedTransportTypes.includes('calltaxi')
+  const isServiceAreaSupported = isInSupportedServiceArea(selectedPlaces.origin)
+    && isInSupportedServiceArea(selectedPlaces.destination)
   const canSearch = selectedPlaces.origin !== null
     && selectedPlaces.destination !== null
+    && isServiceAreaSupported
     && selectedTransportTypes.length > 0
     && (!isCalltaxiSelected || calltaxiPurpose !== '')
 
@@ -416,27 +423,6 @@ function App() {
       return
     }
 
-    const priorityLabels = priorityOrder.map(
-      (priority) => priorityOptions.find((option) => option.value === priority)?.label ?? priority,
-    )
-    const originLabel = selectedPlaces.origin
-      ? `${selectedPlaces.origin.name}(${selectedPlaces.origin.lat.toFixed(6)}, ${selectedPlaces.origin.lng.toFixed(6)})`
-      : origin.trim()
-    const destinationLabel = selectedPlaces.destination
-      ? `${selectedPlaces.destination.name}(${selectedPlaces.destination.lat.toFixed(6)}, ${selectedPlaces.destination.lng.toFixed(6)})`
-      : destination.trim()
-    const calltaxiPurposeLabel = isCalltaxiSelected && calltaxiPurpose
-      ? `, 장애인 콜택시 이용목적 ${calltaxiPurpose}`
-      : ''
-
-    setSubmittedSummary(
-      `${originLabel}에서 ${destinationLabel}까지 ${transportOptions
-        .filter((option) => selectedTransportTypes.includes(option.value))
-        .map((option) => option.label).join(', ')}를${calltaxiPurposeLabel} ${priorityLabels
-        .map((label, index) => `${index + 1}순위 ${label}`)
-        .join(', ')} 경로를 검색합니다.`,
-    )
-
     const originPlace = selectedPlaces.origin
     const destinationPlace = selectedPlaces.destination
     if (!originPlace || !destinationPlace) return
@@ -483,13 +469,6 @@ function App() {
                 {placeSearchMessage[role] ? (
                   <p className="field-hint" role="status">
                     {placeSearchMessage[role]}
-                  </p>
-                ) : null}
-                {selectedPlaces[role] ? (
-                  <p className="selected-place">
-                    {selectedPlaces[role]?.address}
-                    <br />
-                    {selectedPlaces[role]?.lat.toFixed(6)}, {selectedPlaces[role]?.lng.toFixed(6)}
                   </p>
                 ) : null}
                 {searchResults[role].length > 0 ? (
@@ -583,20 +562,16 @@ function App() {
               장애인 콜택시를 포함해 검색하려면 이동 조건 설정에서 이용목적을 선택해주세요.
             </p>
           ) : null}
+          {!isServiceAreaSupported ? (
+            <p className="field-hint service-area-warning" role="alert">
+              현재 서울 지역의 출발지·목적지만 경로검색을 지원합니다.
+            </p>
+          ) : null}
 
           <button type="submit" disabled={!canSearch}>
             경로검색
           </button>
         </form>
-
-        <section className="summary-card" aria-live="polite">
-          <h2>입력 조건 요약</h2>
-          {submittedSummary ? (
-            <p>{submittedSummary}</p>
-          ) : (
-            <p>출발지·목적지를 선택하면 검색 조건이 표시됩니다.</p>
-          )}
-        </section>
 
         <div
           className="route-result-region"
