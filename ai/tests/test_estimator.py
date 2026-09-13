@@ -11,6 +11,7 @@ from ai.waiting_time.estimator import (
     WAITING_TIME_UNIT,
     WaitingTimeModelUnavailableError,
     WaitingTimePredictionAdapter,
+    WaitingTimeInvalidOutputError,
     WaitingTimePredictionInput,
     estimate_waiting_minutes,
     estimate_waiting_minutes_for_input,
@@ -271,6 +272,24 @@ def test_prediction_adapter_rejects_git_lfs_pointer_artifact(tmp_path: Path) -> 
     adapter = WaitingTimePredictionAdapter(model_path=model_path)
 
     with pytest.raises(WaitingTimeModelUnavailableError, match="Git LFS pointer"):
+        adapter.estimate(_prediction_input())
+
+
+@pytest.mark.parametrize("raw_prediction", [None, float("nan"), float("inf"), -1.0, "11.25"])
+def test_prediction_adapter_raises_prediction_error_for_invalid_model_output(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    raw_prediction: object,
+) -> None:
+    model_path = tmp_path / "model.joblib"
+    model_path.write_bytes(b"real joblib placeholder")
+    monkeypatch.setattr(estimator_module, "_build_model_input", lambda features: [features])
+    adapter = WaitingTimePredictionAdapter(
+        model_path=model_path,
+        model_loader=lambda path: _FakeWaitingTimeModel(raw_prediction),
+    )
+
+    with pytest.raises(WaitingTimeInvalidOutputError):
         adapter.estimate(_prediction_input())
 
 
