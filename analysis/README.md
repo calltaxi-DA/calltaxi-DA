@@ -26,4 +26,6 @@
 
 장애인 콜택시·지하철·저상버스의 공통 비교 지표와 활용 구분은 [`transport_comparison_criteria.md`](transport_comparison_criteria.md)에 정리했다. 총 이동시간·예상 비용·총 도보거리·총 도보시간·접근성 상태를 핵심 지표로 확정하고, Backend Phase 7 추천 입력과 표시·주의 정보, 오프라인 분석·검증 결과, 현재 사용 금지 항목을 분리했다.
 
+기존 병원·의료목적 이동 분석을 서비스에서 활용하는 기준은 [`hospital/hospital_destination_insights.md`](hospital/hospital_destination_insights.md)에 정리했다. 개별 병원 방문량이 아니라 의료목적으로 기록된 이동의 목적지 지역별 건수, 같은구·다른구 이동, 거리 커버리지와 자치구 순유입·순유출만 제공 대상으로 확정했다. 병원 이동의 시간대별·특장차/임차택시별 비교는 기존 결과가 없으므로 미확정이며, 전체 이용패턴 값을 병원 이동 결과로 대체하지 않는다.
+
 요금/시간/도보 우선순위 추천 로직은 이 폴더·`ai/`가 아니라 `backend/`가 담당한다(Backend Phase 7 예정).
