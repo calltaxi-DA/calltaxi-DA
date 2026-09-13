@@ -50,6 +50,17 @@ class RecommendationPriority(StrEnum):
     WALK = "walk"
 
 
+class CalltaxiPurpose(StrEnum):
+    """대기시간 Prediction 모델이 지원하는 장애인 콜택시 이용목적."""
+
+    ETC = "기타"
+    RETURN_HOME = "귀가"
+    TREATMENT = "치료"
+    REHABILITATION = "재활"
+    COMMUTE_OR_SCHOOL = "통학/출근"
+    RELIGION = "종교"
+
+
 class RouteMetricAvailability(BaseModel):
     """RouteResult의 numeric field별 비교 가능 상태."""
 
@@ -190,6 +201,10 @@ class RecommendationRequest(BaseModel):
     destination: Location
     transport_types: list[TransportType] = Field(min_length=1, max_length=3)
     priorities: list[RecommendationPriority] = Field(min_length=3, max_length=3)
+    calltaxi_purpose: CalltaxiPurpose | None = Field(
+        default=None,
+        description="장애인 콜택시 대기시간 Prediction에 사용할 이용목적. 미제공 시 콜택시 예측은 unavailable.",
+    )
 
     @model_validator(mode="after")
     def validate_unique_priorities(self) -> "RecommendationRequest":

@@ -2,8 +2,10 @@
 
 import math
 from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol
 
+from ai.waiting_time.estimator import SUPPORTED_MODEL_GROUPS, WaitingTimePredictionError, WaitingTimePredictionInput
 from app.api.contracts import (
     AccessibilityStatus,
     Location,
@@ -26,6 +28,7 @@ from app.services.subway import (
     assess_accessibility_status,
     build_accessibility_warnings,
 )
+from app.services.waiting_time_features import CONSERVATIVE_MODEL_GROUP_WARNING, WaitingTimeFeatureMappingError
 
 CALLTAXI_WALKING_WARNING = "콜택시 승하차 접근 도보 데이터가 없어 도보 지표를 비교할 수 없습니다."
 CALLTAXI_ACCESSIBILITY_WARNING = "이용자 자격과 요청 시점의 실제 배차 가능 여부가 확인되지 않았습니다."
@@ -46,6 +49,13 @@ class WaitingTimeEstimateResult(Protocol):
     """AI Adapter 대기시간 결과의 최소 계약."""
 
     expected_minutes: float
+    warnings: tuple[str, ...]
+
+
+WaitingTimeInputBuilder = Callable[
+    [Location, Location, str, int, datetime],
+    tuple[WaitingTimePredictionInput, ...],
+]
 
 
 class BackendRecommendationRouteProvider:
@@ -58,43 +68,84 @@ class BackendRecommendationRouteProvider:
         subway_client: OdsaySubwayRouteClient | None,
         subway_accessibility_provider: SubwayAccessibilityProvider | None,
         bus_client: OdsayLowFloorBusRouteClient | None,
-        waiting_time_estimator: Callable[[int], WaitingTimeEstimateResult],
-        current_hour_provider: Callable[[], int],
+        waiting_time_estimator: Callable[[WaitingTimePredictionInput], WaitingTimeEstimateResult],
+        waiting_time_input_builder: WaitingTimeInputBuilder | None,
+        current_time_provider: Callable[[], datetime],
     ) -> None:
         self.tmap_client = tmap_client
         self.subway_client = subway_client
         self.subway_accessibility_provider = subway_accessibility_provider
         self.bus_client = bus_client
         self.waiting_time_estimator = waiting_time_estimator
-        self.current_hour_provider = current_hour_provider
+        self.waiting_time_input_builder = waiting_time_input_builder
+        self.current_time_provider = current_time_provider
 
     def get_routes(
-        self, origin: Location, destination: Location, transport_types: list[TransportType]
+        self,
+        origin: Location,
+        destination: Location,
+        transport_types: list[TransportType],
+        calltaxi_purpose: str | None = None,
     ) -> list[RouteResult]:
         route_factories = {
             TransportType.CALLTAXI: self._get_calltaxi_route,
             TransportType.SUBWAY: self._get_subway_route,
             TransportType.LOW_FLOOR_BUS: self._get_bus_route,
         }
-        return [route_factories[transport_type](origin, destination) for transport_type in transport_types]
+        return [
+            route_factories[transport_type](origin, destination, calltaxi_purpose)
+            if transport_type == TransportType.CALLTAXI
+            else route_factories[transport_type](origin, destination)
+            for transport_type in transport_types
+        ]
 
-    def _get_calltaxi_route(self, origin: Location, destination: Location) -> RouteResult:
+    def _get_calltaxi_route(
+        self,
+        origin: Location,
+        destination: Location,
+        calltaxi_purpose: str | None,
+    ) -> RouteResult:
         if self.tmap_client is None:
             return _unavailable(TransportType.CALLTAXI, "TMAP app key is not configured")
-
-        try:
-            estimate = self.waiting_time_estimator(self.current_hour_provider())
-            waiting_seconds = _waiting_seconds(estimate)
-        except NotImplementedError:
-            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 예측 모델이 연결되지 않았습니다.")
-        except (TypeError, ValueError):
-            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 예측 결과가 유효하지 않습니다.")
+        if calltaxi_purpose is None:
+            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 이용목적이 없어 대기시간을 예측할 수 없습니다.")
+        if self.waiting_time_input_builder is None:
+            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 Prediction feature source가 연결되지 않았습니다.")
 
         try:
             distance_meters, vehicle_time_seconds = self.tmap_client.get_vehicle_route(origin, destination)
         except TmapRouteError:
             return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 차량 경로를 계산할 수 없습니다.")
 
+        try:
+            prediction_inputs = self.waiting_time_input_builder(
+                origin,
+                destination,
+                calltaxi_purpose,
+                distance_meters,
+                self.current_time_provider(),
+            )
+            _validate_prediction_input_groups(prediction_inputs)
+            estimate = _select_conservative_waiting_estimate(
+                [self.waiting_time_estimator(prediction_input) for prediction_input in prediction_inputs]
+            )
+            waiting_seconds = _waiting_seconds(estimate)
+        except NotImplementedError:
+            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 예측 모델이 연결되지 않았습니다.")
+        except WaitingTimeFeatureMappingError as exc:
+            return _unavailable(TransportType.CALLTAXI, str(exc))
+        except WaitingTimePredictionError:
+            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 예측 모델을 사용할 수 없습니다.")
+        except (TypeError, ValueError):
+            return _unavailable(TransportType.CALLTAXI, "장애인 콜택시 대기시간 예측 결과가 유효하지 않습니다.")
+
+        warnings = [
+            f"예측 대기시간 {waiting_seconds}초가 총 이동시간에 포함되었습니다.",
+            CONSERVATIVE_MODEL_GROUP_WARNING,
+            CALLTAXI_WALKING_WARNING,
+            CALLTAXI_ACCESSIBILITY_WARNING,
+        ]
+        warnings.extend(getattr(estimate, "warnings", ()))
         return RouteResult(
             transport_type=TransportType.CALLTAXI,
             status=RouteStatus.AVAILABLE,
@@ -109,11 +160,7 @@ class BackendRecommendationRouteProvider:
             ),
             accessibility_status=AccessibilityStatus.NOT_VERIFIED,
             summary="장애인 콜택시 경로",
-            warnings=[
-                f"예측 대기시간 {waiting_seconds}초가 총 이동시간에 포함되었습니다.",
-                CALLTAXI_WALKING_WARNING,
-                CALLTAXI_ACCESSIBILITY_WARNING,
-            ],
+            warnings=warnings,
         )
 
     def _get_subway_route(self, origin: Location, destination: Location) -> RouteResult:
@@ -182,6 +229,21 @@ def _waiting_seconds(estimate: WaitingTimeEstimateResult) -> int:
     if not math.isfinite(expected_minutes) or expected_minutes < 0:
         raise ValueError("waiting time estimate must be finite and non-negative")
     return round(expected_minutes * 60)
+
+
+def _select_conservative_waiting_estimate(
+    estimates: list[WaitingTimeEstimateResult],
+) -> WaitingTimeEstimateResult:
+    if not estimates:
+        raise ValueError("waiting time estimates must not be empty")
+    return max(estimates, key=lambda estimate: _waiting_seconds(estimate))
+
+
+def _validate_prediction_input_groups(prediction_inputs: tuple[WaitingTimePredictionInput, ...]) -> None:
+    expected_groups = set(SUPPORTED_MODEL_GROUPS)
+    actual_groups = [prediction_input.model_group for prediction_input in prediction_inputs]
+    if len(actual_groups) != len(expected_groups) or set(actual_groups) != expected_groups:
+        raise WaitingTimeFeatureMappingError("임차택시_바로콜과 특장차_바로콜을 각각 1회 예측해야 합니다")
 
 
 def _unavailable(

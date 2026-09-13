@@ -1,5 +1,8 @@
 from dataclasses import dataclass
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
+from ai.waiting_time.estimator import WaitingTimePredictionInput
 from app.api.contracts import AccessibilityStatus, Location, RouteStatus, TransportType
 from app.services.bus import LowFloorBusRouteMetrics, OdsayBusRouteError, SelectedBusLane
 from app.services.calltaxi import TmapRouteError
@@ -8,6 +11,7 @@ from app.services.subway import OdsayRouteError, StationAccessibility, SubwayRou
 
 ORIGIN = Location(latitude=37.5666, longitude=126.9784)
 DESTINATION = Location(latitude=37.4979, longitude=127.0276)
+REQUESTED_AT = datetime(2026, 9, 13, 9, 0, tzinfo=ZoneInfo("Asia/Seoul"))
 
 
 class FakeTmapClient:
@@ -64,39 +68,94 @@ class FailingBusClient:
 @dataclass(frozen=True)
 class FakeWaitingEstimate:
     expected_minutes: float
+    warnings: tuple[str, ...] = ()
 
 
-def _provider(waiting_time_estimator) -> BackendRecommendationRouteProvider:
+def _prediction_input(model_group: str, ride_distance_meters: float = 12_500) -> WaitingTimePredictionInput:
+    return WaitingTimePredictionInput(
+        requested_at=REQUESTED_AT,
+        purpose="치료",
+        ride_distance_meters=ride_distance_meters,
+        origin_gu="중구",
+        origin_dong="명동",
+        destination_gu="강남구",
+        destination_dong="역삼동",
+        movement_type="구 간 이동",
+        model_group=model_group,
+        vehicle_operation_count_prev_day=412,
+        temperature_c=23.5,
+        precipitation_mm=0,
+        wind_speed_ms=2,
+        snow_depth_cm=0,
+        is_bad_weather=False,
+    )
+
+
+def _input_builder(
+    origin: Location,
+    destination: Location,
+    purpose: str,
+    ride_distance_meters: int,
+    requested_at: datetime,
+) -> tuple[WaitingTimePredictionInput, ...]:
+    assert purpose == "치료"
+    assert ride_distance_meters == 12_500
+    assert requested_at == REQUESTED_AT
+    return (
+        _prediction_input("임차택시_바로콜", ride_distance_meters),
+        _prediction_input("특장차_바로콜", ride_distance_meters),
+    )
+
+
+def _provider(
+    waiting_time_estimator,
+    *,
+    waiting_time_input_builder=_input_builder,
+) -> BackendRecommendationRouteProvider:
     return BackendRecommendationRouteProvider(
         tmap_client=FakeTmapClient(),
         subway_client=FakeSubwayClient(),
         subway_accessibility_provider=FakeAccessibilityProvider(),
         bus_client=FakeBusClient(),
         waiting_time_estimator=waiting_time_estimator,
-        current_hour_provider=lambda: 9,
+        waiting_time_input_builder=waiting_time_input_builder,
+        current_time_provider=lambda: REQUESTED_AT,
     )
 
 
-def test_provider_builds_three_backend_owned_routes_and_adds_waiting_time() -> None:
-    provider = _provider(lambda hour: FakeWaitingEstimate(expected_minutes=30))
+def test_provider_builds_three_backend_owned_routes_and_adds_conservative_waiting_time() -> None:
+    seen_groups: list[str] = []
 
-    routes = provider.get_routes(ORIGIN, DESTINATION, list(TransportType))
+    def estimate(prediction_input: WaitingTimePredictionInput) -> FakeWaitingEstimate:
+        seen_groups.append(prediction_input.model_group)
+        if prediction_input.model_group == "임차택시_바로콜":
+            return FakeWaitingEstimate(expected_minutes=20)
+        return FakeWaitingEstimate(expected_minutes=30, warnings=("out_of_training_target_range",))
+
+    provider = _provider(estimate)
+
+    routes = provider.get_routes(ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료")
 
     assert [route.transport_type for route in routes] == list(TransportType)
     calltaxi, subway, bus = routes
+    assert seen_groups == ["임차택시_바로콜", "특장차_바로콜"]
     assert calltaxi.total_time_seconds == 30 * 60 + 1_800
     assert calltaxi.walking_distance_meters is None
     assert calltaxi.accessibility_status == AccessibilityStatus.NOT_VERIFIED
     assert any("1800초" in warning for warning in calltaxi.warnings)
+    assert any("임차택시/특장차" in warning for warning in calltaxi.warnings)
+    assert "out_of_training_target_range" in calltaxi.warnings
     assert subway.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
     assert bus.accessibility_status == AccessibilityStatus.VERIFIED_AVAILABLE
 
 
 def test_provider_keeps_other_routes_when_waiting_model_is_not_connected() -> None:
-    def unavailable_estimator(hour: int) -> object:
+    def unavailable_estimator(prediction_input: WaitingTimePredictionInput) -> object:
         raise NotImplementedError
 
-    routes = _provider(unavailable_estimator).get_routes(ORIGIN, DESTINATION, list(TransportType))
+    routes = _provider(unavailable_estimator).get_routes(
+        ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료"
+    )
 
     assert routes[0].status == RouteStatus.UNAVAILABLE
     assert "대기시간 예측 모델" in (routes[0].unavailable_reason or "")
@@ -105,8 +164,8 @@ def test_provider_keeps_other_routes_when_waiting_model_is_not_connected() -> No
 
 
 def test_provider_rejects_invalid_waiting_prediction_without_fake_value() -> None:
-    routes = _provider(lambda hour: FakeWaitingEstimate(expected_minutes=float("nan"))).get_routes(
-        ORIGIN, DESTINATION, list(TransportType)
+    routes = _provider(lambda prediction_input: FakeWaitingEstimate(expected_minutes=float("nan"))).get_routes(
+        ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료"
     )
 
     assert routes[0].status == RouteStatus.UNAVAILABLE
@@ -115,7 +174,7 @@ def test_provider_rejects_invalid_waiting_prediction_without_fake_value() -> Non
 
 
 def test_provider_isolates_each_external_route_failure() -> None:
-    def estimate(hour: int) -> FakeWaitingEstimate:
+    def estimate(prediction_input: WaitingTimePredictionInput) -> FakeWaitingEstimate:
         return FakeWaitingEstimate(expected_minutes=30)
 
     provider = BackendRecommendationRouteProvider(
@@ -124,18 +183,65 @@ def test_provider_isolates_each_external_route_failure() -> None:
         subway_accessibility_provider=FakeAccessibilityProvider(),
         bus_client=FailingBusClient(),
         waiting_time_estimator=estimate,
-        current_hour_provider=lambda: 9,
+        waiting_time_input_builder=_input_builder,
+        current_time_provider=lambda: REQUESTED_AT,
     )
 
-    routes = provider.get_routes(ORIGIN, DESTINATION, list(TransportType))
+    routes = provider.get_routes(ORIGIN, DESTINATION, list(TransportType), calltaxi_purpose="치료")
 
     assert [route.status for route in routes] == [RouteStatus.UNAVAILABLE] * 3
     assert all(route.total_time_seconds is None for route in routes)
 
 
 def test_provider_only_calls_selected_transport_services() -> None:
-    provider = _provider(lambda hour: FakeWaitingEstimate(expected_minutes=30))
+    provider = _provider(lambda prediction_input: FakeWaitingEstimate(expected_minutes=30))
 
     routes = provider.get_routes(ORIGIN, DESTINATION, [TransportType.SUBWAY])
 
     assert [route.transport_type for route in routes] == [TransportType.SUBWAY]
+
+
+def test_provider_returns_calltaxi_unavailable_when_purpose_is_missing() -> None:
+    provider = _provider(lambda prediction_input: FakeWaitingEstimate(expected_minutes=30))
+
+    routes = provider.get_routes(ORIGIN, DESTINATION, [TransportType.CALLTAXI])
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert "이용목적" in (routes[0].unavailable_reason or "")
+
+
+def test_provider_returns_calltaxi_unavailable_when_feature_source_is_not_connected() -> None:
+    provider = _provider(
+        lambda prediction_input: FakeWaitingEstimate(expected_minutes=30),
+        waiting_time_input_builder=None,
+    )
+
+    routes = provider.get_routes(ORIGIN, DESTINATION, [TransportType.CALLTAXI], calltaxi_purpose="치료")
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert "feature source" in (routes[0].unavailable_reason or "")
+
+
+def test_provider_requires_both_calltaxi_model_groups_before_prediction() -> None:
+    seen_inputs: list[WaitingTimePredictionInput] = []
+
+    def one_group_builder(
+        origin: Location,
+        destination: Location,
+        purpose: str,
+        ride_distance_meters: int,
+        requested_at: datetime,
+    ) -> tuple[WaitingTimePredictionInput, ...]:
+        return (_prediction_input("특장차_바로콜", ride_distance_meters),)
+
+    def estimate(prediction_input: WaitingTimePredictionInput) -> FakeWaitingEstimate:
+        seen_inputs.append(prediction_input)
+        return FakeWaitingEstimate(expected_minutes=30)
+
+    provider = _provider(estimate, waiting_time_input_builder=one_group_builder)
+
+    routes = provider.get_routes(ORIGIN, DESTINATION, [TransportType.CALLTAXI], calltaxi_purpose="치료")
+
+    assert routes[0].status == RouteStatus.UNAVAILABLE
+    assert "각각 1회" in (routes[0].unavailable_reason or "")
+    assert seen_inputs == []

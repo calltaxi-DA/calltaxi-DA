@@ -1,15 +1,22 @@
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.api.contracts import Location
 from app.services.waiting_time_features import (
+    ConfiguredWaitingTimeInputBuilder,
+    JsonVehicleOperationCountProvider,
+    JsonWeatherObservationProvider,
     SPECIAL_VEHICLE_MODEL_GROUP,
     SpecialVehiclePredictionFeatureSource,
     WaitingTimeFeatureMappingError,
+    build_waiting_time_inputs,
     build_special_vehicle_waiting_time_input,
     derive_is_bad_weather,
     derive_movement_type,
+    extract_district_and_dong,
 )
 
 
@@ -55,6 +62,79 @@ def test_build_special_vehicle_waiting_time_input_maps_backend_values_to_model_f
     assert features["wind_speed_ms"] == 2.1
     assert features["snow_depth_cm"] == 0.0
     assert features["is_bad_weather"] == 1
+
+
+def test_build_waiting_time_inputs_creates_both_supported_model_groups() -> None:
+    prediction_inputs = build_waiting_time_inputs(_source())
+
+    assert [item.model_group for item in prediction_inputs] == ["임차택시_바로콜", "특장차_바로콜"]
+
+
+@pytest.mark.parametrize(
+    "model_groups",
+    [
+        ("특장차_바로콜",),
+        ("특장차_바로콜", "특장차_바로콜"),
+        ("임차택시_바로콜", "특장차_바로콜", "기타"),
+    ],
+)
+def test_build_waiting_time_inputs_requires_exactly_two_supported_model_groups(
+    model_groups: tuple[str, ...],
+) -> None:
+    with pytest.raises(WaitingTimeFeatureMappingError, match="각각 1회"):
+        build_waiting_time_inputs(_source(), model_groups=model_groups)
+
+
+def test_configured_waiting_time_input_builder_uses_configured_lookup_files(tmp_path: Path) -> None:
+    operation_lookup = tmp_path / "operation-count.json"
+    weather_lookup = tmp_path / "weather.json"
+    operation_lookup.write_text('{"2026-09-12": 412}', encoding="utf-8")
+    weather_lookup.write_text(
+        '{"2026-09-13T09:00:00+09:00": {'
+        '"temperature_c": 23.5, "precipitation_mm": 0, "wind_speed_ms": 2.1, '
+        '"snow_depth_cm": 0, "new_snow_3h_cm": 0'
+        "}}",
+        encoding="utf-8",
+    )
+    builder = ConfiguredWaitingTimeInputBuilder(
+        operation_count_provider=JsonVehicleOperationCountProvider(operation_lookup),
+        weather_provider=JsonWeatherObservationProvider(weather_lookup),
+    )
+
+    prediction_inputs = builder(
+        Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 명동"),
+        Location(latitude=37.4979, longitude=127.0276, address="서울특별시 강남구 역삼동"),
+        "치료",
+        12_500,
+        datetime(2026, 9, 13, 9, 15, tzinfo=ZoneInfo("Asia/Seoul")),
+    )
+
+    features = prediction_inputs[0].to_model_features()
+    assert [item.model_group for item in prediction_inputs] == ["임차택시_바로콜", "특장차_바로콜"]
+    assert features["출발구"] == "중구"
+    assert features["목적동"] == "역삼동"
+    assert features["vehicle_operation_count_prev_day"] == 412.0
+    assert features["temperature_c"] == 23.5
+
+
+def test_extract_district_and_dong_accepts_confirmed_dong_address() -> None:
+    location = Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 명동")
+
+    assert extract_district_and_dong(location) == ("중구", "명동")
+
+
+def test_extract_district_and_dong_rejects_road_name_as_dong() -> None:
+    location = Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 세종대로 110")
+
+    with pytest.raises(WaitingTimeFeatureMappingError, match="구/동"):
+        extract_district_and_dong(location)
+
+
+def test_extract_district_and_dong_rejects_coordinate_only_location() -> None:
+    location = Location(latitude=37.5666, longitude=126.9784)
+
+    with pytest.raises(WaitingTimeFeatureMappingError, match="주소 metadata"):
+        extract_district_and_dong(location)
 
 
 @pytest.mark.parametrize(

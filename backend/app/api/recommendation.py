@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 
-from ai.waiting_time.estimator import estimate_waiting_minutes
+from ai.waiting_time.estimator import estimate_waiting_minutes_for_input
 from app.api.contracts import RecommendationRequest, RecommendationResponse
 from app.core.config import get_settings
 from app.services.bus import CsvLowFloorBusRouteProvider, OdsayBusRouteError, OdsayLowFloorBusRouteClient
@@ -14,6 +14,11 @@ from app.services.calltaxi import TmapRouteClient
 from app.services.recommendation import RecommendationRouteProvider, rank_routes
 from app.services.route_orchestration import BackendRecommendationRouteProvider
 from app.services.subway import CsvSubwayAccessibilityProvider, OdsayRouteError, OdsaySubwayRouteClient
+from app.services.waiting_time_features import (
+    ConfiguredWaitingTimeInputBuilder,
+    JsonVehicleOperationCountProvider,
+    JsonWeatherObservationProvider,
+)
 
 router = APIRouter(prefix="/routes", tags=["routes"])
 logger = logging.getLogger("app.recommendation")
@@ -41,13 +46,23 @@ def get_recommendation_route_provider() -> RecommendationRouteProvider:
         except OdsayBusRouteError as exc:
             logger.warning("low_floor_bus_route_master_unavailable reason=%s", exc.reason)
 
+    waiting_time_input_builder = None
+    operation_count_lookup_path = settings.resolved_calltaxi_operation_count_lookup_path
+    weather_lookup_path = settings.resolved_seoul_weather_observation_lookup_path
+    if operation_count_lookup_path is not None and weather_lookup_path is not None:
+        waiting_time_input_builder = ConfiguredWaitingTimeInputBuilder(
+            operation_count_provider=JsonVehicleOperationCountProvider(operation_count_lookup_path),
+            weather_provider=JsonWeatherObservationProvider(weather_lookup_path),
+        )
+
     return BackendRecommendationRouteProvider(
         tmap_client=tmap_client,
         subway_client=subway_client,
         subway_accessibility_provider=subway_accessibility_provider,
         bus_client=bus_client,
-        waiting_time_estimator=estimate_waiting_minutes,
-        current_hour_provider=lambda: datetime.now(SEOUL_TIMEZONE).hour,
+        waiting_time_estimator=estimate_waiting_minutes_for_input,
+        waiting_time_input_builder=waiting_time_input_builder,
+        current_time_provider=lambda: datetime.now(SEOUL_TIMEZONE),
     )
 
 
@@ -58,7 +73,12 @@ def recommend_routes(
 ) -> RecommendationResponse:
     """세 이동수단 결과를 사용자 우선순위에 따라 최대 3개까지 정렬한다."""
 
-    routes = route_provider.get_routes(request.origin, request.destination, request.transport_types)
+    routes = route_provider.get_routes(
+        request.origin,
+        request.destination,
+        request.transport_types,
+        request.calltaxi_purpose,
+    )
     recommendations, excluded_routes = rank_routes(routes, request.priorities)
     return RecommendationResponse(
         origin=request.origin,

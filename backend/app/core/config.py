@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     tmap_app_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_TMAP_APP_KEY", "TMAP_APP_KEY"))
     odsay_api_key: str | None = Field(default=None, validation_alias=AliasChoices("APP_ODSAY_API_KEY", "ODSAY_API_KEY"))
     transport_cost_db_path: Path = Path("backend/var/transport_costs.sqlite3")
+    calltaxi_operation_count_lookup_path: Path | None = None
+    seoul_weather_observation_lookup_path: Path | None = None
 
     @property
     def cors_origins(self) -> list[str]:
@@ -35,7 +37,23 @@ class Settings(BaseSettings):
             return self.transport_cost_db_path
         return ROOT_ENV_PATH.parent / self.transport_cost_db_path
 
+    @property
+    def resolved_calltaxi_operation_count_lookup_path(self) -> Path | None:
+        return _resolve_optional_path(self.calltaxi_operation_count_lookup_path)
+
+    @property
+    def resolved_seoul_weather_observation_lookup_path(self) -> Path | None:
+        return _resolve_optional_path(self.seoul_weather_observation_lookup_path)
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def _resolve_optional_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_absolute():
+        return path
+    return ROOT_ENV_PATH.parent / path

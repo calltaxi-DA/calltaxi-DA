@@ -58,3 +58,24 @@ def test_transport_cost_database_path_is_resolved_from_repository_root(tmp_path:
 
     assert relative.resolved_transport_cost_db_path == ROOT_ENV_PATH.parent / "backend/var/test.sqlite3"
     assert absolute.resolved_transport_cost_db_path == absolute_path
+
+
+def test_waiting_time_lookup_paths_are_resolved_from_repository_root(tmp_path: Path) -> None:
+    relative = Settings(
+        _env_file=None,
+        calltaxi_operation_count_lookup_path="analysis/waiting_time/operation-count.json",
+        seoul_weather_observation_lookup_path="analysis/waiting_time/weather.json",
+    )
+    absolute_path = tmp_path / "weather.json"
+    absolute = Settings(_env_file=None, seoul_weather_observation_lookup_path=absolute_path)
+
+    assert (
+        relative.resolved_calltaxi_operation_count_lookup_path
+        == ROOT_ENV_PATH.parent / "analysis/waiting_time/operation-count.json"
+    )
+    assert (
+        relative.resolved_seoul_weather_observation_lookup_path
+        == ROOT_ENV_PATH.parent / "analysis/waiting_time/weather.json"
+    )
+    assert absolute.resolved_seoul_weather_observation_lookup_path == absolute_path
+    assert absolute.resolved_calltaxi_operation_count_lookup_path is None
