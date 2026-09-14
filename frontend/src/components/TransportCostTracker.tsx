@@ -173,8 +173,15 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const isCalendarLoading = monthlyQueryStatus === 'loading'
+  const isDailyLoading = dailyQueryStatus === 'loading'
+
   return (
-    <section className="transport-cost-tracker" aria-labelledby="transport-cost-title">
+    <section
+      className="transport-cost-tracker"
+      aria-labelledby="transport-cost-title"
+      aria-busy={status === 'saving' || isCalendarLoading || isDailyLoading}
+    >
       <h2 id="transport-cost-title">교통비 기록</h2>
       <p>실제 이용금액을 기록하면 Backend가 같은 경로의 금액 우선 추천과 비교해 절약 가능 금액을 계산합니다.</p>
       <form className="transport-cost-form" onSubmit={handleSubmit}>
@@ -193,6 +200,7 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
         <button type="button" onClick={handleMonthlyQuery} disabled={monthlyQueryStatus === 'loading'}>
           {monthlyQueryStatus === 'loading' ? '조회 중…' : '월별 조회'}
         </button>
+        {isCalendarLoading ? <p className="cost-query-status" role="status">월별 교통비를 불러오는 중입니다.</p> : null}
         {monthlyQueryStatus === 'error' ? <p role="alert">월별 교통비를 불러오지 못했습니다.</p> : null}
         {summary ? <>
           <dl aria-label={`${summary.month} 월 누적 교통비`}>
@@ -219,7 +227,7 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
           </div>
           <section className="daily-cost-detail" aria-labelledby="daily-cost-title">
             <h3 id="daily-cost-title">{selectedDate} 이용 기록</h3>
-            {dailyQueryStatus === 'loading' ? <p>상세 기록을 불러오는 중입니다.</p> : null}
+            {isDailyLoading ? <p role="status">상세 기록을 불러오는 중입니다.</p> : null}
             {dailyQueryStatus === 'error' ? <p role="alert">선택한 날짜의 상세 기록을 불러오지 못했습니다.</p> : null}
             {dailyQueryStatus !== 'error' && dailyDetail ? <>
               <dl>
@@ -237,9 +245,9 @@ function TransportCostTracker({ result }: { result: RecommendationResponse }) {
                     </li>
                   ))}
                 </ul>
-              ) : <p>선택한 날짜의 교통비 기록이 없습니다.</p>}
+              ) : <p role="status">선택한 날짜의 교통비 기록이 없습니다.</p>}
             </> : null}
-            {dailyQueryStatus === 'idle' && !dailyDetail ? <p>날짜를 선택하면 상세 기록이 표시됩니다.</p> : null}
+            {dailyQueryStatus === 'idle' && !dailyDetail ? <p role="status">날짜를 선택하면 상세 기록이 표시됩니다.</p> : null}
           </section>
         </> : <p>조회할 월을 선택해주세요.</p>}
       </div>

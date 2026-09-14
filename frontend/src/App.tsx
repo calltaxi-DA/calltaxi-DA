@@ -604,7 +604,7 @@ function App() {
           aria-busy={recommendationStatus === 'loading'}
         >
           {recommendationStatus === 'loading' ? (
-            <section className="route-result-card loading-state">
+            <section className="route-result-card loading-state" role="status">
               <p>선택한 이동수단의 경로와 추천 순위를 계산하고 있습니다.</p>
             </section>
           ) : null}

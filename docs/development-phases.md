@@ -1154,6 +1154,43 @@
   - 실제 운영 Backend와 연결한 smoke test에서 콜택시 available 응답이 내려오는 환경을 구성해 카드 표시를 확인한다.
   - 필요하면 결과 카드의 시각적 강조 순서(총 예상시간 vs 대기시간)를 사용자 테스트 후 조정한다.
 
+## Frontend Phase 9 — 오류 처리 및 최종 사용자 Flow 검증 (2026-09-14)
+
+- 브랜치: `frontend/phase9-user-flow-validation` (base: 최신 `origin/dev` `b260232`). 기존 변경사항은 임의 수정·삭제하지 않고 Phase 전용 브랜치에서만 작업했다.
+- 작업 전 확인:
+  - 반드시 읽은 파일: `AGENTS.md`, `docs/architecture.md`, `docs/decisions/0003-frontend-map-sdk-exception.md`, `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md`, `docs/decisions/0005-backend-owned-transport-cost-records.md`, `docs/development-phases.md`, `frontend/src/App.tsx`, `frontend/src/components/RecommendationResults.tsx`, `frontend/src/components/TransportCostTracker.tsx`, `frontend/src/api/recommendation.ts`, `frontend/src/api/transportCosts.ts`, `frontend/src/__tests__/App.test.tsx`, `frontend/src/__tests__/TransportCostTracker.test.tsx`, `frontend/src/index.css`
+  - 이번 Phase에서 수정한 파일: `frontend/src/App.tsx`, `frontend/src/components/RecommendationResults.tsx`, `frontend/src/components/TransportCostTracker.tsx`, `frontend/src/__tests__/App.test.tsx`, `frontend/src/__tests__/TransportCostTracker.test.tsx`, `frontend/src/index.css`, `docs/development-phases.md`
+  - 참고만 하고 수정하지 않은 파일: `backend/`, `ai/`, `analysis/`, `data/`, `notebooks*/`, `docs/architecture.md`, `docs/decisions/`
+  - 이번 Phase 범위에 포함하지 않은 작업: Backend 추천·오류 처리 정책 변경, AI Prediction 모델·artifact·계약 변경, Kakao/ODsay/TMAP provider 변경, 새 API·환경변수 추가, 인증·사용자별 교통비 분리, 교통비 기록 수정·삭제, 운영 모니터링·배포 환경 smoke test
+- 핵심 목표: 일부 이동수단이나 조회 API가 실패해도 사용자가 출발지·목적지 검색부터 TOP 추천 확인, 지도 확인, 교통비 기록까지 핵심 Flow를 계속 진행할 수 있는지 Frontend 상태와 테스트로 검증했다.
+- 한 일:
+  - 추천 결과가 일부만 성공한 경우 `excluded_routes`와 별도로 partial success 안내를 노출하고 `role="status"`로 보조기술에 전달되도록 했다.
+  - 추천 결과가 비어 있을 때 empty state를 status 영역으로 보강하고, 제외된 이동수단 목록에 접근 가능한 라벨을 추가했다.
+  - 추천 로딩 상태에 `role="status"`를 추가하고 결과 영역의 `aria-busy` 흐름을 유지했다.
+  - 교통비 캘린더의 월별 로딩, 상세 로딩, 빈 상세 기록 상태를 status로 노출하고, 저장·조회 중에는 교통비 섹션이 `aria-busy`를 반영하도록 했다.
+  - App 통합 렌더 테스트에 출발지·목적지 검색, 이동수단 선택, 콜택시 이용목적, 추천 요청, 부분 성공 표시, 지도 영역 유지, 교통비 저장 payload까지 이어지는 사용자 Flow 검증을 추가했다.
+  - 교통비 컴포넌트 테스트에 월별 로딩 안내와 빈 날짜 상세 기록이 오류가 아닌 empty state로 표시되는 검증을 추가했다.
+- 확정 동작:
+  - Frontend는 Backend가 내려준 추천 결과와 제외 사유를 재계산 없이 표시한다.
+  - 일부 이동수단이 제외되어도 available 추천이 있으면 TOP 추천 카드와 교통비 기록 UI가 유지된다.
+  - 추천이 모두 제외되면 교통비 기록 UI는 표시하지 않고 empty state와 제외 사유만 표시한다.
+  - 교통비 저장·월별 조회·날짜별 상세 조회의 loading/error/empty 상태는 화면에서 구분된다.
+  - 지도 렌더링과 Kakao Places 장소검색 예외를 제외한 경로·추천·교통비 비즈니스 데이터는 Backend API 계약을 따른다.
+- 검증 결과:
+  - `frontend/`에서 `npm test -- --run` — 2개 파일, 24개 테스트 통과.
+  - `frontend/`에서 `npm run build` — TypeScript build 및 Vite production build 통과.
+  - `frontend/`에서 `npm run lint` — 통과.
+  - `frontend/`에서 `npm run dev -- --host 127.0.0.1` — 최초 sandbox 실행은 포트 바인딩 권한 문제로 `listen EPERM 127.0.0.1:5173` 실패. 권한 승인 후 실행 성공, 5173 포트 사용 중으로 Vite가 `http://127.0.0.1:5174/`에 서버를 띄웠다.
+  - 자동 브라우저 E2E/스크린샷 도구는 현재 `frontend/package.json`에 포함되어 있지 않아 별도 Playwright 검증은 수행하지 않았다. 반응형 검증은 기존 CSS의 `@media (max-width: 760px)` 유지와 렌더/빌드 검증 기준으로 확인했다.
+  - `git diff --check` — 통과.
+- 자체 리뷰:
+  - API request/response 타입, Backend 추천 정렬, AI Adapter, 데이터 소유권은 변경하지 않았다.
+  - 새 안내 문구는 실패를 숨기지 않고 Backend의 제외 사유를 함께 보여주는 보조 UI이며, 숫자 fallback이나 프론트 재계산을 추가하지 않았다.
+  - 교통비 기록은 기존 Backend-owned 계약을 유지하며, Frontend는 저장 payload와 Backend 응답 표시만 담당한다.
+- 다음에 이어받을 것:
+  - 운영/시연 환경에서는 실제 Backend, Kakao SDK, 외부 API key가 연결된 브라우저 smoke test로 같은 사용자 Flow를 확인한다.
+  - 필요하면 Playwright 같은 브라우저 E2E 스크립트를 별도 Phase에서 추가해 모바일/데스크톱 스크린샷 회귀 검증을 자동화한다.
+
 ## AI Phase 8 — 실행환경 및 모델 파일 관리 (2026-09-14)
 
 - 브랜치: `ai/phase8-model-runtime-management` (base: 최신 `origin/dev`). 기존 로컬 작업 트리는 보존하고 Phase 전용 worktree에서만 작업했다.
