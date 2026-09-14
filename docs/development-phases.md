@@ -1193,3 +1193,49 @@
   - 운영/시연 환경에서는 runtime check를 배포 전 smoke test에 포함한다.
   - `backend/.venv`가 pip 없이 생성되는 환경에서는 venv 재생성 또는 `ensurepip` 가능 여부를 환경 세팅 가이드에 반영한다.
   - 실제 운영 lookup fresheness와 Prediction warning 관측 지표는 운영 모니터링 Phase에서 정리한다.
+
+## AI Phase 9 — AI 최종 통합 검증 (2026-09-14)
+
+- 브랜치: `ai/phase9-ai-integration-validation` (base: 최신 `origin/dev`). 작업 시작 전 `git status --short --branch`로 작업트리가 깨끗한 것을 확인하고, 기존 변경사항을 임의 수정·삭제하지 않았다.
+- 작업 전 확인:
+  - 반드시 읽은 파일: `AGENTS.md`, `docs/architecture.md`, `docs/development-phases.md`, `docs/decisions/0002-ai-as-adapter-only.md`, `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md`, `docs/decisions/0006-wait-time-prediction-contract.md`, `analysis/waiting_time/model_runtime.md`, `analysis/waiting_time/rf_v2_prev_day_weather_serving_feature_mapping.md`, `ai/waiting_time/estimator.py`, `ai/waiting_time/validation.py`, `backend/app/services/route_orchestration.py`, `backend/app/api/recommendation.py`, `backend/app/services/recommendation.py`, `backend/app/api/contracts.py`, `backend/tests/test_route_orchestration.py`, `backend/tests/test_recommendation_routes.py`, `ai/tests/test_estimator.py`, `ai/tests/test_prediction_validation.py`
+  - 이번 Phase에서 수정한 파일: `backend/tests/test_recommendation_routes.py`, `docs/development-phases.md`
+  - 참고만 하고 수정하지 않은 파일: `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`, `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json`, `analysis/waiting_time/prediction_validation_phase4.json`, `analysis/waiting_time/prediction_validation_phase4.md`, `analysis/waiting_time/rf_v2_prev_day_weather_serving_feature_mapping.md`, `data/`, `notebooks*/`, Frontend UI 파일, 기존 ADR
+  - 이번 Phase 범위에 포함하지 않은 작업: 모델 재학습, joblib artifact 교체, feature set 변경, API 계약 변경, 추천 정렬 정책 변경, Frontend 표시 변경, 운영 lookup 생성·갱신 배치, reverse geocoding 신규 구현
+- 핵심 목표: 통합 장애인 콜택시 대기시간 Prediction부터 Backend 추천 응답 전달까지 전체 AI 연동 Flow를 최종 점검하고, 정상 sample과 오류 scenario가 서비스 계약으로 안정적으로 전달되는지 확인했다.
+- 한 일:
+  - 운영 추천 API integration 테스트에 invalid Prediction output scenario를 추가했다.
+  - 설정된 TMAP/operation-count/weather source와 주소 metadata가 있는 요청에서 Prediction output이 유효하지 않으면 콜택시가 추천 결과에 남지 않고 `excluded_routes`에 `장애인 콜택시 대기시간 예측 결과가 유효하지 않습니다.` 사유로 전달되는지 검증했다.
+  - 기존 정상 sample integration 테스트로 HTTP 요청 → TMAP fake → `ConfiguredWaitingTimeInputBuilder` → 양쪽 `model_group` Prediction → conservative max → `predicted_waiting_time_seconds`/`vehicle_time_seconds`/`total_time_seconds` 응답 전달 흐름을 재확인했다.
+  - 실제 joblib sample validation을 `/private/tmp/phase9-ai-validation-py312.json`에 출력해 기존 Phase 4 결과와 같은 conservative max `2473`초 흐름을 확인했다. 기존 `analysis/` validation artifact는 갱신하지 않았다.
+- 산출물:
+  - `backend/tests/test_recommendation_routes.py`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - Backend는 AI Adapter의 `to_backend_output()["waitingTime"]`, `unit="minutes"` 계약만 소비해 seconds로 변환한다.
+  - 콜택시 총 예상시간은 `predicted_waiting_time_seconds + vehicle_time_seconds`이며, 예측 실패나 invalid output은 숫자 fallback 없이 콜택시 route unavailable/excluded로 전달된다.
+  - 임차택시·특장차 바로콜 양쪽 `model_group`을 모두 예측하고 보수적 max를 사용한다. 한쪽 실패 fallback은 사용하지 않는다.
+  - 지하철·저상버스 추천 흐름, 추천 정렬 정책, API schema, Frontend UI, 모델 artifact, metadata, 분석 export는 변경하지 않았다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests/test_recommendation_routes.py -q` — 13개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건.
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest backend/tests ai/tests -q` — 271개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건.
+  - `PYTHONPATH=backend:. backend/.venv/bin/python -m pytest src/tests backend/tests ai/tests -q` — 292개 통과, 기존 Starlette/anyio `DeprecationWarning` 1건.
+  - `python3 -m src.data_quality --check-report docs/validation/phase9-audit-2026-09-13.json` — errors 없음, 기존 데이터 한계 warning 유지.
+  - `frontend/`에서 `npm test -- --run` — 2개 파일, 22개 테스트 통과.
+  - `frontend/`에서 `npm run build` — TypeScript build 및 Vite production build 통과.
+  - `frontend/`에서 `npm run lint` — 통과.
+  - 최초 `PYTHONPATH=backend:. backend/.venv/bin/python -m ai.waiting_time.runtime` — 실패. Python 3.11.9, `numpy==2.4.6`, `scipy==1.17.1`이 Phase 8 runtime 기준과 달랐다.
+  - 최초 `PYTHONPATH=backend:. .venv/bin/python -m ai.waiting_time.runtime` — 실패. Python 3.12.14와 artifact는 준비됐지만 `joblib`, `scikit-learn`, `scipy`, `threadpoolctl`이 설치되지 않았다.
+  - 최초 `.venv/bin/python -m pip install -r backend/requirements.txt` — sandbox DNS 제한으로 PyPI 조회 실패. 권한 승인 후 동일 명령 성공.
+  - `PYTHONPATH=backend:. .venv/bin/python -m ai.waiting_time.runtime` — 통과. Python 3.12.14, `joblib==1.4.2`, `pandas==2.2.3`, `scikit-learn==1.9.0`, `numpy==2.5.2`, `scipy==1.18.1`, `threadpoolctl==3.6.0`, 실제 joblib artifact size와 metadata/feature 순서 확인.
+  - `PYTHONPATH=backend:. .venv/bin/python -m ai.waiting_time.validation --output /private/tmp/phase9-ai-validation-py312.json` — 통과. 임차택시 바로콜 `41.21341000519471`분, 특장차 바로콜 `40.50492956696942`분, conservative max `41.21341000519471`분/`2473`초, `all_outputs_valid=true`.
+  - `PYTHONPATH=backend:. .venv/bin/python -m pytest ai/tests/test_runtime.py ai/tests/test_estimator.py ai/tests/test_prediction_validation.py backend/tests/test_recommendation_routes.py -q` — 67개 통과.
+  - `PYTHONPATH=backend:. .venv/bin/python -m pytest src/tests backend/tests ai/tests -q` — 292개 통과.
+- 자체 리뷰:
+  - 이번 변경은 최종 통합 검증 테스트와 Phase 결과 기록에 한정했다.
+  - 확정된 아키텍처, 데이터 소유권, API 계약, 추천 정렬 정책을 변경하지 않았다.
+  - runtime check 실패는 Phase 8에 이미 기록된 실행환경 drift와 sandbox PyPI 제한의 재현이며, 승인 후 requirements 설치로 해결했다. 새로 문서화해야 할 별도 트러블슈팅 항목은 발생하지 않았다.
+  - 실제 운영 lookup의 최신성, reverse geocoding fallback, inference latency/monitoring은 여전히 후속 운영 검증 범위다.
+- 다음에 이어받을 것:
+  - 배포/시연 환경에서 `ai.waiting_time.runtime`과 실제 추천 API smoke test를 release gate로 반복한다.
+  - 운영 lookup stale/missing 상태와 Prediction unavailable reason을 구조화 로그 또는 metric으로 관측한다.
