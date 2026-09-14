@@ -236,10 +236,14 @@ def extract_district_and_dong(location: Location) -> tuple[str, str]:
         raise WaitingTimeFeatureMappingError("주소 metadata가 없어 구/동을 정규화할 수 없습니다")
     tokens = location.address.replace(",", " ").split()
     gu = next((token for token in tokens if token.endswith("구")), None)
-    dong = next((token for token in tokens if token.endswith("동") and token != gu), None)
+    dong = next((token for token in tokens if _looks_like_dong_name(token) and token != gu), None)
     if gu is None or dong is None:
         raise WaitingTimeFeatureMappingError("주소 metadata에서 구/동을 정규화할 수 없습니다")
     return gu, dong
+
+
+def _looks_like_dong_name(token: str) -> bool:
+    return token.endswith("동") or ("동" in token and token.endswith("가"))
 
 
 def _validate_model_groups(model_groups: tuple[str, ...]) -> None:

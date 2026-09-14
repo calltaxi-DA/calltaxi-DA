@@ -11,8 +11,15 @@ const destinationPlace = createPlace('destination', '강남역', '127.027621', '
 const busanPlace = createPlace('busan', '부산역', '129.039616', '35.115225', '부산광역시 동구 중앙대로 206')
 const gyeonggiInSeoulBoxPlace = createPlace('gyeonggi', '광명사거리역', '126.854986', '37.479252', '경기도 광명시 오리로 980')
 
-function createPlace(id: string, placeName: string, x: string, y: string, address = `서울특별시 ${placeName} 도로명주소`): MockPlace {
-  return { id, place_name: placeName, address_name: address, road_address_name: address, x, y }
+function createPlace(
+  id: string,
+  placeName: string,
+  x: string,
+  y: string,
+  address = `서울특별시 ${placeName} 도로명주소`,
+  roadAddress = address,
+): MockPlace {
+  return { id, place_name: placeName, address_name: address, road_address_name: roadAddress, x, y }
 }
 
 function recommendationResult(): RecommendationResponse {
@@ -23,7 +30,7 @@ function recommendationResult(): RecommendationResponse {
     transport_types: ['calltaxi', 'subway', 'low_floor_bus'],
     priorities: ['time', 'cost', 'walk'],
     recommendations: [
-      { rank: 1, route: { transport_type: 'subway', status: 'available', total_time_seconds: 2340, total_distance_meters: 13530, total_cost_won: 1650, walking_distance_meters: 330, walking_time_seconds: 660, metric_availability: availableMetrics, accessibility_status: 'not_verified', unavailable_reason: null, summary: '을지로입구역 → 강남역 지하철 경로', warnings: ['일부 역 접근성은 상세 확인이 필요합니다.'] } },
+      { rank: 1, route: { transport_type: 'subway', status: 'available', total_time_seconds: 2340, total_distance_meters: 13530, total_cost_won: 1650, walking_distance_meters: 330, walking_time_seconds: 660, metric_availability: availableMetrics, accessibility_status: 'not_verified', unavailable_reason: null, summary: '을지로입구역 → 강남역 지하철 경로', route_map_segments: [{ segment_type: 'subway', label: '2호선', points: [{ latitude: 37.566826, longitude: 126.9786567, name: '을지로입구' }, { latitude: 37.497942, longitude: 127.027621, name: '강남' }] }], warnings: ['일부 역 접근성은 상세 확인이 필요합니다.'] } },
       { rank: 2, route: { transport_type: 'low_floor_bus', status: 'available', total_time_seconds: 2460, total_distance_meters: 10366, total_cost_won: 1500, walking_distance_meters: 676, walking_time_seconds: 600, metric_availability: availableMetrics, accessibility_status: 'verified_available', unavailable_reason: null, summary: '470 저상버스 경로', warnings: ['실제 도착 차량의 저상 여부를 보장하지 않습니다.'] } },
     ],
     excluded_routes: [{ transport_type: 'calltaxi', reason: '장애인 콜택시 대기시간 예측 모델이 연결되지 않았습니다.' }],
@@ -35,10 +42,14 @@ function setupKakaoMock(
 ) {
   vi.stubEnv('KAKAO_JS_KEY', 'test-key')
   const setCenter = vi.fn()
+  const setBounds = vi.fn()
+  const boundsExtend = vi.fn()
   const markerSetMap = vi.fn()
   const markerConstructor = vi.fn(function () { return { setMap: markerSetMap } })
-  window.kakao = { maps: { load: (callback) => callback(), Map: vi.fn(function () { return { setCenter } }), LatLng: vi.fn(function (lat, lng) { return { lat, lng } }), Marker: markerConstructor, services: { Places: vi.fn(function () { return { keywordSearch } }), Status: { OK: 'OK', ZERO_RESULT: 'ZERO_RESULT' } } } }
-  return { keywordSearch, markerConstructor, markerSetMap, setCenter }
+  const polylineSetMap = vi.fn()
+  const polylineConstructor = vi.fn(function () { return { setMap: polylineSetMap } })
+  window.kakao = { maps: { load: (callback) => callback(), Map: vi.fn(function () { return { setCenter, setBounds } }), LatLng: vi.fn(function (lat, lng) { return { lat, lng } }), LatLngBounds: vi.fn(function () { return { extend: boundsExtend } }), Marker: markerConstructor, Polyline: polylineConstructor, services: { Places: vi.fn(function () { return { keywordSearch } }), Status: { OK: 'OK', ZERO_RESULT: 'ZERO_RESULT' } } } }
+  return { keywordSearch, markerConstructor, markerSetMap, setCenter, setBounds, boundsExtend, polylineConstructor, polylineSetMap }
 }
 
 async function selectRoutePlaces() {
@@ -105,6 +116,83 @@ describe('Frontend Phase 7 recommendation UI', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.priorities).toEqual(['time', 'cost', 'walk']); expect(body.transport_types).toEqual(['calltaxi', 'subway', 'low_floor_bus'])
     expect(body.calltaxi_purpose).toBe('치료')
+  })
+
+  it('draws the top-ranked backend route geometry on the Kakao map', async () => {
+    const { polylineConstructor, boundsExtend, setBounds } = setupKakaoMock()
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => recommendationResult() })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<App />)
+
+    await selectRoutePlaces()
+    selectCalltaxiPurpose()
+    fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+
+    await waitFor(() => expect(polylineConstructor).toHaveBeenCalledTimes(1))
+    expect(polylineConstructor).toHaveBeenCalledWith(expect.objectContaining({
+      path: [{ lat: 37.566826, lng: 126.9786567 }, { lat: 37.497942, lng: 127.027621 }],
+      strokeColor: '#2563eb',
+      strokeStyle: 'solid',
+    }))
+    expect(boundsExtend).toHaveBeenCalledTimes(2)
+    expect(setBounds).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('추천 1위 경로를 지도에 표시했습니다.')).toBeInTheDocument()
+  })
+
+  it('clears an existing route polyline when route inputs change', async () => {
+    const { polylineConstructor, polylineSetMap } = setupKakaoMock()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => recommendationResult() }))
+    render(<App />)
+
+    await selectRoutePlaces()
+    selectCalltaxiPurpose()
+    fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+    await waitFor(() => expect(polylineConstructor).toHaveBeenCalledTimes(1))
+
+    fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '서울역' } })
+
+    expect(polylineSetMap).toHaveBeenCalledWith(null)
+    expect(screen.queryByRole('heading', { name: '추천 경로 최대 TOP 3' })).not.toBeInTheDocument()
+  })
+
+  it('sends Kakao jibun addresses to the backend so calltaxi feature mapping can read dong metadata', async () => {
+    const originWithRoadAddress = createPlace(
+      'origin-road',
+      '불광역',
+      '126.929887',
+      '37.610469',
+      '서울특별시 은평구 불광동 281',
+      '서울특별시 은평구 통일로 지하 723-1',
+    )
+    const destinationWithRoadAddress = createPlace(
+      'destination-road',
+      '서울역',
+      '126.972559',
+      '37.554648',
+      '서울특별시 중구 봉래동2가 122',
+      '서울특별시 중구 한강대로 405',
+    )
+    setupKakaoMock(vi.fn((keyword: string, callback: (results: MockPlace[], status: string) => void) => {
+      callback([keyword === '서울역' ? destinationWithRoadAddress : originWithRoadAddress], 'OK')
+    }))
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => recommendationResult() })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('장소를 검색하고 출발지·목적지를 선택하세요.')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('출발지'), { target: { value: '불광역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[0])
+    fireEvent.click(screen.getByRole('button', { name: /불광역/ }))
+    fireEvent.change(screen.getByLabelText('목적지'), { target: { value: '서울역' } })
+    fireEvent.click(screen.getAllByRole('button', { name: '검색' })[1])
+    fireEvent.click(screen.getByRole('button', { name: /서울역/ }))
+    selectCalltaxiPurpose()
+    fireEvent.click(screen.getByRole('button', { name: '경로검색' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.origin.address).toBe('서울특별시 은평구 불광동 281')
+    expect(body.destination.address).toBe('서울특별시 중구 봉래동2가 122')
   })
 
   it('sends the swapped priority order without ranking routes in the frontend', async () => {

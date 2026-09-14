@@ -155,6 +155,12 @@ def test_extract_district_and_dong_accepts_confirmed_dong_address() -> None:
     assert extract_district_and_dong(location) == ("중구", "명동")
 
 
+def test_extract_district_and_dong_accepts_legal_dong_ga_address_for_local_demo() -> None:
+    location = Location(latitude=37.554648, longitude=126.972559, address="서울특별시 중구 봉래동2가 122")
+
+    assert extract_district_and_dong(location) == ("중구", "봉래동2가")
+
+
 def test_extract_district_and_dong_rejects_road_name_as_dong() -> None:
     location = Location(latitude=37.5666, longitude=126.9784, address="서울특별시 중구 세종대로 110")
 

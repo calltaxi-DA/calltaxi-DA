@@ -5,6 +5,19 @@ export type TransportType = 'calltaxi' | 'subway' | 'low_floor_bus'
 export type MetricAvailability = 'available' | 'not_available'
 export type AccessibilityStatus = 'verified_available' | 'verified_unavailable' | 'not_verified'
 export type CalltaxiPurpose = '기타' | '귀가' | '치료' | '재활' | '통학/출근' | '종교'
+export type RouteMapSegmentType = 'walk' | 'subway' | 'bus' | 'vehicle'
+
+export type RouteMapPoint = {
+  latitude: number
+  longitude: number
+  name: string | null
+}
+
+export type RouteMapSegment = {
+  segment_type: RouteMapSegmentType
+  label: string | null
+  points: RouteMapPoint[]
+}
 
 export type RouteResult = {
   transport_type: TransportType
@@ -27,6 +40,7 @@ export type RouteResult = {
   accessibility_status: AccessibilityStatus
   unavailable_reason: string | null
   summary: string | null
+  route_map_segments?: RouteMapSegment[] | null
   warnings: string[]
 }
 

@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { fetchRecommendations } from './api/recommendation'
-import type { CalltaxiPurpose, RecommendationPriority, RecommendationResponse, TransportType } from './api/recommendation'
+import type {
+  CalltaxiPurpose,
+  RecommendationPriority,
+  RecommendationResponse,
+  RouteMapSegment,
+  RouteMapSegmentType,
+  TransportType,
+} from './api/recommendation'
 import type { RouteLocation } from './api/subway'
 import RecommendationResults from './components/RecommendationResults'
 import TransportCostTracker from './components/TransportCostTracker'
@@ -28,11 +35,19 @@ type KakaoPlace = {
 
 type KakaoMap = {
   setCenter: (latLng: KakaoLatLng) => void
+  setBounds: (bounds: KakaoLatLngBounds) => void
 }
 
 type KakaoLatLng = unknown
+type KakaoLatLngBounds = {
+  extend: (latLng: KakaoLatLng) => void
+}
 
 type KakaoMarker = {
+  setMap: (map: KakaoMap | null) => void
+}
+
+type KakaoPolyline = {
   setMap: (map: KakaoMap | null) => void
 }
 
@@ -50,7 +65,16 @@ declare global {
         load: (callback: () => void) => void
         Map: new (container: HTMLElement, options: { center: KakaoLatLng; level: number }) => KakaoMap
         LatLng: new (lat: number, lng: number) => KakaoLatLng
+        LatLngBounds: new () => KakaoLatLngBounds
         Marker: new (options: { map: KakaoMap; position: KakaoLatLng }) => KakaoMarker
+        Polyline: new (options: {
+          map: KakaoMap
+          path: KakaoLatLng[]
+          strokeWeight: number
+          strokeColor: string
+          strokeOpacity: number
+          strokeStyle: 'solid' | 'shortdash'
+        }) => KakaoPolyline
         services: {
           Places: new () => KakaoPlaces
           Status: {
@@ -86,9 +110,15 @@ const calltaxiPurposeOptions = [
 
 const defaultPriorityOrder = priorityOptions.map((option) => option.value)
 const defaultCenter = { lat: 37.566826, lng: 126.9786567 }
+const routeLineStyles: Record<RouteMapSegmentType, { color: string; strokeStyle: 'solid' | 'shortdash' }> = {
+  walk: { color: '#6b7280', strokeStyle: 'shortdash' },
+  subway: { color: '#2563eb', strokeStyle: 'solid' },
+  bus: { color: '#059669', strokeStyle: 'solid' },
+  vehicle: { color: '#111827', strokeStyle: 'solid' },
+}
 
 function getPlaceAddress(place: KakaoPlace) {
-  return place.road_address_name || place.address_name || '주소 정보 없음'
+  return place.address_name || place.road_address_name || '주소 정보 없음'
 }
 
 function toPlaceSelection(place: KakaoPlace): PlaceSelection {
@@ -154,6 +184,7 @@ function App() {
     origin: null,
     destination: null,
   })
+  const routePolylinesRef = useRef<KakaoPolyline[]>([])
   const placeSearchRequestRef = useRef<Record<LocationRole, number>>({
     origin: 0,
     destination: 0,
@@ -196,6 +227,51 @@ function App() {
     && isServiceAreaSupported
     && selectedTransportTypes.length > 0
     && (!isCalltaxiSelected || calltaxiPurpose !== '')
+  const hasTopRouteMapSegments = Boolean(recommendation?.recommendations[0]?.route.route_map_segments?.length)
+  const displayedMapStatus = isMapReady && hasTopRouteMapSegments
+    ? '추천 1위 경로를 지도에 표시했습니다.'
+    : mapStatus
+
+  const clearRoutePolylines = () => {
+    routePolylinesRef.current.forEach((polyline) => polyline.setMap(null))
+    routePolylinesRef.current = []
+  }
+
+  const renderRecommendedRouteMap = (segments: RouteMapSegment[] | null | undefined) => {
+    clearRoutePolylines()
+
+    if (!mapRef.current || !window.kakao?.maps || !segments?.length) {
+      return
+    }
+
+    const kakaoMaps = window.kakao.maps
+    const bounds = new kakaoMaps.LatLngBounds()
+    const nextPolylines: KakaoPolyline[] = []
+
+    segments.forEach((segment) => {
+      if (segment.points.length < 2) return
+
+      const path = segment.points.map((point) => {
+        const latLng = new kakaoMaps.LatLng(point.latitude, point.longitude)
+        bounds.extend(latLng)
+        return latLng
+      })
+      const style = routeLineStyles[segment.segment_type]
+      nextPolylines.push(new kakaoMaps.Polyline({
+        map: mapRef.current!,
+        path,
+        strokeWeight: segment.segment_type === 'walk' ? 4 : 6,
+        strokeColor: style.color,
+        strokeOpacity: 0.85,
+        strokeStyle: style.strokeStyle,
+      }))
+    })
+
+    routePolylinesRef.current = nextPolylines
+    if (nextPolylines.length > 0) {
+      mapRef.current.setBounds(bounds)
+    }
+  }
 
   useEffect(() => {
     let ignore = false
@@ -230,7 +306,14 @@ function App() {
     }
   }, [kakaoMapAppKey])
 
-  useEffect(() => () => recommendationAbortControllerRef.current?.abort(), [])
+  useEffect(() => () => {
+    recommendationAbortControllerRef.current?.abort()
+    clearRoutePolylines()
+  }, [])
+
+  useEffect(() => {
+    renderRecommendedRouteMap(recommendation?.recommendations[0]?.route.route_map_segments ?? null)
+  }, [isMapReady, recommendation])
 
   const invalidateRecommendation = () => {
     recommendationRequestRef.current += 1
@@ -238,6 +321,7 @@ function App() {
     recommendationAbortControllerRef.current = null
     setRecommendation(null)
     setRecommendationStatus('idle')
+    clearRoutePolylines()
   }
 
   const updatePlaceQuery = (role: LocationRole, nextValue: string) => {
@@ -436,7 +520,7 @@ function App() {
         <div className="map-canvas" ref={mapContainerRef} role="img" aria-label="선택한 장소가 표시되는 지도" />
         <div className="map-status-bar">
           <span className={isMapReady ? 'status-dot ready' : 'status-dot'} aria-hidden="true" />
-          <span>{mapStatus}</span>
+          <span>{displayedMapStatus}</span>
         </div>
       </section>
 
