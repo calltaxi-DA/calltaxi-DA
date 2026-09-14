@@ -1239,3 +1239,50 @@
 - 다음에 이어받을 것:
   - 배포/시연 환경에서 `ai.waiting_time.runtime`과 실제 추천 API smoke test를 release gate로 반복한다.
   - 운영 lookup stale/missing 상태와 Prediction unavailable reason을 구조화 로그 또는 metric으로 관측한다.
+
+## Backend Phase 9 — 오류 처리 및 최종 통합 검증 (2026-09-14)
+
+- 브랜치: `backend/phase9-error-handling-integration` (base: 최신 `origin/dev`). 작업 시작 전 로컬 `dev`가 이전 PR #76 병합 시도로 `origin/dev`보다 1커밋 앞선 상태임을 확인했고, 해당 커밋은 보존한 채 최신 `origin/dev`에서 이번 Phase 전용 브랜치를 생성했다.
+- 작업 전 확인:
+  - 반드시 읽은 파일: `AGENTS.md`, `docs/architecture.md`, `docs/development-phases.md`, `docs/decisions/0004-route-metric-availability-and-recommendation-contract.md`, `docs/decisions/0006-wait-time-prediction-contract.md`, `backend/app/services/route_orchestration.py`, `backend/app/api/recommendation.py`, `backend/app/services/recommendation.py`, `backend/app/api/contracts.py`, `backend/tests/test_route_orchestration.py`, `backend/tests/test_recommendation_routes.py`
+  - 이번 Phase에서 수정한 파일: `backend/app/services/route_orchestration.py`, `backend/tests/test_route_orchestration.py`, `backend/tests/test_recommendation_routes.py`, `docs/development-phases.md`
+  - 참고만 하고 수정하지 않은 파일: `ai/waiting_time/estimator.py`, `ai/waiting_time/validation.py`, `ai/waiting_time/runtime.py`, `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final.joblib`, `analysis/waiting_time/rf_wait_time_v2_prev_day_weather_final_metadata.json`, `analysis/waiting_time/prediction_validation_phase4.json`, `analysis/waiting_time/prediction_validation_phase4.md`, `analysis/`, `data/`, `notebooks*/`, Frontend UI 파일, 기존 ADR
+  - 이번 Phase 범위에 포함하지 않은 작업: 모델 재학습, joblib artifact 교체, feature set 변경, API 계약 변경, 추천 정렬 정책 변경, Frontend 표시 변경, 실시간 외부 API 신규 연동, reverse geocoding 구현, 운영 lookup 갱신 배치, 관측성 metric 구현
+- 핵심 목표: TMAP·ODsay·Prediction 중 일부가 실패해도 통합 경로검색 API가 가능한 이동수단 결과를 계속 반환하고, 실패한 이동수단은 숫자 fallback 없이 `unavailable`/`excluded_routes`로 전달되도록 최종 검증했다.
+- 한 일:
+  - `RouteGenerationError`를 추가해 다른 이동수단 추천을 계속할 수 있는 recoverable route generation 실패 경계를 명시했다.
+  - `BackendRecommendationRouteProvider.get_routes()`는 `RouteGenerationError`만 partial success로 처리하고, `AttributeError`, `RuntimeError`, `AssertionError`, contract validation 실패 같은 내부 programming error는 숨기지 않는다.
+  - TMAP/ODsay/Prediction의 기존 명시적 예외 처리는 `RouteGenerationError`로 normalize했다. 모델 미연결, feature mapping 실패, invalid output, 외부 API 전용 오류는 기존 사유를 보존한다.
+  - service-level 테스트에 recoverable TMAP·저상버스 ODsay 실패가 섞여도 지하철 결과가 계속 `available`로 반환되는 partial success 검증을 추가했다.
+  - 예상 밖 지하철 provider 오류와 Prediction programming error는 일반 `unavailable`로 삼키지 않고 그대로 드러나는지 검증했다.
+  - 운영 추천 API integration 테스트에 invalid Prediction output scenario를 추가해 `{"waitingTime": None, "unit": "minutes"}`가 `200` 응답의 `excluded_routes`로 전달되는지 확인했다.
+- 산출물:
+  - `backend/app/services/route_orchestration.py`
+  - `backend/tests/test_route_orchestration.py`
+  - `backend/tests/test_recommendation_routes.py`
+  - `docs/development-phases.md`
+- 확정 동작:
+  - 통합 경로검색 API는 선택된 이동수단별로 가능한 결과를 반환하며, 실패한 이동수단은 추천 후보에서 제외된다.
+  - 콜택시 대기시간 Prediction 실패나 invalid output은 임의 숫자, 평균값, 0분으로 복구하지 않는다.
+  - 명시적으로 처리한 recoverable 실패 사유는 기존 메시지를 유지하고, 내부 programming/contract error는 generic unavailable로 숨기지 않는다.
+  - 추천 정렬은 기존 ADR 0004 정책대로 `available` 후보만 대상으로 수행한다.
+  - `ai/`는 계속 순수 Prediction Adapter이며 HTTP/추천 정렬 로직을 갖지 않는다.
+- 검증 결과:
+  - `PYTHONPATH=backend:. .venv/bin/python -m pytest backend/tests/test_route_orchestration.py backend/tests/test_recommendation_routes.py -q` — 34개 통과.
+  - `PYTHONPATH=backend:. .venv/bin/python -m pytest src/tests backend/tests ai/tests -q` — 295개 통과.
+  - `python3 -m src.data_quality --check-report docs/validation/phase9-audit-2026-09-13.json` — errors 없음, 기존 데이터 한계 warning 유지.
+  - `PYTHONPATH=backend:. .venv/bin/python -m ai.waiting_time.runtime` — 통과. Python 3.12.14, 요구 ML 의존성, 실제 joblib artifact size, metadata/feature 순서 확인.
+  - `PYTHONPATH=backend:. .venv/bin/python -m ai.waiting_time.validation --output /private/tmp/phase9-error-handling-validation.json` — 통과. 임차택시 바로콜 `41.21341000519471`분, 특장차 바로콜 `40.50492956696943`분, conservative max `41.21341000519471`분/`2473`초, `all_outputs_valid=true`.
+  - `frontend/`에서 `npm test -- --run` — 2개 파일, 22개 테스트 통과.
+  - `frontend/`에서 `npm run build` — TypeScript build 및 Vite production build 통과.
+  - `frontend/`에서 `npm run lint` — 통과.
+  - `git diff --check` — 통과.
+- 자체 리뷰:
+  - 이번 변경은 통합 provider의 오류 격리와 그 회귀 테스트에 한정했다.
+  - 확정된 아키텍처, 폴더 구조, API 계약, 데이터 소유권, 추천 정렬 정책을 변경하지 않았다.
+  - broad `except Exception`으로 내부 버그를 숨기지 않고, recoverable route generation 실패만 명시적으로 unavailable 처리한다.
+  - 사용자 응답에는 안전한 실패 사유를 주고, 구조화된 원인·stage·model version·latency 관측은 후속 운영 검증 범위로 남겼다.
+  - 새로 문서화해야 할 재현 가능한 운영 문제는 발생하지 않아 별도 troubleshooting 문서는 추가하지 않았다.
+- 다음에 이어받을 것:
+  - 운영/시연 환경에서 실제 TMAP·ODsay key, 최신 operation/weather lookup, 실제 joblib artifact를 모두 사용한 `/routes/recommendations` smoke test를 release gate로 반복한다.
+  - `prediction_unavailable_reason`, route generation failure, model version, inference latency를 구조화 로그 또는 metric으로 분리한다.
